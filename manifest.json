@@ -1,0 +1,52 @@
+{
+  "name": "Interliga — Mobilidade Urbana",
+  "short_name": "Interliga",
+  "description": "Corridas, Interifood e mobilidade urbana para o interior e região metropolitana. App completo para passageiros, motoristas e comerciantes.",
+  "start_url": "/interliga/",
+  "scope": "/interliga/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#04183A",
+  "theme_color": "#04183A",
+  "lang": "pt-BR",
+  "categories": ["travel", "lifestyle"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "App Passageiro"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Solicitar corrida",
+      "short_name": "Corrida",
+      "description": "Solicite uma corrida agora",
+      "url": "/interliga/?acao=corrida",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Interifood",
+      "short_name": "Interifood",
+      "description": "Peça comida agora",
+      "url": "/interliga/?acao=food",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
