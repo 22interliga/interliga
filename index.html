@@ -11065,7 +11065,11 @@ function selRecur2(el){document.querySelectorAll('.recur-opt').forEach(r=>r.clas
 setTimeout(buildCalSched, 800);
 
 // Activate first module
-showModule('cadastro');
+if(document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => showModule('cadastro'));
+} else {
+  showModule('cadastro');
+}
 
 // === HUB ===
 (function(){
