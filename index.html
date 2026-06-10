@@ -4260,7 +4260,7 @@ function confirmBlock() {
 
 const BOT_NUMERO = '5571981899571';
 // URL do bot Railway — atualizar quando souber a URL
-const BOT_API = window.BOT_API_URL || 'https://interliga-bot.up.railway.app';
+const BOT_API = window.BOT_API_URL || 'https://interliga-bot-production.up.railway.app';
 
 // Chamar bot via API (se disponível) ou WhatsApp (fallback)
 async function chamarBotAPI(endpoint, dados) {
@@ -4553,6 +4553,52 @@ function iniciarTrackingCorrida(destino, preco) {
     setTimeout(() => { carro.style.left='45%'; carro.style.top='48%'; }, 500);
     setTimeout(() => { carro.style.left='58%'; carro.style.top='38%'; }, 3000);
   }
+}
+
+function enviarAudioMotorista() {
+  // Abre WhatsApp para enviar áudio — número oculto via bot
+  const msg = encodeURIComponent('[Interliga] Passageiro quer enviar áudio. Responda aqui.');
+  window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
+  showToast('🎤 Abrindo WhatsApp para enviar áudio...');
+}
+
+function adicionarParadaEmAndamento() {
+  const modal = document.getElementById('modal-parada');
+  if(modal) {
+    modal.style.display = 'flex';
+    const input = document.getElementById('parada-input');
+    if(input) input.focus();
+  }
+}
+
+function confirmarNovaParada() {
+  const input = document.getElementById('parada-input');
+  const modal = document.getElementById('modal-parada');
+  if(!input || !input.value.trim()) {
+    showToast('⚠️ Digite o endereço da parada');
+    return;
+  }
+  const parada = input.value.trim();
+
+  // Notifica motorista da nova parada via WhatsApp
+  const msg = encodeURIComponent(
+    '📍 *NOVA PARADA ADICIONADA*\n\n' +
+    '🛑 ' + parada + '\n' +
+    '💰 Taxa adicional: R$ 5,00\n\n' +
+    '_Passageiro adicionou parada em andamento_'
+  );
+  window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
+
+  modal.style.display = 'none';
+  input.value = '';
+  showToast('📍 Parada adicionada! +R$ 5,00 · Motorista notificado');
+}
+
+function ligarMotorista() {
+  // Liga via WhatsApp (número oculto)
+  const msg = encodeURIComponent('📞 [Interliga] Passageiro solicita contato. Por favor ligue de volta.');
+  window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
+  showToast('📞 Solicitação de ligação enviada ao motorista');
 }
 
 function abrirChatWhatsApp() {
@@ -5030,12 +5076,32 @@ document.querySelectorAll('.feat-card, .mod-card, .test-card, .how-step, .benefi
     </div>
 
     <!-- Botões ação -->
-    <div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid #F0F4FF;">
-      <div onclick="abrirChatWhatsApp()" style="flex:1;height:42px;background:#25D366;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:700;cursor:pointer;gap:6px;">
-        💬 Chat WhatsApp
+    <div style="display:flex;gap:6px;padding:12px 0;border-bottom:1px solid #F0F4FF;">
+      <div onclick="abrirChatWhatsApp()" style="flex:1;height:42px;background:#25D366;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;cursor:pointer;">
+        💬 Chat
       </div>
-      <div onclick="ligarMotorista()" style="width:42px;height:42px;background:#F0F4FF;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;">📞</div>
-      <div onclick="cancelarCorridaPassageiro()" style="width:42px;height:42px;background:#FFF0F0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;">✕</div>
+      <div onclick="enviarAudioMotorista()" style="flex:1;height:42px;background:#1251B5;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;cursor:pointer;">
+        🎤 Áudio
+      </div>
+      <div onclick="ligarMotorista()" style="flex:1;height:42px;background:#F0F4FF;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1A1A2E;cursor:pointer;">
+        📞 Ligar
+      </div>
+      <div onclick="adicionarParadaEmAndamento()" style="width:42px;height:42px;background:#FFF8E8;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;" title="Parada">➕</div>
+      <div onclick="cancelarCorridaPassageiro()" style="width:42px;height:42px;background:#FFF0F0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;">✕</div>
+    </div>
+
+    <!-- Modal parada em andamento -->
+    <div id="modal-parada" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:flex-end;">
+      <div style="background:white;border-radius:24px 24px 0 0;padding:20px;width:100%;">
+        <div style="font-size:15px;font-weight:700;color:#1A1A2E;margin-bottom:4px;">➕ Adicionar parada</div>
+        <div style="font-size:11px;color:#5A6A8A;margin-bottom:12px;">⚠️ Taxa adicional de R$ 5,00 por parada</div>
+        <input id="parada-input" placeholder="Ex: Farmácia, Banco, Supermercado..."
+          style="width:100%;border:1.5px solid #EEF2FF;border-radius:12px;padding:12px;font-size:13px;color:#1A1A2E;outline:none;font-family:inherit;margin-bottom:12px;"/>
+        <div style="display:flex;gap:8px;">
+          <div onclick="confirmarNovaParada()" style="flex:1;height:44px;background:#FF6B00;border-radius:12px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;cursor:pointer;">✅ Confirmar (+R$ 5,00)</div>
+          <div onclick="document.getElementById('modal-parada').style.display='none'" style="width:44px;height:44px;background:#F0F4FF;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;">✕</div>
+        </div>
+      </div>
     </div>
 
     <!-- Chat rápido interno -->
@@ -10905,6 +10971,11 @@ document.querySelectorAll('.feat-card, .mod-card, .test-card, .how-step, .benefi
 
 // ── GLOBAL MODULE SWITCHER ──
 function showModule(id) {
+  if(id === 'motorista') {
+    setTimeout(() => ativarModoMotorista && ativarModoMotorista(), 1000);
+  } else {
+    desativarModoMotorista && desativarModoMotorista();
+  }
   document.querySelectorAll('.gmodule').forEach(m => m.classList.remove('active'));
   document.querySelectorAll('.gnav-btn').forEach(b => b.classList.remove('active'));
   const target = document.getElementById('mod-' + id);
@@ -10913,6 +10984,32 @@ function showModule(id) {
     const oc = b.getAttribute('onclick') || '';
     if(oc.includes("'" + id + "'")) b.classList.add('active');
   });
+
+  // Ativar tela inicial correta em cada módulo
+  setTimeout(() => {
+    if(id === 'prototipo') {
+      const screens = document.querySelectorAll('#mod-prototipo .screen');
+      screens.forEach(s => s.classList.remove('active'));
+      const home = document.getElementById('s-home');
+      if(home) home.classList.add('active');
+      else if(screens[0]) screens[0].classList.add('active');
+    }
+    if(id === 'motorista') {
+      const screens = document.querySelectorAll('#mod-motorista .screen');
+      screens.forEach(s => s.classList.remove('active'));
+      const home = document.getElementById('mot-s-home');
+      if(home) home.classList.add('active');
+      else if(screens[0]) screens[0].classList.add('active');
+    }
+    if(id === 'comerciante') {
+      const screens = document.querySelectorAll('#mod-comerciante .screen');
+      screens.forEach(s => s.classList.remove('active'));
+      const splash = document.getElementById('com-s-splash');
+      if(splash) splash.classList.add('active');
+      else if(screens[0]) screens[0].classList.add('active');
+    }
+  }, 50);
+
   window.scrollTo(0,0);
 }
 
@@ -12637,7 +12734,7 @@ document.querySelectorAll('.feat-card, .mod-card, .test-card, .how-step, .benefi
 
   <!-- ══ TELA 7: SUCESSO ══ -->
   <div class="screen" id="s-success">
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;">
+    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px 20px 0;">
       <div class="success-anim" id="success-icon">🎉</div>
       <div class="success-title" id="success-title">Cadastro concluído!</div>
       <div class="success-sub" id="success-sub">Bem-vindo ao Interliga! Sua conta foi criada com sucesso e está pronta para uso.</div>
@@ -12659,7 +12756,9 @@ document.querySelectorAll('.feat-card, .mod-card, .test-card, .how-step, .benefi
         <div class="checkin-sub">A cada dia que você ligar o app, faremos uma verificação rápida para confirmar que é você quem está dirigindo. Isso protege sua conta e os passageiros.</div>
       </div>
     </div>
-    <div class="btn-primary" onclick="irParaApp()">Ir para o app →</div>
+    <div style="padding:16px;width:100%;flex-shrink:0;">
+      <div class="btn-primary" onclick="irParaApp()" style="margin:0;">🚀 Ir para o app →</div>
+    </div>
   </div>
 
   <!-- ══ OTP SCREEN ══ -->
@@ -14152,10 +14251,26 @@ function definirCorridaAtiva(origem, destino, valor) {
 // ── LADO DO MOTORISTA ──
 
 function aceitarCorrida() {
-  // Para o countdown
   if(window.countdownTimer) clearInterval(window.countdownTimer);
+  pararPolling && pararPolling();
 
-  // Notifica passageiro via WhatsApp que motorista aceitou
+  // Confirmar aceite no bot
+  const corridaId = window.corridaAtualId;
+  if(corridaId) {
+    fetch('https://interliga-bot-production.up.railway.app/aceitar-corrida', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        corridaId,
+        motoristaNome: 'Marcos R.',
+        motoristaVeiculo: 'Honda Civic',
+        motoristaPlaca: 'ABC-1234',
+        motoristaAvaliacao: '4.8'
+      })
+    }).catch(()=>{});
+  }
+
+  // Notifica passageiro via WhatsApp
   const hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   const msg = encodeURIComponent(
     '✅ *MOTORISTA ACEITOU SUA CORRIDA!*\n\n' +
@@ -14167,7 +14282,6 @@ function aceitarCorrida() {
   );
   window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
 
-  // Motorista vai para tela em corrida
   go('s-ongoing');
 
   // Atualiza tela de tracking do passageiro se estiver aberta
@@ -14252,6 +14366,68 @@ function notificarMotoristaNaApp(origem, destino, valor) {
   }
 }
 
+// ── POLLING CORRIDAS PENDENTES ──
+let pollingAtivo = false;
+let pollingInterval = null;
+
+function iniciarPolling() {
+  if(pollingAtivo) return;
+  pollingAtivo = true;
+  console.log('🔍 Polling iniciado...');
+  pollingInterval = setInterval(verificarNovasCorridas, 5000);
+}
+
+function pararPolling() {
+  pollingAtivo = false;
+  if(pollingInterval) clearInterval(pollingInterval);
+}
+
+async function verificarNovasCorridas() {
+  try {
+    const BOT = 'https://interliga-bot-production.up.railway.app';
+    const resp = await fetch(BOT + '/corridas-pendentes');
+    const data = await resp.json();
+    if(data.corridas && data.corridas.length > 0) {
+      const corrida = data.corridas[0];
+      // Só notificar se for nova
+      if(window.ultimaCorridaNotificada === corrida.id) return;
+      window.ultimaCorridaNotificada = corrida.id;
+      mostrarNovaCorrida(corrida);
+    }
+  } catch(e) {}
+}
+
+function mostrarNovaCorrida(corrida) {
+  // Atualizar dados na tela s-request
+  const els = document.querySelectorAll('#mod-motorista .req-addr');
+  if(els[0]) els[0].textContent = corrida.origem || 'Origem';
+  if(els[2]) els[2].textContent = corrida.destino || 'Destino';
+  const badge = document.querySelector('#mod-motorista .req-badge');
+  if(badge) badge.textContent = '+' + (corrida.valor || 'R$ 0');
+  // Guardar ID da corrida
+  window.corridaAtualId = corrida.id;
+  window.corridaAtualDados = corrida;
+  // Som e navegar para tela de aceitar
+  speakNovaCorrida && speakNovaCorrida();
+  // Ir para tela de aceitar se estiver no home
+  const modMot = document.getElementById('mod-motorista');
+  if(modMot && modMot.classList.contains('active')) {
+    go('s-request');
+    iniciarCountdown(15);
+    showToast('🚗 Nova corrida disponível!');
+  }
+}
+
+// Iniciar polling quando módulo motorista abre
+function ativarModoMotorista() {
+  iniciarPolling();
+  showToast('🟢 Online — buscando corridas...');
+}
+
+function desativarModoMotorista() {
+  pararPolling();
+}
+
 function speakNovaCorrida() {
   // Voz "Nova corrida disponível"
   try {
@@ -14290,24 +14466,24 @@ function confirmarCancelPassageiro() {
   localStorage.setItem('carteira', carteiraMotoristaSaldo.toFixed(2));
   
   fecharModalCancel();
-  showToast('❌ Corrida cancelada · Multa de R$ 5,00 cobrada');
+  showToast('❌ Corrida cancelada · R$ 5,00 transferido ao motorista');
 
-  // Notifica motorista via WhatsApp
+  // Notifica motorista via WhatsApp com confirmação do pagamento
   const hora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   const msgBot = encodeURIComponent(
-    '⚠️ *CANCELAMENTO COM MULTA*\n\n' +
+    '💰 *MULTA RECEBIDA — INTERLIGA*\n\n' +
+    '✅ R$ 5,00 creditado na sua carteira\n' +
     '❌ Passageiro cancelou a corrida\n' +
-    '💰 Multa de R$ 5,00 aplicada\n' +
     '⏰ Horário: ' + hora + '\n\n' +
-    '_Sistema Interliga_'
+    '_Valor repassado no próximo repasse semanal_'
   );
   setTimeout(() => {
     window.open('https://wa.me/5571981899571?text=' + msgBot, '_blank');
-    speakCancelado();
-    showToast('💰 Motorista notificado via WhatsApp');
+    if(typeof speakCancelado === 'function') speakCancelado();
+    showToast('💰 R$ 5,00 creditado ao motorista!');
   }, 800);
 
-  if(typeof go === 'function') go('com-s-home');
+  if(typeof go === 'function') go('s-home');
   atualizarTabelaMultas();
 }
 
