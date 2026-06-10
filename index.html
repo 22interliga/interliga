@@ -2835,6 +2835,43 @@ textarea.form-inp{resize:vertical;min-height:120px;}
 .gmodule { isolation: isolate; }
 #mod-hub { display: none !important; }
 </style>
+
+<style id="style-mobile-pwa">
+/* ── PWA MOBILE — TELA CHEIA ── */
+@media (max-width: 500px), (display-mode: standalone) {
+  body { 
+    background: #04183A !important; 
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .gmodule {
+    width: 100vw !important;
+    min-height: 100vh !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+  }
+  .phone-shell {
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+  .screen-container {
+    border-radius: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  /* Esconder elementos decorativos do desktop */
+  .splash-ring,
+  .phone-shell::before,
+  .phone-shell::after { display: none !important; }
+}
+</style>
 </head>
 <body>
 
