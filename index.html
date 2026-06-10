@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Interliga — Plataforma Completa</title>
 
 <!-- PWA META TAGS -->
@@ -2837,31 +2837,44 @@ textarea.form-inp{resize:vertical;min-height:120px;}
 </style>
 
 <style id="style-mobile-pwa">
-/* ── PWA MOBILE — TELA CHEIA ── */
-@media (max-width: 500px), (display-mode: standalone) {
+/* ══ RESET GLOBAL ══ */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* ══ TELA CHEIA NO MOBILE E PWA ══ */
+@media (max-width: 600px), (display-mode: standalone) {
   html, body {
     width: 100vw !important;
     height: 100vh !important;
     overflow: hidden !important;
-    margin: 0 !important;
-    padding: 0 !important;
     background: #04183A !important;
   }
-  /* Esconder top-bar e nav decorativos */
-  .top-bar, .nav-hint { display: none !important; }
-  
-  /* gmodule ocupa tela toda */
+
+  /* Esconder nav de desenvolvimento */
+  nav.gnav { display: none !important; }
+
+  /* Módulos ocupam tela toda */
   .gmodule {
     width: 100vw !important;
     height: 100vh !important;
     height: 100dvh !important;
+    min-height: unset !important;
     padding: 0 !important;
     margin: 0 !important;
     display: block !important;
-    background: #04183A !important;
+    overflow: hidden !important;
   }
-  
-  /* phone-shell vira a tela inteira */
+
+  /* Top-bar escondida */
+  .top-bar, .nav-hint { display: none !important; }
+
+  /* Phone-shell vira tela inteira */
   .phone-shell {
     width: 100vw !important;
     height: 100vh !important;
@@ -2873,29 +2886,41 @@ textarea.form-inp{resize:vertical;min-height:120px;}
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
+    z-index: 1 !important;
   }
-  
-  /* screen-container também */
+
+  /* Screen container tela toda */
   .screen-container {
     width: 100vw !important;
     height: 100vh !important;
     height: 100dvh !important;
     border-radius: 0 !important;
     overflow: hidden !important;
+    position: relative !important;
   }
-  
-  /* Esconder decoração */
+
+  /* Cada screen ocupa tudo */
+  .screen {
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+
+  /* Esconder decorações */
   .splash-ring,
   .phone-shell::before,
   .phone-shell::after,
   .notch { display: none !important; }
-  
-  /* Nav global fica por cima */
-  .gnav {
+
+  /* Status bar no topo */
+  .status {
+    padding-top: env(safe-area-inset-top, 12px) !important;
+  }
+
+  /* Nav global por cima */
+  nav.gnav {
     position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100vw !important;
     z-index: 99999 !important;
   }
 }
@@ -12586,10 +12611,7 @@ document.querySelectorAll('.feat-card, .mod-card, .test-card, .how-step, .benefi
         <div class="lbl">TELEFONE</div>
         <input class="inp" id="d-tel" placeholder="(11) 99999-9999" maxlength="15" oninput="maskPhone(this)"/>
       </div>
-      <div class="field">
-        <div class="lbl">CPF</div>
-        <input class="inp" id="d-cpf" placeholder="000.000.000-00" maxlength="14" oninput="maskCPFCadastro(this)"/>
-        <div style="font-size:10px;margin-top:3px;min-height:14px;" id="cpf-cad-feedback"></div>
+      
       </div>
       <div class="field">
         <div class="lbl">CUPOM DE INDICAÇÃO <span style="opacity:0.5;font-size:9px;">OPCIONAL</span></div>
