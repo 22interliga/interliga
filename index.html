@@ -2839,19 +2839,29 @@ textarea.form-inp{resize:vertical;min-height:120px;}
 <style id="style-mobile-pwa">
 /* ── PWA MOBILE — TELA CHEIA ── */
 @media (max-width: 500px), (display-mode: standalone) {
-  body { 
-    background: #04183A !important; 
+  html, body {
+    width: 100vw !important;
+    height: 100vh !important;
     overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
+    background: #04183A !important;
   }
+  /* Esconder top-bar e nav decorativos */
+  .top-bar, .nav-hint { display: none !important; }
+  
+  /* gmodule ocupa tela toda */
   .gmodule {
     width: 100vw !important;
-    min-height: 100vh !important;
+    height: 100vh !important;
+    height: 100dvh !important;
     padding: 0 !important;
-    align-items: stretch !important;
-    justify-content: flex-start !important;
+    margin: 0 !important;
+    display: block !important;
+    background: #04183A !important;
   }
+  
+  /* phone-shell vira a tela inteira */
   .phone-shell {
     width: 100vw !important;
     height: 100vh !important;
@@ -2860,16 +2870,34 @@ textarea.form-inp{resize:vertical;min-height:120px;}
     border: none !important;
     box-shadow: none !important;
     margin: 0 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
   }
+  
+  /* screen-container também */
   .screen-container {
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
     border-radius: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
+    overflow: hidden !important;
   }
-  /* Esconder elementos decorativos do desktop */
+  
+  /* Esconder decoração */
   .splash-ring,
   .phone-shell::before,
-  .phone-shell::after { display: none !important; }
+  .phone-shell::after,
+  .notch { display: none !important; }
+  
+  /* Nav global fica por cima */
+  .gnav {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    z-index: 99999 !important;
+  }
 }
 </style>
 </head>
