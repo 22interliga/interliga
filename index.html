@@ -2859,6 +2859,33 @@ html, body {
   /* Esconder nav de desenvolvimento */
   nav.gnav { display: none !important; }
 
+  /* Corrigir mod-cadastro no mobile */
+  #mod-cadastro {
+    padding-top: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  #mod-cadastro .phone-shell {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow: hidden !important;
+  }
+  
+  /* Corrigir overflow lateral em todos os módulos */
+  .gmodule.active,
+  .gmodule.active .phone-shell,
+  .gmodule.active .screen-container,
+  .gmodule.active .screen.active {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Corrigir scroll vertical nas telas */
+  .gmodule.active .screen.active {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
   /* Módulos inativos ficam escondidos */
   .gmodule {
     display: none !important;
