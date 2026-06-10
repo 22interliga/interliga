@@ -9,16 +9,19 @@
   "background_color": "#04183A",
   "theme_color": "#04183A",
   "lang": "pt-BR",
-  "categories": ["travel", "lifestyle"],
+  "categories": [
+    "travel",
+    "lifestyle"
+  ],
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "ícone-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "ícone-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -39,14 +42,24 @@
       "short_name": "Corrida",
       "description": "Solicite uma corrida agora",
       "url": "/interliga/?acao=corrida",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "ícone-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Interifood",
       "short_name": "Interifood",
       "description": "Peça comida agora",
       "url": "/interliga/?acao=food",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "ícone-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
