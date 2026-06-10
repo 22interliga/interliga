@@ -2959,25 +2959,32 @@ html, body {
     overflow-x: hidden !important;
   }
 
-  /* Módulos inativos ficam escondidos */
+  /* Módulos inativos ficam completamente escondidos */
   .gmodule {
     display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
   }
 
   /* Módulo ativo ocupa tela toda */
   .gmodule.active {
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: all !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
     height: 100dvh !important;
     min-height: unset !important;
     padding: 0 !important;
     margin: 0 !important;
-    display: block !important;
     overflow: hidden !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    z-index: 10 !important;
+    z-index: 100 !important;
   }
 
   /* Top-bar escondida */
