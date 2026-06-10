@@ -2859,8 +2859,13 @@ html, body {
   /* Esconder nav de desenvolvimento */
   nav.gnav { display: none !important; }
 
-  /* Módulos ocupam tela toda */
+  /* Módulos inativos ficam escondidos */
   .gmodule {
+    display: none !important;
+  }
+
+  /* Módulo ativo ocupa tela toda */
+  .gmodule.active {
     width: 100vw !important;
     height: 100vh !important;
     height: 100dvh !important;
@@ -2869,6 +2874,10 @@ html, body {
     margin: 0 !important;
     display: block !important;
     overflow: hidden !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 10 !important;
   }
 
   /* Top-bar escondida */
