@@ -1662,6 +1662,9 @@ body{
 .plan-card.sel .plan-check{background:var(--red);border-color:var(--red);color:white;}
 .cad-next-btn{position:absolute;bottom:70px;left:16px;right:16px;height:50px;background:linear-gradient(90deg,var(--red),var(--red-lt));border-radius:25px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(232,0,45,0.3);cursor:pointer;transition:transform 0.15s;z-index:10;}
 .cad-next-btn:active{transform:scale(0.97);}
+@media(max-width:600px){
+  .cad-next-btn{position:sticky;bottom:16px;margin:16px;width:auto;left:auto;right:auto;z-index:100;}
+}
 
 /* ── RASTREIO ── */
 #s-tracking{background:white;display:flex;flex-direction:column;}
