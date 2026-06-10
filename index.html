@@ -2961,6 +2961,60 @@ html, body {
   }
 }
 </style>
+
+<script>
+// ── MOBILE FULLSCREEN FIX ──
+(function() {
+  function isMobile() {
+    return window.innerWidth <= 600 || 
+           window.matchMedia('(display-mode: standalone)').matches ||
+           navigator.standalone === true;
+  }
+  
+  function aplicarMobileLayout() {
+    if (!isMobile()) return;
+    
+    // Remover phone-shell wrapper — mover screens direto para gmodule
+    document.querySelectorAll('.phone-shell').forEach(shell => {
+      const container = shell.querySelector('.screen-container');
+      if (!container) return;
+      const parent = shell.parentNode;
+      
+      // Mover todos os filhos do screen-container para o parent
+      while (container.firstChild) {
+        parent.appendChild(container.firstChild);
+      }
+      // Remover phone-shell vazio
+      parent.removeChild(shell);
+    });
+    
+    // Aplicar estilos direto
+    document.querySelectorAll('.gmodule').forEach(m => {
+      m.style.cssText = 'width:100vw;height:100vh;overflow:hidden;padding:0;margin:0;position:fixed;top:0;left:0;';
+    });
+    
+    document.querySelectorAll('.screen').forEach(s => {
+      s.style.cssText = s.style.cssText + ';width:100vw !important;max-width:100vw !important;height:100vh !important;height:100dvh !important;border-radius:0 !important;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;';
+    });
+    
+    // Esconder gnav
+    const gnav = document.querySelector('nav.gnav');
+    if (gnav) gnav.style.display = 'none';
+    
+    console.log('✅ Mobile fullscreen aplicado');
+  }
+  
+  // Aplicar quando DOM carregar
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', aplicarMobileLayout);
+  } else {
+    aplicarMobileLayout();
+  }
+  
+  // Reaplicar quando módulo muda
+  window.addEventListener('modulechange', aplicarMobileLayout);
+})();
+</script>
 </head>
 <body>
 
