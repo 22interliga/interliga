@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Interliga — Plataforma de mobilidade urbana para passageiros, motoristas e delivery em Madre de Deus e região">
+<title>Interliga — Mobilidade Urbana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --or:#FF6B00; --olt:#FF8C42;
+  --bl:#1270C2; --blt:#1F8CE6;
+  --dk:#04183A; --dk2:#071F4A;
+  --wh:#FFFFFF; --off:#F8F9FF;
+  --tx:#1A1A2E; --t2:#5A6A8A;
+  --rd:#E8002D;
+}
+html{scroll-behavior:smooth;}
+body{font-family:'Barlow',sans-serif;color:var(--tx);background:var(--wh);overflow-x:hidden;}
+
+/* NAVBAR */
+.nav{position:fixed;top:0;left:0;right:0;z-index:999;padding:0 5%;height:68px;display:flex;align-items:center;justify-content:space-between;transition:all .3s;background:transparent;}
+.nav.scrolled{background:rgba(4,24,58,0.97);backdrop-filter:blur(12px);box-shadow:0 2px 20px rgba(0,0,0,0.3);}
+.nav-brand{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:white;text-decoration:none;letter-spacing:1px;}
+.nav-brand span{color:var(--or);}
+.nav-links{display:flex;gap:28px;align-items:center;}
+.nav-link{color:rgba(255,255,255,0.8);text-decoration:none;font-size:15px;font-weight:600;transition:color .2s;}
+.nav-link:hover{color:var(--or);}
+.nav-cta{background:var(--or);color:white;padding:10px 22px;border-radius:25px;font-weight:700;font-size:14px;text-decoration:none;transition:all .2s;}
+.nav-cta:hover{background:var(--olt);transform:translateY(-1px);}
+.nav-hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px;}
+.nav-hamburger span{width:24px;height:2px;background:white;border-radius:2px;transition:all .3s;}
+.nav-mobile{display:none;position:fixed;inset:0;background:var(--dk);z-index:998;flex-direction:column;align-items:center;justify-content:center;gap:32px;}
+.nav-mobile.open{display:flex;}
+.nav-mobile a{color:white;text-decoration:none;font-size:24px;font-weight:700;}
+
+/* HERO */
+.hero{min-height:100vh;background:linear-gradient(135deg,var(--dk) 0%,var(--dk2) 50%,#0A2A5E 100%);display:flex;align-items:center;padding:100px 5% 60px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,rgba(18,112,194,0.3) 0%,transparent 70%);}
+.hero::after{content:'';position:absolute;top:-50%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,rgba(255,107,0,0.08) 0%,transparent 70%);}
+.hero-content{max-width:560px;position:relative;z-index:1;}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,107,0,0.15);border:1px solid rgba(255,107,0,0.4);color:var(--olt);font-size:13px;font-weight:700;padding:7px 16px;border-radius:20px;margin-bottom:28px;letter-spacing:1px;}
+.hero-badge::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--or);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hero-title{font-family:'Barlow Condensed',sans-serif;font-size:clamp(44px,6vw,72px);font-weight:900;color:white;line-height:1.05;margin-bottom:20px;letter-spacing:-1px;}
+.hero-title span{color:var(--or);}
+.hero-desc{font-size:18px;color:rgba(255,255,255,0.7);line-height:1.7;margin-bottom:36px;max-width:480px;}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:52px;}
+.btn-primary{background:linear-gradient(90deg,var(--or),var(--olt));color:white;padding:15px 32px;border-radius:30px;font-weight:700;font-size:16px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(255,107,0,0.4);transition:all .2s;}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(255,107,0,0.5);}
+.btn-secondary{background:rgba(255,255,255,0.1);color:white;padding:15px 32px;border-radius:30px;font-weight:700;font-size:16px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,0.2);transition:all .2s;backdrop-filter:blur(4px);}
+.btn-secondary:hover{background:rgba(255,255,255,0.2);}
+.hero-stats{display:flex;gap:40px;flex-wrap:wrap;}
+.stat-item{color:white;}
+.stat-val{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;color:var(--or);}
+.stat-lbl{font-size:13px;color:rgba(255,255,255,0.55);margin-top:2px;}
+.hero-visual{position:absolute;right:5%;top:50%;transform:translateY(-50%);width:340px;}
+.phone-frame{background:linear-gradient(145deg,#1F8CE6,#1270C2);border-radius:36px;padding:20px;box-shadow:0 40px 80px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.1);position:relative;}
+.phone-screen{background:#0D1117;border-radius:24px;padding:20px;min-height:420px;}
+.phone-notch{width:80px;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;margin:0 auto 16px;}
+.phone-status{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:20px;}
+.phone-logo{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:white;text-align:center;margin-bottom:4px;}
+.phone-logo span{color:var(--or);}
+.phone-sub{font-size:12px;color:rgba(255,255,255,0.5);text-align:center;margin-bottom:20px;}
+.phone-input{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;margin-bottom:10px;}
+.phone-input-lbl{font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;}
+.phone-input-val{font-size:14px;color:rgba(255,255,255,0.8);}
+.phone-btn{background:linear-gradient(90deg,var(--or),var(--olt));border-radius:20px;padding:13px;text-align:center;font-size:14px;font-weight:700;color:white;margin-top:16px;}
+
+/* SECTIONS */
+section{padding:90px 5%;}
+.section-badge{display:inline-block;background:rgba(255,107,0,0.1);color:var(--or);font-size:12px;font-weight:700;padding:5px 14px;border-radius:20px;letter-spacing:1.5px;margin-bottom:14px;}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-size:clamp(32px,4vw,48px);font-weight:900;color:var(--tx);line-height:1.1;margin-bottom:16px;}
+.section-title span{color:var(--or);}
+.section-desc{font-size:17px;color:var(--t2);line-height:1.7;max-width:560px;}
+.section-header{text-align:center;margin-bottom:56px;}
+.section-header .section-desc{margin:0 auto;}
+
+/* FEATURES */
+.features{background:var(--off);}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+.feature-card{background:white;border-radius:20px;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.06);transition:all .3s;border:1px solid rgba(0,0,0,0.04);}
+.feature-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,0.1);}
+.feature-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:16px;}
+.feature-icon.blue{background:rgba(18,112,194,0.1);}
+.feature-icon.orange{background:rgba(255,107,0,0.1);}
+.feature-icon.green{background:rgba(22,163,74,0.1);}
+.feature-icon.red{background:rgba(232,0,45,0.1);}
+.feature-title{font-size:18px;font-weight:700;color:var(--tx);margin-bottom:8px;}
+.feature-desc{font-size:15px;color:var(--t2);line-height:1.6;}
+
+/* COMO FUNCIONA */
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;position:relative;}
+.steps-grid::before{content:'';position:absolute;top:40px;left:10%;right:10%;height:2px;background:linear-gradient(90deg,var(--or),var(--blt));opacity:0.3;}
+.step-card{text-align:center;position:relative;}
+.step-num{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--bl),var(--blt));display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:white;margin:0 auto 20px;box-shadow:0 8px 24px rgba(18,112,194,0.3);}
+.step-title{font-size:17px;font-weight:700;color:var(--tx);margin-bottom:8px;}
+.step-desc{font-size:14px;color:var(--t2);line-height:1.6;}
+
+/* MOTORISTA */
+.motorista{background:linear-gradient(135deg,var(--dk),var(--dk2));color:white;}
+.motorista-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;}
+.motorista .section-title{color:white;}
+.motorista .section-desc{color:rgba(255,255,255,0.7);}
+.mot-benefits{display:flex;flex-direction:column;gap:16px;margin-top:32px;}
+.mot-benefit{display:flex;align-items:flex-start;gap:14px;}
+.mot-benefit-ic{width:44px;height:44px;border-radius:12px;background:rgba(255,107,0,0.2);border:1px solid rgba(255,107,0,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.mot-benefit-txt h4{font-size:16px;font-weight:700;color:white;margin-bottom:3px;}
+.mot-benefit-txt p{font-size:14px;color:rgba(255,255,255,0.6);line-height:1.5;}
+.mot-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px;backdrop-filter:blur(10px);}
+.mot-earnings{font-family:'Barlow Condensed',sans-serif;font-size:48px;font-weight:900;color:var(--or);line-height:1;}
+.mot-earnings-lbl{font-size:14px;color:rgba(255,255,255,0.6);margin-top:4px;margin-bottom:24px;}
+.mot-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.mot-stat{background:rgba(255,255,255,0.05);border-radius:12px;padding:14px;}
+.mot-stat-val{font-size:22px;font-weight:700;color:white;}
+.mot-stat-lbl{font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;}
+
+/* INTERIFOOD */
+.interifood-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;}
+.food-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.food-card{border-radius:16px;padding:16px;border:1px solid rgba(0,0,0,0.07);}
+.food-card-icon{font-size:32px;margin-bottom:8px;}
+.food-card-name{font-size:15px;font-weight:700;color:var(--tx);}
+.food-card-cat{font-size:13px;color:var(--t2);}
+.food-card-rating{font-size:13px;color:var(--or);margin-top:4px;font-weight:600;}
+
+/* PRICING */
+.pricing{background:var(--off);}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:900px;margin:0 auto;}
+.pricing-card{background:white;border-radius:24px;padding:32px;border:2px solid transparent;transition:all .3s;text-align:center;}
+.pricing-card:hover{transform:translateY(-4px);}
+.pricing-card.featured{background:linear-gradient(135deg,var(--bl),var(--blt));border-color:transparent;color:white;transform:scale(1.04);}
+.pricing-card.featured:hover{transform:scale(1.06) translateY(-4px);}
+.pricing-badge{background:var(--or);color:white;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;display:inline-block;margin-bottom:12px;letter-spacing:1px;}
+.pricing-name{font-size:20px;font-weight:800;color:var(--tx);margin-bottom:4px;}
+.pricing-card.featured .pricing-name{color:white;}
+.pricing-city{font-size:13px;color:var(--t2);margin-bottom:20px;}
+.pricing-card.featured .pricing-city{color:rgba(255,255,255,0.7);}
+.pricing-price{font-family:'Barlow Condensed',sans-serif;font-size:48px;font-weight:900;color:var(--bl);line-height:1;}
+.pricing-card.featured .pricing-price{color:white;}
+.pricing-period{font-size:14px;color:var(--t2);margin-bottom:24px;}
+.pricing-card.featured .pricing-period{color:rgba(255,255,255,0.7);}
+.pricing-features{list-style:none;text-align:left;margin-bottom:28px;}
+.pricing-features li{font-size:14px;color:var(--t2);padding:7px 0;border-bottom:1px solid rgba(0,0,0,0.05);display:flex;gap:8px;}
+.pricing-card.featured .pricing-features li{color:rgba(255,255,255,0.8);border-bottom-color:rgba(255,255,255,0.1);}
+.pricing-features li::before{content:'✓';color:var(--or);font-weight:700;}
+.pricing-btn{width:100%;padding:13px;border-radius:20px;font-weight:700;font-size:15px;cursor:pointer;border:none;font-family:inherit;transition:all .2s;}
+.pricing-btn.default{background:var(--off);color:var(--bl);}
+.pricing-btn.default:hover{background:var(--bl);color:white;}
+.pricing-btn.featured-btn{background:var(--or);color:white;box-shadow:0 8px 20px rgba(255,107,0,0.4);}
+
+/* APP DOWNLOAD */
+.app-download{background:linear-gradient(135deg,var(--or),var(--olt));text-align:center;padding:80px 5%;}
+.app-download .section-title{color:white;}
+.app-download .section-desc{color:rgba(255,255,255,0.85);margin:0 auto 40px;}
+.app-btns{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+.app-btn{background:var(--dk);color:white;padding:14px 28px;border-radius:14px;text-decoration:none;display:flex;align-items:center;gap:12px;transition:all .2s;}
+.app-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3);}
+.app-btn-ic{font-size:28px;}
+.app-btn-txt{text-align:left;}
+.app-btn-sub{font-size:11px;opacity:0.7;}
+.app-btn-name{font-size:16px;font-weight:700;}
+
+/* FOOTER */
+footer{background:var(--dk);color:white;padding:60px 5% 30px;}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px;}
+.footer-brand{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;margin-bottom:12px;}
+.footer-brand span{color:var(--or);}
+.footer-desc{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:20px;}
+.footer-social{display:flex;gap:10px;}
+.social-ic{width:36px;height:36px;background:rgba(255,255,255,0.08);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:background .2s;}
+.social-ic:hover{background:var(--or);}
+.footer-col-title{font-size:13px;font-weight:700;color:rgba(255,255,255,0.5);letter-spacing:1.5px;margin-bottom:16px;}
+.footer-links{display:flex;flex-direction:column;gap:10px;}
+.footer-links a{font-size:14px;color:rgba(255,255,255,0.6);text-decoration:none;transition:color .2s;}
+.footer-links a:hover{color:var(--or);}
+.footer-bottom{border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.footer-copy{font-size:13px;color:rgba(255,255,255,0.35);}
+.footer-legal{display:flex;gap:20px;}
+.footer-legal a{font-size:13px;color:rgba(255,255,255,0.35);text-decoration:none;}
+.footer-legal a:hover{color:var(--or);}
+
+/* WHATSAPP BTN */
+.wa-btn{position:fixed;bottom:24px;right:24px;width:56px;height:56px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 8px 24px rgba(37,211,102,0.5);z-index:998;text-decoration:none;transition:transform .2s;}
+.wa-btn:hover{transform:scale(1.1);}
+
+/* RESPONSIVE */
+@media(max-width:1024px){
+  .hero-visual{width:280px;}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:768px){
+  .nav-links,.nav-cta{display:none;}
+  .nav-hamburger{display:flex;}
+  .hero{padding:100px 5% 60px;text-align:center;}
+  .hero-content{max-width:100%;}
+  .hero-badge{margin:0 auto 28px;}
+  .hero-btns{justify-content:center;}
+  .hero-stats{justify-content:center;}
+  .hero-visual{display:none;}
+  .features-grid{grid-template-columns:1fr;}
+  .steps-grid{grid-template-columns:1fr 1fr;}
+  .steps-grid::before{display:none;}
+  .motorista-grid,.interifood-grid{grid-template-columns:1fr;}
+  .pricing-grid{grid-template-columns:1fr;}
+  .pricing-card.featured{transform:none;}
+  .footer-grid{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:480px){
+  .steps-grid{grid-template-columns:1fr;}
+  .food-cards{grid-template-columns:1fr;}
+  .footer-grid{grid-template-columns:1fr;}
+  .hero-btns{flex-direction:column;align-items:center;}
+  .app-btns{flex-direction:column;align-items:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="nav" id="navbar">
+  <a href="#" class="nav-brand">INTER<span>LIGA</span></a>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">Funcionalidades</a>
+    <a href="#como-funciona" class="nav-link">Como funciona</a>
+    <a href="#motorista" class="nav-link">Seja motorista</a>
+    <a href="#interifood" class="nav-link">Interifood</a>
+    <a href="#franquias" class="nav-link">Franquias</a>
+    <a href="#contato" class="nav-link">Contato</a>
+  </div>
+  <a href="https://22interliga.github.io/interliga/" class="nav-cta">📱 Baixar app</a>
+  <div class="nav-hamburger" onclick="toggleMenu()" id="hamburger">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- MENU MOBILE -->
+<div class="nav-mobile" id="nav-mobile">
+  <a href="#features" onclick="toggleMenu()">Funcionalidades</a>
+  <a href="#como-funciona" onclick="toggleMenu()">Como funciona</a>
+  <a href="#motorista" onclick="toggleMenu()">Seja motorista</a>
+  <a href="#interifood" onclick="toggleMenu()">Interifood</a>
+  <a href="#franquias" onclick="toggleMenu()">Franquias</a>
+  <a href="#contato" onclick="toggleMenu()">Contato</a>
+  <a href="https://22interliga.github.io/interliga/" style="color:var(--or)">📱 Baixar app</a>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="home">
+  <div class="hero-content">
+    <div class="hero-badge">🟢 DISPONÍVEL NA SUA REGIÃO</div>
+    <h1 class="hero-title">Mobilidade urbana<br>que <span>conecta</span> você</h1>
+    <p class="hero-desc">Da região metropolitana ao interior da Bahia. Solicite corridas, peça comida dos melhores restaurantes locais e ganhe dinheiro como motorista parceiro — tudo em um único app.</p>
+    <div class="hero-btns">
+      <a href="https://22interliga.github.io/interliga/" class="btn-primary">📱 Baixar grátis</a>
+      <a href="#como-funciona" class="btn-secondary">Como funciona →</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-item"><div class="stat-val">500+</div><div class="stat-lbl">Motoristas parceiros</div></div>
+      <div class="stat-item"><div class="stat-val">84</div><div class="stat-lbl">Restaurantes</div></div>
+      <div class="stat-item"><div class="stat-val">4.9⭐</div><div class="stat-lbl">Avaliação média</div></div>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="phone-notch"></div>
+        <div class="phone-status"><span>9:41</span><span>●●● 100%</span></div>
+        <div class="phone-logo">INTER<span>LIGA</span></div>
+        <div class="phone-sub">Para onde você vai hoje?</div>
+        <div class="phone-input"><div class="phone-input-lbl">EMBARQUE</div><div class="phone-input-val">📍 Rua das Flores, 240</div></div>
+        <div class="phone-input"><div class="phone-input-lbl">DESTINO</div><div class="phone-input-val" style="color:rgba(255,255,255,0.4)">Para onde vai?</div></div>
+        <div class="phone-btn">🚗 Solicitar corrida</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FUNCIONALIDADES -->
+<section class="features" id="features">
+  <div class="section-header">
+    <div class="section-badge">FUNCIONALIDADES</div>
+    <h2 class="section-title">Tudo que você precisa<br>em um só <span>app</span></h2>
+    <p class="section-desc">Uma plataforma completa para passageiros, motoristas e comerciantes — com tecnologia de ponta e atendimento local.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon blue">🚗</div>
+      <div class="feature-title">Corridas seguras</div>
+      <div class="feature-desc">Motoristas verificados com antecedentes, CNH e documentação validados. Rastreamento em tempo real para você e sua família.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon orange">🍔</div>
+      <div class="feature-title">Interifood Delivery</div>
+      <div class="feature-desc">Os melhores restaurantes locais na palma da mão. Peça comida, acompanhe o entregador ao vivo e receba em casa.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">📅</div>
+      <div class="feature-title">Agendamento</div>
+      <div class="feature-desc">Agende corridas com antecedência para nunca perder um compromisso. Selecione data, horário e o motorista confirma.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue">💳</div>
+      <div class="feature-title">Múltiplas formas de pagamento</div>
+      <div class="feature-desc">Pix, cartão de crédito, débito ou dinheiro. Carteira digital integrada com saldo e histórico completo.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon orange">🔗</div>
+      <div class="feature-title">Compartilhe sua viagem</div>
+      <div class="feature-desc">Envie um link em tempo real para amigos e familiares acompanharem sua corrida. Segurança em primeiro lugar.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green">💬</div>
+      <div class="feature-title">Chat anônimo</div>
+      <div class="feature-desc">Comunicação direta entre passageiro e motorista sem expor números de telefone. Privacidade total garantida.</div>
+    </div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA -->
+<section id="como-funciona">
+  <div class="section-header">
+    <div class="section-badge">COMO FUNCIONA</div>
+    <h2 class="section-title">Simples assim em<br><span>4 passos</span></h2>
+    <p class="section-desc">Do download à primeira corrida em menos de 5 minutos. Sem complicação.</p>
+  </div>
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-title">Baixe o app</div>
+      <div class="step-desc">Disponível para Android. Cadastro rápido com CPF e selfie de verificação.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-title">Informe os endereços</div>
+      <div class="step-desc">Digite o ponto de embarque e destino. O app calcula a rota e o valor automaticamente.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-title">Motorista aceita</div>
+      <div class="step-desc">Em segundos um motorista próximo aceita a corrida. Acompanhe a chegada em tempo real.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-num">4</div>
+      <div class="step-title">Avalie e pague</div>
+      <div class="step-desc">Pague pelo app ou em dinheiro. Avalie o motorista e ganhe pontos para descontos futuros.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SEJA MOTORISTA -->
+<section class="motorista" id="motorista">
+  <div class="motorista-grid">
+    <div>
+      <div class="section-badge" style="background:rgba(255,107,0,0.2);color:var(--olt)">SEJA PARCEIRO</div>
+      <h2 class="section-title">Ganhe dinheiro<br>com seu <span>carro</span></h2>
+      <p class="section-desc">Trabalhe quando e onde quiser. Defina seus próprios horários e aumente sua renda com a Interliga.</p>
+      <div class="mot-benefits">
+        <div class="mot-benefit">
+          <div class="mot-benefit-ic">💰</div>
+          <div class="mot-benefit-txt"><h4>Melhores ganhos da região</h4><p>Comissão justa e pagamentos semanais via Pix direto na sua conta.</p></div>
+        </div>
+        <div class="mot-benefit">
+          <div class="mot-benefit-ic">⏰</div>
+          <div class="mot-benefit-txt"><h4>Horários flexíveis</h4><p>Você decide quando trabalhar. Ligue e desligue o app quando quiser.</p></div>
+        </div>
+        <div class="mot-benefit">
+          <div class="mot-benefit-ic">🛡️</div>
+          <div class="mot-benefit-txt"><h4>Suporte dedicado</h4><p>Equipe local disponível via WhatsApp para te ajudar sempre que precisar.</p></div>
+        </div>
+      </div>
+      <div style="margin-top:32px;">
+        <a href="https://22interliga.github.io/interliga/" class="btn-primary">🚗 Quero ser motorista</a>
+      </div>
+    </div>
+    <div class="mot-card">
+      <div class="mot-earnings">R$ 3.200</div>
+      <div class="mot-earnings-lbl">Ganho médio mensal dos nossos motoristas</div>
+      <div class="mot-stats">
+        <div class="mot-stat"><div class="mot-stat-val">312</div><div class="mot-stat-lbl">Corridas/mês</div></div>
+        <div class="mot-stat"><div class="mot-stat-val">4.93⭐</div><div class="mot-stat-lbl">Avaliação média</div></div>
+        <div class="mot-stat"><div class="mot-stat-val">85%</div><div class="mot-stat-lbl">Taxa de aceite</div></div>
+        <div class="mot-stat"><div class="mot-stat-val">7 dias</div><div class="mot-stat-lbl">Primeiro pagamento</div></div>
+      </div>
+      <div style="margin-top:20px;padding:14px;background:rgba(255,107,0,0.1);border:1px solid rgba(255,107,0,0.2);border-radius:12px;">
+        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:4px;">Requisitos mínimos</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.8);line-height:1.6;">✓ CNH B ou superior &nbsp; ✓ Veículo 2015 ou mais novo<br>✓ Sem antecedentes criminais &nbsp; ✓ Smartphone Android</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INTERIFOOD -->
+<section id="interifood">
+  <div class="interifood-grid">
+    <div>
+      <div class="section-badge">INTERIFOOD</div>
+      <h2 class="section-title">Delivery dos melhores<br>restaurantes <span>locais</span></h2>
+      <p class="section-desc">Apoie os negócios da sua cidade. Peça comida dos restaurantes que você ama e receba em casa com rapidez e segurança.</p>
+      <div style="margin-top:32px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">⚡</span><span style="font-size:15px;color:var(--t2)">Entrega em até <b style="color:var(--tx)">40 minutos</b></span></div>
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">🏪</span><span style="font-size:15px;color:var(--t2)"><b style="color:var(--tx)">84+ restaurantes</b> locais cadastrados</span></div>
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">📍</span><span style="font-size:15px;color:var(--t2)">Rastreamento em <b style="color:var(--tx)">tempo real</b></span></div>
+        <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:20px;">💳</span><span style="font-size:15px;color:var(--t2)"><b style="color:var(--tx)">Pix, cartão ou dinheiro</b> na entrega</span></div>
+      </div>
+      <div style="margin-top:32px;">
+        <a href="https://22interliga.github.io/interliga/" class="btn-primary" style="background:linear-gradient(90deg,var(--rd),#FF4D6D)">🍔 Pedir agora</a>
+      </div>
+    </div>
+    <div class="food-cards">
+      <div class="food-card" style="background:#FFF8F0;">
+        <div class="food-card-icon">🍔</div>
+        <div class="food-card-name">Burger do Zé</div>
+        <div class="food-card-cat">Lanches • Centro</div>
+        <div class="food-card-rating">⭐ 4.8 • 487 pedidos</div>
+      </div>
+      <div class="food-card" style="background:#FFF0F5;">
+        <div class="food-card-icon">🍕</div>
+        <div class="food-card-name">Bella Napoli</div>
+        <div class="food-card-cat">Pizzaria • Madre de Deus</div>
+        <div class="food-card-rating">⭐ 4.6 • 312 pedidos</div>
+      </div>
+      <div class="food-card" style="background:#F0FFF4;">
+        <div class="food-card-icon">🥗</div>
+        <div class="food-card-name">Verde & Bem</div>
+        <div class="food-card-cat">Saudável • São Francisco</div>
+        <div class="food-card-rating">⭐ 4.9 • 198 pedidos</div>
+      </div>
+      <div class="food-card" style="background:#F0F8FF;">
+        <div class="food-card-icon">🍗</div>
+        <div class="food-card-name">Frango do João</div>
+        <div class="food-card-cat">Grelhados • Centro</div>
+        <div class="food-card-rating">⭐ 4.7 • 156 pedidos</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FRANQUIAS -->
+<section style="background:var(--off);" id="franquias">
+  <div class="section-header">
+    <div class="section-badge">FRANQUIAS</div>
+    <h2 class="section-title">Leve a Interliga para<br>sua <span>cidade</span></h2>
+    <p class="section-desc">Seja um franqueado e tenha sua própria operação de mobilidade urbana com todo o suporte da Interliga.</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="pricing-card" style="border-color:rgba(0,0,0,0.08)">
+      <div class="pricing-name">Básico</div>
+      <div class="pricing-city">Cidades até 30 mil hab.</div>
+      <div class="pricing-price" style="color:var(--bl)">R$299</div>
+      <div class="pricing-period">/mês + R$2.500 adesão</div>
+      <ul class="pricing-features">
+        <li>App personalizado</li>
+        <li>Até 50 motoristas</li>
+        <li>Suporte via WhatsApp</li>
+        <li>Painel administrativo</li>
+        <li>Treinamento inicial</li>
+      </ul>
+      <button class="pricing-btn default" onclick="window.location='https://wa.me/5571981899571?text=Quero+saber+sobre+franquia+Básico'">Saiba mais</button>
+    </div>
+    <div class="pricing-card featured">
+      <div class="pricing-badge">MAIS POPULAR</div>
+      <div class="pricing-name">Médio</div>
+      <div class="pricing-city">Cidades de 30–100 mil hab.</div>
+      <div class="pricing-price">R$599</div>
+      <div class="pricing-period">/mês + R$2.500 adesão</div>
+      <ul class="pricing-features">
+        <li>App + Interifood</li>
+        <li>Motoristas ilimitados</li>
+        <li>Suporte prioritário 24h</li>
+        <li>Painel + relatórios</li>
+        <li>Marketing inicial</li>
+        <li>Gerente de conta</li>
+      </ul>
+      <button class="pricing-btn featured-btn" onclick="window.location='https://wa.me/5571981899571?text=Quero+saber+sobre+franquia+Médio'">Quero essa franquia</button>
+    </div>
+    <div class="pricing-card" style="border-color:rgba(0,0,0,0.08)">
+      <div class="pricing-name">Premium</div>
+      <div class="pricing-city">Cidades acima de 100 mil hab.</div>
+      <div class="pricing-price" style="color:var(--bl)">R$999</div>
+      <div class="pricing-period">/mês + R$2.500 adesão</div>
+      <ul class="pricing-features">
+        <li>Tudo do plano Médio</li>
+        <li>Exclusividade de cidade</li>
+        <li>API personalizada</li>
+        <li>Suporte técnico dedicado</li>
+        <li>Personalização completa</li>
+        <li>Royalties reduzidos</li>
+      </ul>
+      <button class="pricing-btn default" onclick="window.location='https://wa.me/5571981899571?text=Quero+saber+sobre+franquia+Premium'">Saiba mais</button>
+    </div>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section class="app-download">
+  <div class="section-badge" style="background:rgba(255,255,255,0.2);color:white">BAIXE AGORA</div>
+  <h2 class="section-title" style="margin-top:8px;">Comece a usar a<br>Interliga hoje mesmo</h2>
+  <p class="section-desc">Gratuito para passageiros. Cadastre-se em minutos e solicite sua primeira corrida agora.</p>
+  <div class="app-btns">
+    <a href="https://22interliga.github.io/interliga/" class="app-btn">
+      <div class="app-btn-ic">🤖</div>
+      <div class="app-btn-txt"><div class="app-btn-sub">Disponível no</div><div class="app-btn-name">Google Play</div></div>
+    </a>
+    <a href="https://wa.me/5571981899571" class="app-btn">
+      <div class="app-btn-ic">💬</div>
+      <div class="app-btn-txt"><div class="app-btn-sub">Fale conosco no</div><div class="app-btn-name">WhatsApp</div></div>
+    </a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer id="contato">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brand">INTER<span>LIGA</span></div>
+      <p class="footer-desc">Plataforma de mobilidade urbana conectando passageiros, motoristas e comerciantes na Bahia e em todo o Brasil.</p>
+      <div class="footer-social">
+        <div class="social-ic" onclick="window.open('https://wa.me/5571981899571')">💬</div>
+        <div class="social-ic">📘</div>
+        <div class="social-ic">📷</div>
+        <div class="social-ic">🐦</div>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-title">PRODUTO</div>
+      <div class="footer-links">
+        <a href="#features">Funcionalidades</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#interifood">Interifood</a>
+        <a href="https://22interliga.github.io/interliga/">Baixar app</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-title">PARCEIROS</div>
+      <div class="footer-links">
+        <a href="#motorista">Seja motorista</a>
+        <a href="#franquias">Franquias</a>
+        <a href="https://22interliga.github.io/interliga/">Cadastre seu restaurante</a>
+        <a href="https://22interliga.github.io/interliga/admin.html">Painel admin</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-title">CONTATO</div>
+      <div class="footer-links">
+        <a href="https://wa.me/5571981899571">(71) 98189-9571</a>
+        <a href="mailto:contato@interliga.com.br">contato@interliga.com.br</a>
+        <a href="#">Madre de Deus — BA</a>
+        <a href="#">São Francisco do Conde — BA</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-copy">© 2026 Interliga Mobilidade Urbana. Todos os direitos reservados.</div>
+    <div class="footer-legal">
+      <a href="#">Privacidade</a>
+      <a href="#">Termos de uso</a>
+      <a href="#">Cookies</a>
+    </div>
+  </div>
+</footer>
+
+<!-- WHATSAPP -->
+<a href="https://wa.me/5571981899571?text=Olá!%20Quero%20saber%20mais%20sobre%20a%20Interliga" class="wa-btn" target="_blank">💬</a>
+
+<script>
+// Navbar scroll
+window.addEventListener('scroll',()=>{
+  document.getElementById('navbar').classList.toggle('scrolled',window.scrollY>50);
+});
+
+// Menu mobile
+function toggleMenu(){
+  const m=document.getElementById('nav-mobile');
+  const h=document.getElementById('hamburger');
+  m.classList.toggle('open');
+  h.classList.toggle('open');
+}
+
+// Fechar menu ao clicar fora
+document.getElementById('nav-mobile').addEventListener('click',function(e){
+  if(e.target===this) toggleMenu();
+});
+</script>
+</body>
+</html>
