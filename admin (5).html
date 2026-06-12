@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Interliga — Admin</title>
+<style>
+:root {
+  --bg: #060C1A; --s0: #0D1117; --s1: #161B22; --s2: #21262D;
+  --bd: #30363D; --brd: #30363D; --tx: #E6EDF3; --t2: #8B949E;
+  --text: #E6EDF3; --text2: #8B949E; --border: #30363D;
+  --surface: #0D1117; --surface2: #161B22;
+  --or: #FF6B00; --olt: #FF8C42; --orange: #FF6B00; --orange-lt: #FF8C42;
+  --blue: #1270C2; --blue-lt: #1F8CE6;
+  --green: #22C55E; --glt: #22C55E; --green-lt: #22C55E;
+  --red: #E8002D; --red-lt: #FF4D6D;
+  --yellow: #F59E0B;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--tx); min-height: 100vh; font-size: 14px; }
+
+/* LOGIN */
+#login-wrap { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+.lcard { background: var(--s0); border: 1px solid var(--bd); border-radius: 16px; padding: 32px; width: 100%; max-width: 420px; }
+.ltitle { text-align: center; font-size: 32px; font-weight: 900; color: white; }
+.ltitle span { color: var(--or); }
+.lsub { text-align: center; font-size: 13px; color: var(--t2); margin: 6px 0 24px; }
+.llbl { font-size: 11px; font-weight: 700; color: var(--t2); letter-spacing: 1px; margin-bottom: 6px; }
+.linp { width: 100%; padding: 12px 14px; background: var(--s1); border: 1px solid var(--bd); border-radius: 10px; color: white; font-size: 15px; outline: none; font-family: inherit; margin-bottom: 14px; }
+.linp:focus { border-color: var(--or); }
+.lbtn { width: 100%; height: 50px; background: linear-gradient(90deg, var(--or), var(--olt)); border-radius: 12px; color: white; font-weight: 700; font-size: 16px; cursor: pointer; border: none; font-family: inherit; }
+.lerr { color: #F85149; font-size: 13px; text-align: center; margin-top: 10px; display: none; }
+
+/* ADMIN LAYOUT */
+#admin-panel { display: none; min-height: 100vh; }
+.adm-wrap { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 240px; min-height: 100vh; background: var(--s0);
+  border-right: 1px solid var(--bd); display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; z-index: 100; transition: transform .3s;
+  overflow-y: auto;
+}
+.sidebar-logo { padding: 20px 16px; border-bottom: 1px solid var(--bd); }
+.sidebar-logo-title { font-size: 20px; font-weight: 900; color: white; }
+.sidebar-logo-title span { color: var(--or); }
+.sidebar-logo-sub { font-size: 11px; color: var(--t2); margin-top: 2px; }
+.nav-group { padding: 12px 16px 4px; font-size: 10px; font-weight: 700; color: var(--t2); letter-spacing: 1.5px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-radius: 8px; margin: 1px 8px; color: var(--t2); font-size: 14px; transition: all .15s; }
+.nav-item:hover { background: var(--s2); color: var(--tx); }
+.nav-item.active { background: rgba(18,112,194,0.2); border-left: 3px solid var(--blue-lt); color: var(--tx); font-weight: 600; }
+.nav-badge { background: var(--or); color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; margin-left: auto; }
+.sidebar-footer { margin-top: auto; padding: 16px; border-top: 1px solid var(--bd); }
+.admin-row { display: flex; align-items: center; gap: 10px; }
+.admin-av { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, var(--or), var(--olt)); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; flex-shrink: 0; }
+.admin-name { font-size: 14px; font-weight: 600; color: var(--tx); }
+.admin-role { font-size: 12px; color: var(--t2); }
+
+/* TOPBAR */
+.topbar { position: fixed; top: 0; left: 240px; right: 0; height: 56px; background: var(--s0); border-bottom: 1px solid var(--bd); display: flex; align-items: center; padding: 0 20px; gap: 12px; z-index: 90; }
+.menu-btn { display: none; width: 36px; height: 36px; background: var(--s2); border-radius: 8px; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; flex-shrink: 0; }
+.page-title { font-size: 17px; font-weight: 700; color: var(--tx); }
+.page-sub { font-size: 12px; color: var(--t2); }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.search-box { background: var(--s1); border: 1px solid var(--bd); border-radius: 8px; padding: 8px 12px; color: var(--tx); font-size: 14px; outline: none; font-family: inherit; width: 200px; }
+.notif-btn { width: 36px; height: 36px; background: var(--s2); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; position: relative; }
+
+/* CONTENT */
+.content { margin-left: 240px; padding-top: 56px; min-height: 100vh; }
+.content-inner { padding: 20px; }
+
+/* OVERLAY */
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; }
+.sidebar-overlay.show { display: block; }
+
+/* SECTIONS */
+.section { display: none; }
+.section.active { display: block; }
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+.section-title { font-size: 20px; font-weight: 700; color: var(--tx); }
+
+/* CARDS */
+.card { background: var(--s0); border: 1px solid var(--bd); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.ct { font-size: 15px; font-weight: 700; color: var(--tx); }
+.g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.g2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.fl { display: flex; flex-direction: column; }
+
+/* STAT CARDS */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat-card { background: var(--s0); border: 1px solid var(--bd); border-radius: 14px; padding: 16px; }
+.stat-icon { font-size: 24px; margin-bottom: 8px; }
+.stat-val { font-size: 24px; font-weight: 800; color: var(--tx); }
+.stat-lbl { font-size: 12px; color: var(--t2); margin-top: 2px; }
+.stat-chg { font-size: 12px; margin-top: 6px; }
+.stat-chg.up { color: var(--green); }
+.stat-chg.dn { color: var(--red); }
+
+/* TABLES */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 500px; }
+th { padding: 10px 8px; text-align: left; color: var(--t2); font-size: 11px; font-weight: 700; letter-spacing: 0.5px; background: var(--s1); }
+td { padding: 10px 8px; border-bottom: 1px solid var(--bd); color: var(--tx); }
+.tbl-btn { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; }
+.tbl-btn.primary { background: rgba(18,112,194,0.2); color: var(--blue-lt); }
+
+/* BADGES */
+.badge { padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; display: inline-block; }
+.badge.green { background: rgba(34,197,94,.12); color: var(--green); }
+.badge.red { background: rgba(232,0,45,.1); color: var(--red); }
+.badge.blue { background: rgba(18,112,194,.15); color: var(--blue-lt); }
+.badge.yellow { background: rgba(245,158,11,.12); color: var(--yellow); }
+.badge.gray { background: var(--s2); color: var(--t2); }
+
+/* BUTTONS */
+.pbtn { padding: 8px 16px; background: linear-gradient(90deg, var(--or), var(--olt)); color: white; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; font-family: inherit; }
+.sbtn { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--or), var(--olt)); color: white; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; text-align: center; border: none; font-family: inherit; }
+.icon-btn { padding: 6px 8px; background: var(--s2); border-radius: 6px; cursor: pointer; font-size: 14px; display: inline-block; }
+
+/* INPUTS */
+.inp { width: 100%; padding: 10px 12px; background: var(--s1); border: 1px solid var(--bd); border-radius: 8px; color: var(--tx); font-size: 14px; outline: none; font-family: inherit; }
+.inp:focus { border-color: var(--blue-lt); }
+.lbl { font-size: 11px; font-weight: 700; color: var(--t2); letter-spacing: 0.5px; margin-bottom: 6px; }
+select.inp { cursor: pointer; }
+textarea.inp { resize: vertical; }
+
+/* TABS */
+.filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.filter-btn { padding: 6px 12px; background: var(--s2); color: var(--t2); border-radius: 8px; font-size: 13px; cursor: pointer; border: none; font-family: inherit; font-weight: 600; }
+.filter-btn.active { background: var(--blue); color: white; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1A1A2E; color: white; padding: 12px 20px; border-radius: 20px; font-size: 14px; font-weight: 600; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .3s; white-space: nowrap; }
+.toast.show { opacity: 1; }
+
+/* CHAT */
+.chat-layout { display: flex; gap: 0; height: calc(100vh - 120px); border: 1px solid var(--bd); border-radius: 14px; overflow: hidden; }
+.chat-list { width: 280px; border-right: 1px solid var(--bd); overflow-y: auto; flex-shrink: 0; }
+.chat-item { padding: 12px 16px; border-bottom: 1px solid var(--bd); cursor: pointer; }
+.chat-item:hover, .chat-item.active { background: var(--s2); }
+.chat-item-name { font-size: 14px; font-weight: 600; color: var(--tx); }
+.chat-item-preview { font-size: 12px; color: var(--t2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-area { flex: 1; display: flex; flex-direction: column; }
+.chat-header { padding: 12px 16px; border-bottom: 1px solid var(--bd); display: flex; align-items: center; justify-content: space-between; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+.msg.recv { background: var(--s2); color: var(--tx); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.sent { background: var(--blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg-time { font-size: 11px; opacity: 0.6; margin-top: 4px; }
+.chat-input-area { padding: 12px 16px; border-top: 1px solid var(--bd); display: flex; gap: 8px; }
+.chat-input { flex: 1; padding: 10px 14px; background: var(--s1); border: 1px solid var(--bd); border-radius: 20px; color: var(--tx); font-size: 14px; outline: none; font-family: inherit; }
+.chat-send { padding: 10px 16px; background: var(--blue); color: white; border-radius: 20px; cursor: pointer; font-weight: 700; font-size: 14px; border: none; font-family: inherit; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .topbar { left: 0; }
+  .content { margin-left: 0; }
+  .menu-btn { display: flex; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: 1fr 1fr; }
+  .search-box { width: 140px; }
+  .chat-list { width: 200px; }
+}
+@media (max-width: 600px) {
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: 1fr; }
+  .g2 { grid-template-columns: 1fr; }
+  .content-inner { padding: 12px; }
+  .search-box { display: none; }
+  .chat-list { display: none; }
+  .chat-layout { height: calc(100vh - 100px); }
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-wrap">
+  <div class="lcard">
+    <div class="ltitle">INTER<span>LIGA</span></div>
+    <div class="lsub">🔐 Painel Administrativo</div>
+    <div class="llbl">E-MAIL</div>
+    <input class="linp" id="lemail" type="email" placeholder="admin@interliga.com.br" autocomplete="email"/>
+    <div class="llbl">SENHA</div>
+    <input class="linp" id="lsenha" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()"/>
+    <button class="lbtn" onclick="login()">Entrar no painel →</button>
+    <div class="lerr" id="lerr">❌ E-mail ou senha incorretos</div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin-panel">
+  <div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+  <div class="adm-wrap">
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-title">INTER<span style="color:var(--or)">LIGA</span></div>
+        <div class="sidebar-logo-sub">PAINEL ADMINISTRATIVO</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:8px 0;">
+        <div class="nav-group">VISÃO GERAL</div>
+        <div class="nav-item active" onclick="showSection('dashboard',this)"><span>📊</span> Dashboard</div>
+        <div class="nav-item" onclick="showSection('monitor',this)"><span>🗺️</span> Monitoramento <span class="nav-badge">12</span></div>
+        <div class="nav-group">USUÁRIOS</div>
+        <div class="nav-item" onclick="showSection('passageiros',this)"><span>👤</span> Passageiros</div>
+        <div class="nav-item" onclick="showSection('motoristas',this)"><span>🚗</span> Motoristas</div>
+        <div class="nav-item" onclick="showSection('comerciantes',this)"><span>🍔</span> Comerciantes</div>
+        <div class="nav-group">OPERAÇÃO</div>
+        <div class="nav-item" onclick="showSection('corridas',this)"><span>🚕</span> Corridas</div>
+        <div class="nav-item" onclick="showSection('pedidos',this)"><span>🛒</span> Pedidos</div>
+        <div class="nav-group">FINANCEIRO</div>
+        <div class="nav-item" onclick="showSection('financeiro',this)"><span>💰</span> Financeiro</div>
+        <div class="nav-item" onclick="showSection('repasses',this)"><span>💸</span> Repasses</div>
+        <div class="nav-group">OPERAÇÃO</div>
+        <div class="nav-item" onclick="showSection('config-operacao',this)"><span>⚙️</span> Configurar App</div>
+        <div class="nav-item" onclick="showSection('cupons',this)"><span>🎁</span> Cupons</div>
+        <div class="nav-item" onclick="showSection('anuncios',this)"><span>📢</span> Anúncios</div>
+        <div class="nav-item" onclick="showSection('notificacoes',this)"><span>🔔</span> Notificações</div>
+        <div class="nav-item" onclick="showSection('mapa-calor',this)"><span>🗺️</span> Mapa de Calor</div>
+        <div class="nav-item" onclick="showSection('relatorios',this)"><span>📊</span> Relatórios</div>
+        <div class="nav-item" onclick="showSection('franqueados',this)"><span>🤝</span> Franqueados</div>
+        <div class="nav-group">CONFIGURAÇÕES</div>
+        <div class="nav-item" onclick="showSection('precificacao',this)"><span>💲</span> Precificação</div>
+        <div class="nav-item" onclick="showSection('chat',this)"><span>💬</span> Chat & Ligações <span class="nav-badge">5</span></div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="admin-row">
+          <div class="admin-av">AD</div>
+          <div><div class="admin-name">Admin Master</div><div class="admin-role">Superadmin</div></div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- MAIN -->
+    <div style="flex:1;display:flex;flex-direction:column;">
+      <!-- TOPBAR -->
+      <div class="topbar">
+        <div class="menu-btn" onclick="toggleSidebar()">☰</div>
+        <div>
+          <div class="page-title" id="page-title">Dashboard</div>
+          <div class="page-sub" id="page-sub">Visão geral da plataforma</div>
+        </div>
+        <div class="topbar-right">
+          <input class="search-box" placeholder="🔍 Buscar..." />
+          <div class="notif-btn">🔔</div>
+        </div>
+      </div>
+
+      <!-- CONTENT -->
+      <div class="content">
+        <div class="content-inner">
+
+          <!-- DASHBOARD -->
+          <div class="section active" id="s-dashboard">
+            <div class="stat-grid">
+              <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val">R$ 48.320</div><div class="stat-lbl">Faturamento hoje</div><div class="stat-chg up">↑ +18% vs ontem</div></div>
+              <div class="stat-card"><div class="stat-icon">🚕</div><div class="stat-val">1.247</div><div class="stat-lbl">Corridas hoje</div><div class="stat-chg up">↑ +94 vs ontem</div></div>
+              <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-val">389</div><div class="stat-lbl">Pedidos Interifood</div><div class="stat-chg up">↑ +12% vs ontem</div></div>
+              <div class="stat-card"><div class="stat-icon">🚗</div><div class="stat-val">312</div><div class="stat-lbl">Motoristas online</div><div class="stat-chg dn">↓ -8 vs ontem</div></div>
+            </div>
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Atividade Recente</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>TIPO</th><th>USUÁRIO</th><th>VALOR</th><th>STATUS</th><th>HORA</th></tr></thead>
+                  <tbody>
+                    <tr><td>#10482</td><td>🚕 Corrida</td><td>João Silva</td><td>R$ 18,90</td><td><span class="badge green">✓ Concluída</span></td><td>09:41</td></tr>
+                    <tr><td>#10481</td><td>🍔 Pedido</td><td>Maria Costa</td><td>R$ 54,90</td><td><span class="badge green">✓ Entregue</span></td><td>09:38</td></tr>
+                    <tr><td>#10480</td><td>🚕 Corrida</td><td>Carlos Mendes</td><td>R$ 34,50</td><td><span class="badge blue">🔵 Em andamento</span></td><td>09:35</td></tr>
+                    <tr><td>#10479</td><td>🍔 Pedido</td><td>Ana Lima</td><td>R$ 28,90</td><td><span class="badge yellow">⏳ Preparando</span></td><td>09:33</td></tr>
+                    <tr><td>#10478</td><td>🚕 Corrida</td><td>Pedro Santos</td><td>R$ 22,00</td><td><span class="badge red">✕ Cancelada</span></td><td>09:30</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- PASSAGEIROS -->
+          <div class="section" id="s-passageiros">
+            <div class="section-header">
+              <div class="section-title">👤 Passageiros</div>
+              <button class="pbtn">+ Novo</button>
+            </div>
+            <div class="filter-tabs">
+              <button class="filter-btn active">Todos (2.841)</button>
+              <button class="filter-btn">Ativos</button>
+              <button class="filter-btn">Inativos</button>
+              <button class="filter-btn">Novos (7 dias)</button>
+            </div>
+            <div class="card">
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>USUÁRIO</th><th>TELEFONE</th><th>CORRIDAS</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>João Silva</b><br><small style="color:var(--t2)">joao.silva@email.com</small></td><td>(11) 98765-4321</td><td>48</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">✏️</span> <span class="icon-btn">🚫</span></td></tr>
+                    <tr><td><b>Maria Costa</b><br><small style="color:var(--t2)">maria.costa@email.com</small></td><td>(11) 91234-5678</td><td>92</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">✏️</span> <span class="icon-btn">🚫</span></td></tr>
+                    <tr><td><b>Carlos Mendes</b></td><td>(11) 93456-7890</td><td>17</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">✏️</span> <span class="icon-btn">🚫</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- MOTORISTAS -->
+          <div class="section" id="s-motoristas">
+            <div class="section-header">
+              <div class="section-title">🚗 Motoristas</div>
+              <button class="pbtn">+ Novo</button>
+            </div>
+            <div class="filter-tabs">
+              <button class="filter-btn active">Todos (428)</button>
+              <button class="filter-btn">🟢 Online (312)</button>
+              <button class="filter-btn">🔵 Em corrida (47)</button>
+              <button class="filter-btn">🔴 Offline (116)</button>
+              <button class="filter-btn">🚫 Bloqueados (8)</button>
+            </div>
+            <div class="card">
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>MOTORISTA</th><th>VEÍCULO</th><th>CORRIDAS</th><th>GANHOS/MÊS</th><th>AVALIAÇÃO</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>Marcos R.</b></td><td>Civic · ABC-1234</td><td>312</td><td>R$ 3.240</td><td>⭐ 4.93</td><td><span class="badge green">🟢 Online</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">💬</span> <span class="icon-btn">⏸</span> <span class="icon-btn">🚫</span></td></tr>
+                    <tr><td><b>Paulo S.</b></td><td>Corolla · DEF-5678</td><td>198</td><td>R$ 2.100</td><td>⭐ 4.8</td><td><span class="badge blue">🔵 Em corrida</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">💬</span> <span class="icon-btn">⏸</span> <span class="icon-btn">🚫</span></td></tr>
+                    <tr><td><b>Ana L.</b></td><td>Van · GHI-9012</td><td>87</td><td>R$ 4.800</td><td>⭐ 4.96</td><td><span class="badge green">🟢 Online</span></td><td><span class="icon-btn">👁</span> <span class="icon-btn">💬</span> <span class="icon-btn">⏸</span> <span class="icon-btn">🚫</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- CORRIDAS -->
+          <div class="section" id="s-corridas">
+            <div class="section-header">
+              <div class="section-title">🚕 Corridas</div>
+              <button class="pbtn" onclick="showToast('📊 Exportando...')">Exportar</button>
+            </div>
+            <div class="filter-tabs">
+              <button class="filter-btn active">Todas (1.247)</button>
+              <button class="filter-btn">🔵 Em andamento (47)</button>
+              <button class="filter-btn">✅ Concluídas (1.183)</button>
+              <button class="filter-btn">❌ Canceladas (17)</button>
+            </div>
+            <div class="card">
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>PASSAGEIRO</th><th>MOTORISTA</th><th>ORIGEM → DESTINO</th><th>VALOR</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
+                  <tbody>
+                    <tr><td>#10482</td><td>João Silva</td><td>Marcos R.</td><td>R. das Flores → Av. Paulista</td><td>R$ 18,90</td><td><span class="badge green">✅ Concluída</span></td><td><span class="icon-btn">🗺️</span></td></tr>
+                    <tr><td>#10480</td><td>Carlos M.</td><td>Paulo S.</td><td>Terminal → Shopping</td><td>R$ 34,50</td><td><span class="badge blue">🔵 Em andamento</span></td><td><span class="icon-btn">🗺️</span></td></tr>
+                    <tr><td>#10478</td><td>Pedro S.</td><td>—</td><td>Bairro Novo → Centro</td><td>R$ 22,00</td><td><span class="badge red">❌ Cancelada</span></td><td><span class="icon-btn">📋</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- PEDIDOS -->
+          <div class="section" id="s-pedidos">
+            <div class="section-header"><div class="section-title">🛒 Pedidos Interifood</div><button class="pbtn" onclick="showToast('📊 Exportando...')">Exportar</button></div>
+            <div class="card">
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>CLIENTE</th><th>RESTAURANTE</th><th>VALOR</th><th>STATUS</th></tr></thead>
+                  <tbody>
+                    <tr><td>#1042</td><td>João Silva</td><td>🍔 Burger do Zé</td><td>R$ 36,80</td><td><span class="badge blue">🔵 A caminho</span></td></tr>
+                    <tr><td>#1041</td><td>Maria Costa</td><td>🍔 Burger do Zé</td><td>R$ 128,70</td><td><span class="badge yellow">🟡 Preparando</span></td></tr>
+                    <tr><td>#1040</td><td>Carlos M.</td><td>🍕 Bella Napoli</td><td>R$ 52,00</td><td><span class="badge green">✅ Entregue</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- FINANCEIRO -->
+          <div class="section" id="s-financeiro">
+            <div class="section-header"><div class="section-title">💰 Financeiro</div></div>
+            <div class="stat-grid">
+              <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val">R$ 892.400</div><div class="stat-lbl">Faturamento do mês</div><div class="stat-chg up">↑ +14% vs mês anterior</div></div>
+              <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-val">R$ 134.800</div><div class="stat-lbl">Receita líquida</div></div>
+              <div class="stat-card"><div class="stat-icon">🎯</div><div class="stat-val">R$ 32,40</div><div class="stat-lbl">Ticket médio</div></div>
+              <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-val">+18%</div><div class="stat-lbl">Crescimento</div></div>
+            </div>
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Movimentações</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>DATA</th><th>DESCRIÇÃO</th><th>TIPO</th><th>VALOR BRUTO</th><th>COMISSÃO</th><th>LÍQUIDO</th></tr></thead>
+                  <tbody>
+                    <tr><td>Hoje</td><td>Corridas — Total dia</td><td>🚕 Corridas</td><td>R$ 38.240</td><td>R$ 5.736 (18%)</td><td><b style="color:var(--green)">R$ 32.504</b></td></tr>
+                    <tr><td>Hoje</td><td>Pedidos Interifood</td><td>🍔 Interifood</td><td>R$ 10.080</td><td>R$ 1.210 (12%)</td><td><b style="color:var(--green)">R$ 8.870</b></td></tr>
+                    <tr><td>Ontem</td><td>Corridas — Total dia</td><td>🚕 Corridas</td><td>R$ 41.320</td><td>R$ 6.198 (18%)</td><td><b style="color:var(--green)">R$ 35.122</b></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- REPASSES -->
+          <div class="section" id="s-repasses">
+            <div class="section-header"><div class="section-title">💸 Repasses</div><button class="pbtn" onclick="showToast('💸 Pagando todos...')">Pagar Todos</button></div>
+            <div class="stat-grid">
+              <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-val">R$ 758.000</div><div class="stat-lbl">Total a repassar (mês)</div></div>
+              <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-val">R$ 124.200</div><div class="stat-lbl">Aguardando repasse</div></div>
+              <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val">R$ 633.800</div><div class="stat-lbl">Repasses realizados</div></div>
+            </div>
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Repasses Pendentes — Motoristas</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>MOTORISTA</th><th>CORRIDAS</th><th>PIX</th><th>VALOR</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>Marcos R.</b></td><td>312</td><td>•••2341</td><td>R$ 3.240,00</td><td><span class="badge yellow">Pendente</span></td><td><button class="pbtn" onclick="showToast('💸 Pago!')">Pagar</button></td></tr>
+                    <tr><td><b>Paulo S.</b></td><td>198</td><td>•••7812</td><td>R$ 2.100,00</td><td><span class="badge yellow">Pendente</span></td><td><button class="pbtn" onclick="showToast('💸 Pago!')">Pagar</button></td></tr>
+                    <tr><td><b>Ana L.</b></td><td>87</td><td>•••4490</td><td>R$ 4.800,00</td><td><span class="badge green">✓ Pago</span></td><td>—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- NOTIFICAÇÕES -->
+          <div class="section" id="s-notificacoes">
+            <div class="section-header"><div class="section-title">🔔 Notificações em Massa</div></div>
+            <div class="card">
+              <div class="g2" style="margin-bottom:14px;">
+                <div class="fl"><div class="lbl">DESTINATÁRIO</div><select class="inp"><option>Todos os usuários</option><option>Apenas passageiros</option><option>Apenas motoristas</option><option>Apenas comerciantes</option></select></div>
+                <div class="fl"><div class="lbl">TIPO</div><select class="inp"><option>Push notification</option><option>WhatsApp</option><option>Ambos</option></select></div>
+              </div>
+              <div class="fl" style="margin-bottom:10px;"><div class="lbl">TÍTULO</div><input class="inp" placeholder="Ex: 🎉 Promoção especial hoje!"/></div>
+              <div class="fl" style="margin-bottom:14px;"><div class="lbl">MENSAGEM</div><textarea class="inp" rows="3" placeholder="Texto da notificação..."></textarea></div>
+              <button class="sbtn" onclick="showToast('📤 Notificação disparada!')">📤 Disparar notificação</button>
+            </div>
+          </div>
+
+          <!-- FRANQUEADOS -->
+          <div class="section" id="s-franqueados">
+            <div class="section-header"><div class="section-title">🤝 Franqueados</div><button class="pbtn" onclick="showToast('➕ Novo franqueado')">+ Cadastrar</button></div>
+            <div class="card" style="margin-bottom:16px;">
+              <div class="ct" style="margin-bottom:14px;">⏸️ Controle de Operações</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--s1);border-radius:12px;margin-bottom:10px;">
+                <div><div style="font-size:15px;font-weight:700;">🚗 Aceitar novas corridas</div><div style="font-size:12px;color:var(--t2)">Pausar impede novos pedidos</div></div>
+                <div onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)';showToast(this.dataset.on==='0'?'⏸️ Corridas PAUSADAS':'✅ Corridas ATIVAS')" data-on="1" style="width:52px;height:28px;background:var(--green);border-radius:14px;position:relative;cursor:pointer;"><div style="position:absolute;width:22px;height:22px;background:white;border-radius:50%;top:3px;right:3px;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--s1);border-radius:12px;">
+                <div><div style="font-size:15px;font-weight:700;">🍔 Aceitar pedidos Interifood</div><div style="font-size:12px;color:var(--t2)">Pausar impede pedidos</div></div>
+                <div onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)';showToast(this.dataset.on==='0'?'⏸️ Interifood PAUSADO':'✅ Interifood ATIVO')" data-on="1" style="width:52px;height:28px;background:var(--green);border-radius:14px;position:relative;cursor:pointer;"><div style="position:absolute;width:22px;height:22px;background:white;border-radius:50%;top:3px;right:3px;box-shadow:0 1px 4px rgba(0,0,0,.2);"></div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">💳 Mensalidades</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>FRANQUEADO</th><th>CIDADE</th><th>PLANO</th><th>VALOR</th><th>VENCIMENTO</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+                  <tbody>
+                    <tr><td><b>João Franqueado</b><br><small style="color:var(--t2)">Itacaré - BA</small></td><td>Itacaré</td><td><span class="badge yellow">Médio</span></td><td>R$ 599</td><td>15/06/2026</td><td><span class="badge green">✓ Pago</span></td><td><span class="icon-btn">💳</span></td></tr>
+                    <tr><td><b>Maria Franqueada</b><br><small style="color:var(--t2)">Valença - BA</small></td><td>Valença</td><td><span class="badge blue">Básico</span></td><td>R$ 299</td><td style="color:var(--red)">10/06/2026</td><td><span class="badge red">⚠️ Vencido</span></td><td><span class="icon-btn" onclick="showToast('📩 Cobrança enviada!')">📩</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- CHAT -->
+          <div class="section" id="s-chat">
+            <div class="section-header"><div class="section-title">💬 Chat & Ligações</div></div>
+            <div class="chat-layout">
+              <div class="chat-list">
+                <div class="chat-item active" onclick="openChat('João Silva','JS')">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div class="chat-item-name">João Silva</div>
+                    <div style="font-size:11px;color:var(--t2)">09:41</div>
+                  </div>
+                  <div class="chat-item-preview">Motorista está chegando?</div>
+                </div>
+                <div class="chat-item" onclick="openChat('Marcos R.','MR')">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div class="chat-item-name">Marcos R. 🚗</div>
+                    <div style="font-size:11px;color:var(--t2)">09:38</div>
+                  </div>
+                  <div class="chat-item-preview">Estou a 2 minutos</div>
+                </div>
+                <div class="chat-item" onclick="openChat('Maria Costa','MC')">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div class="chat-item-name">Maria Costa</div>
+                    <div style="font-size:11px;color:var(--t2)">09:22</div>
+                  </div>
+                  <div class="chat-item-preview">🎵 Áudio (0:08)</div>
+                </div>
+              </div>
+              <div class="chat-area">
+                <div class="chat-header">
+                  <div><div style="font-size:15px;font-weight:700;" id="chat-name">João Silva</div><div style="font-size:12px;color:var(--t2)">Passageiro · 🟢 Online</div></div>
+                  <div style="display:flex;gap:8px;"><span class="icon-btn">📞</span><span class="icon-btn">🚫</span></div>
+                </div>
+                <div class="chat-messages" id="chat-msgs">
+                  <div class="msg recv">Oi! O motorista está chegando?<div class="msg-time">09:38</div></div>
+                  <div class="msg sent">Sim! Marcos está a 2 minutos de você 📍<div class="msg-time">09:39</div></div>
+                  <div class="msg recv">Ótimo, obrigado!<div class="msg-time">09:40</div></div>
+                </div>
+                <div class="chat-input-area">
+                  <input class="chat-input" id="chat-input" placeholder="Digite uma mensagem..." onkeydown="if(event.key==='Enter')sendMsgAdmin()"/>
+                  <button class="chat-send" onclick="sendMsgAdmin()">Enviar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SEÇÕES PLACEHOLDER -->
+          <div class="section" id="s-monitor"><div class="section-header"><div class="section-title">🗺️ Monitoramento</div></div><div class="card"><p style="color:var(--t2);text-align:center;padding:40px;">Mapa em tempo real — disponível com Firebase integrado</p></div></div>
+          <div class="section" id="s-comerciantes"><div class="section-header"><div class="section-title">🍔 Comerciantes</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Lista de comerciantes Interifood</p></div></div>
+          <div class="section" id="s-config-operacao"><div class="section-header"><div class="section-title">⚙️ Configurar App</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Configurações gerais do aplicativo</p></div></div>
+          <div class="section" id="s-cupons"><div class="section-header"><div class="section-title">🎁 Cupons</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Gerenciar cupons de desconto</p></div></div>
+          <div class="section" id="s-anuncios"><div class="section-header"><div class="section-title">📢 Anúncios</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Gerenciar banners e anúncios</p></div></div>
+          <div class="section" id="s-mapa-calor"><div class="section-header"><div class="section-title">🗺️ Mapa de Calor</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Visualização de demanda por região</p></div></div>
+          <div class="section" id="s-relatorios"><div class="section-header"><div class="section-title">📊 Relatórios</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Relatórios detalhados</p></div></div>
+          <div class="section" id="s-precificacao"><div class="section-header"><div class="section-title">💲 Precificação</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Configuração de tarifas</p></div></div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ADMINS=[
+  {email:'admin@interliga.com.br',senha:'interliga@2026',nome:'Admin Master',role:'Superadmin'},
+  {email:'22mobilidade@gmail.com',senha:'interliga@2026',nome:'Miqueias',role:'Proprietario'},
+];
+
+const sectionTitles={
+  dashboard:['Dashboard','Visão geral da plataforma'],
+  monitor:['Monitoramento','Corridas e entregas em tempo real'],
+  passageiros:['Passageiros','Gerenciar usuários passageiros'],
+  motoristas:['Motoristas','Gerenciar motoristas cadastrados'],
+  comerciantes:['Comerciantes','Estabelecimentos Interifood'],
+  corridas:['Corridas','Histórico e corridas em andamento'],
+  pedidos:['Pedidos','Pedidos Interifood'],
+  financeiro:['Financeiro','Faturamento e movimentações'],
+  repasses:['Repasses','Repasses para motoristas e comerciantes'],
+  'config-operacao':['Configurar App','Configurações gerais'],
+  cupons:['Cupons','Cupons de desconto'],
+  anuncios:['Anúncios','Banners e anúncios'],
+  notificacoes:['Notificações','Notificações em massa'],
+  'mapa-calor':['Mapa de Calor','Demanda por região'],
+  relatorios:['Relatórios','Relatórios detalhados'],
+  franqueados:['Franqueados','Painel de franqueados'],
+  precificacao:['Precificação','Tarifas e categorias'],
+  chat:['Chat & Ligações','Suporte aos usuários'],
+};
+
+function login(){
+  const e=(document.getElementById('lemail').value||'').trim().toLowerCase();
+  const s=document.getElementById('lsenha').value||'';
+  const a=ADMINS.find(x=>x.email===e&&x.senha===s);
+  if(a){
+    document.getElementById('login-wrap').style.display='none';
+    document.getElementById('admin-panel').style.display='block';
+    const nm=document.querySelector('.admin-name');
+    const rl=document.querySelector('.admin-role');
+    if(nm)nm.textContent=a.nome;
+    if(rl)rl.textContent=a.role;
+    showSection('dashboard',document.querySelector('.nav-item'));
+    showToast('✅ Bem-vindo, '+a.nome+'!');
+  }else{
+    const err=document.getElementById('lerr');
+    err.style.display='block';
+    setTimeout(()=>err.style.display='none',3000);
+  }
+}
+
+function showSection(id,navEl){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('s-'+id);
+  if(sec)sec.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(navEl)navEl.classList.add('active');
+  if(sectionTitles[id]){
+    const pt=document.getElementById('page-title');
+    const ps=document.getElementById('page-sub');
+    if(pt)pt.textContent=sectionTitles[id][0];
+    if(ps)ps.textContent=sectionTitles[id][1];
+  }
+  closeSidebar();
+}
+
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('overlay');
+  sb.classList.toggle('open');
+  ov.classList.toggle('show');
+}
+function closeSidebar(){
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('overlay')?.classList.remove('show');
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  if(!t)return;
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function openChat(name){
+  document.getElementById('chat-name').textContent=name;
+  document.querySelectorAll('.chat-item').forEach(i=>i.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+function sendMsgAdmin(){
+  const inp=document.getElementById('chat-input');
+  const msgs=document.getElementById('chat-msgs');
+  const txt=(inp.value||'').trim();
+  if(!txt)return;
+  const div=document.createElement('div');
+  div.className='msg sent';
+  div.innerHTML=txt+'<div class="msg-time">'+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</div>';
+  msgs.appendChild(div);
+  msgs.scrollTop=msgs.scrollHeight;
+  inp.value='';
+}
+</script>
+</body>
+</html>
