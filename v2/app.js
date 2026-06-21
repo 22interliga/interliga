@@ -705,7 +705,12 @@ async function enviarAudioChat(audioDataUrl) {
       await fb.addDoc(fb.collection(db, 'corridas', state.corridaId, 'mensagens'), {
         tipo: 'audio', audioData: audioDataUrl, de: 'passageiro', ts: fb.serverTimestamp(),
       });
-    } catch (e) { console.warn('Erro ao enviar áudio:', e); }
+    } catch (e) {
+      console.warn('Erro ao enviar áudio:', e);
+      showToast('⚠️ Falha ao enviar o áudio — tente de novo');
+    }
+  } else {
+    showToast('⚠️ Sem conexão — áudio não foi enviado ao motorista');
   }
 }
 
@@ -746,18 +751,28 @@ async function alternarGravacaoAudioChat() {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    gravadorAudioChat = new MediaRecorder(stream);
+    const opcoes = { audioBitsPerSecond: 24000 };
+    if (window.MediaRecorder?.isTypeSupported?.('audio/webm;codecs=opus')) {
+      opcoes.mimeType = 'audio/webm;codecs=opus';
+    }
+    gravadorAudioChat = new MediaRecorder(stream, opcoes);
     pedacosAudioChat = [];
-    gravadorAudioChat.ondataavailable = (e) => pedacosAudioChat.push(e.data);
+    gravadorAudioChat.ondataavailable = (e) => { if (e.data && e.data.size > 0) pedacosAudioChat.push(e.data); };
     gravadorAudioChat.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
       clearTimeout(timeoutGravacaoChat);
       gravandoAudioChat = false;
       btnMic?.classList.remove('is-recording');
-      const blob = new Blob(pedacosAudioChat, { type: 'audio/webm' });
+      if (pedacosAudioChat.length === 0) {
+        showToast('⚠️ Gravação muito curta, nada foi enviado');
+        return;
+      }
+      const blob = new Blob(pedacosAudioChat, { type: gravadorAudioChat.mimeType || 'audio/webm' });
       if (blob.size > 0) {
         const base64 = await blobParaBase64(blob);
         enviarAudioChat(base64);
+      } else {
+        showToast('⚠️ Gravação vazia, nada foi enviado');
       }
     };
     gravadorAudioChat.start();
@@ -767,6 +782,7 @@ async function alternarGravacaoAudioChat() {
     clearTimeout(timeoutGravacaoChat);
     timeoutGravacaoChat = setTimeout(() => { if (gravandoAudioChat) gravadorAudioChat?.stop(); }, 30000); // limite de 30s
   } catch (e) {
+    console.error('[passageiro] erro ao gravar áudio:', e);
     showToast('⚠️ Não foi possível acessar o microfone');
   }
 }

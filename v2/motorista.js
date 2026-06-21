@@ -897,7 +897,12 @@ async function enviarAudioChatMotorista(audioDataUrl) {
       await fb.addDoc(fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'), {
         tipo: 'audio', audioData: audioDataUrl, de: 'motorista', ts: fb.serverTimestamp(),
       });
-    } catch (e) { console.warn('Erro ao enviar áudio:', e); }
+    } catch (e) {
+      console.warn('Erro ao enviar áudio:', e);
+      showToast('⚠️ Falha ao enviar o áudio — tente de novo');
+    }
+  } else {
+    showToast('⚠️ Sem conexão — áudio não foi enviado ao passageiro');
   }
 }
 
@@ -940,18 +945,28 @@ async function alternarGravacaoAudioChatMotorista() {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    gravadorAudioChatMotorista = new MediaRecorder(stream);
+    const opcoes = { audioBitsPerSecond: 24000 };
+    if (window.MediaRecorder?.isTypeSupported?.('audio/webm;codecs=opus')) {
+      opcoes.mimeType = 'audio/webm;codecs=opus';
+    }
+    gravadorAudioChatMotorista = new MediaRecorder(stream, opcoes);
     pedacosAudioChatMotorista = [];
-    gravadorAudioChatMotorista.ondataavailable = (e) => pedacosAudioChatMotorista.push(e.data);
+    gravadorAudioChatMotorista.ondataavailable = (e) => { if (e.data && e.data.size > 0) pedacosAudioChatMotorista.push(e.data); };
     gravadorAudioChatMotorista.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
       clearTimeout(timeoutGravacaoChatMotorista);
       gravandoAudioChatMotorista = false;
       btnMic?.classList.remove('is-recording');
-      const blob = new Blob(pedacosAudioChatMotorista, { type: 'audio/webm' });
+      if (pedacosAudioChatMotorista.length === 0) {
+        showToast('⚠️ Gravação muito curta, nada foi enviado');
+        return;
+      }
+      const blob = new Blob(pedacosAudioChatMotorista, { type: gravadorAudioChatMotorista.mimeType || 'audio/webm' });
       if (blob.size > 0) {
         const base64 = await blobParaBase64Motorista(blob);
         enviarAudioChatMotorista(base64);
+      } else {
+        showToast('⚠️ Gravação vazia, nada foi enviado');
       }
     };
     gravadorAudioChatMotorista.start();
@@ -961,6 +976,7 @@ async function alternarGravacaoAudioChatMotorista() {
     clearTimeout(timeoutGravacaoChatMotorista);
     timeoutGravacaoChatMotorista = setTimeout(() => { if (gravandoAudioChatMotorista) gravadorAudioChatMotorista?.stop(); }, 30000);
   } catch (e) {
+    console.error('[motorista] erro ao gravar áudio:', e);
     showToast('⚠️ Não foi possível acessar o microfone');
   }
 }
