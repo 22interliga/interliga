@@ -49,6 +49,8 @@
       <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="cad-pax-email" placeholder="seu@email.com"></div>
       <div class="cadastro-field"><label>CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf" placeholder="000.000.000-00" maxlength="14"></div>
       <div class="cadastro-field"><label>Confirme os 2 últimos dígitos do CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf-confirma" placeholder="00" maxlength="2" inputmode="numeric"></div>
+      <div class="cadastro-field"><label>Crie uma senha</label><input type="password" class="cadastro-input" id="cad-pax-senha" placeholder="Mínimo 6 caracteres"></div>
+      <div class="cadastro-field"><label>Confirme a senha</label><input type="password" class="cadastro-input" id="cad-pax-senha-confirma" placeholder="Repita a senha"></div>
     </div>
 
     <div class="section-label">FOTO DE PERFIL (SELFIE)</div>
@@ -62,6 +64,23 @@
 
     <div id="cad-pax-erro" class="cadastro-erro" hidden></div>
     <button class="btn-primary" id="btn-enviar-cadastro-passageiro">Enviar cadastro</button>
+    <div class="link-secundario" id="link-ir-pro-login">Já tem cadastro? <b>Entrar</b></div>
+  </section>
+
+  <!-- ══════════════════ LOGIN PASSAGEIRO ══════════════════ -->
+  <section class="screen" id="screen-login-passageiro">
+    <div class="page-header">
+      <div class="page-title">Entrar</div>
+      <div class="page-sub">Bem-vindo de volta</div>
+    </div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">
+      <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="login-pax-email" placeholder="seu@email.com"></div>
+      <div class="cadastro-field"><label>Senha</label><input type="password" class="cadastro-input" id="login-pax-senha" placeholder="Sua senha"></div>
+    </div>
+    <div id="login-pax-erro" class="cadastro-erro" hidden></div>
+    <button class="btn-primary" id="btn-fazer-login-passageiro">Entrar</button>
+    <div class="link-secundario" id="link-ir-pro-cadastro">Ainda não tem cadastro? <b>Cadastre-se</b></div>
+    <div class="link-secundario" id="link-esqueci-senha-pax" style="margin-top:4px;">Esqueci minha senha</div>
   </section>
 
   <!-- ══════════════════ AGUARDANDO APROVAÇÃO ══════════════════ -->

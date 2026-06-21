@@ -34,6 +34,8 @@ export function setStorageJSON(key, value) {
 }
 let fb = {}; // funções do firestore, preenchidas após carregar
 let meuPassageiroId = null;
+let authPassageiro = null;
+let authModRef = null;
 
 async function initFirebase() {
   try {
@@ -41,6 +43,7 @@ async function initFirebase() {
     const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const authMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
     fb = firestoreMod;
+    authModRef = authMod;
 
     const firebaseConfig = {
       apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
@@ -53,16 +56,27 @@ async function initFirebase() {
 
     const fbApp = initializeApp(firebaseConfig);
     db = fb.getFirestore(fbApp);
-
-    // Autenticação anônima — exige um login (mesmo sem senha) pra poder ler/escrever no banco.
-    // Sem isso, qualquer pessoa na internet acessaria os dados direto, sem nem abrir o app.
-    const auth = authMod.getAuth(fbApp);
-    const cred = await authMod.signInAnonymously(auth);
-    meuPassageiroId = cred.user.uid;
+    authPassageiro = authMod.getAuth(fbApp);
 
     firebaseReady = true;
     console.log('✅ Firebase conectado');
-    verificarCadastroPassageiro();
+
+    // Login real (e-mail/senha) — quando já tem sessão salva, entra direto sem pedir senha de novo.
+    // Quando não tem (ou deslogou), mostra a tela de login pra quem já escolheu ser passageiro.
+    authMod.onAuthStateChanged(authPassageiro, (user) => {
+      if (user) {
+        meuPassageiroId = user.uid;
+        verificarCadastroPassageiro();
+      } else {
+        meuPassageiroId = null;
+        if (localStorage.getItem('interliga_papel') === 'passageiro') {
+          const telaAtual = state.currentScreen;
+          if (telaAtual !== 'screen-cadastro-passageiro' && telaAtual !== 'screen-role-choice') {
+            go('screen-login-passageiro');
+          }
+        }
+      }
+    });
   } catch (e) {
     console.warn('Firebase não disponível — app funciona em modo local:', e);
     firebaseReady = false;
@@ -902,8 +916,7 @@ document.getElementById('btn-sou-motorista')?.addEventListener('click', () => {
 });
 document.getElementById('btn-sou-passageiro')?.addEventListener('click', () => {
   localStorage.setItem('interliga_papel', 'passageiro');
-  go('screen-cadastro-passageiro');
-  verificarCadastroPassageiro();
+  go('screen-login-passageiro');
 });
 
 // ─────────────────────────────────────
@@ -983,6 +996,8 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
   const email = document.getElementById('cad-pax-email').value.trim();
   const cpf = document.getElementById('cad-pax-cpf').value.replace(/\D/g, '');
   const confirma = document.getElementById('cad-pax-cpf-confirma').value.trim();
+  const senha = document.getElementById('cad-pax-senha').value;
+  const senhaConfirma = document.getElementById('cad-pax-senha-confirma').value;
 
   function mostrarErro(msg) { erroEl.textContent = '⚠️ ' + msg; erroEl.hidden = false; }
 
@@ -991,14 +1006,20 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
   if (!email.includes('@') || !email.includes('.')) return mostrarErro('Informe um e-mail válido');
   if (!validarCPF(cpf)) return mostrarErro('CPF inválido — confira os números digitados');
   if (confirma !== cpf.slice(-2)) return mostrarErro('Os 2 últimos dígitos não confirmam o CPF informado');
+  if (senha.length < 6) return mostrarErro('A senha precisa ter pelo menos 6 caracteres');
+  if (senha !== senhaConfirma) return mostrarErro('As senhas não são iguais');
   if (!selfiePassageiroBase64) return mostrarErro('Tire uma selfie pra concluir o cadastro');
-  if (!firebaseReady || !db || !meuPassageiroId) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
+  if (!firebaseReady || !db || !authPassageiro) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
 
   const btn = document.getElementById('btn-enviar-cadastro-passageiro');
   btn.disabled = true;
   btn.textContent = 'Enviando...';
 
   try {
+    if (!meuPassageiroId) {
+      const cred = await authModRef.createUserWithEmailAndPassword(authPassageiro, email, senha);
+      meuPassageiroId = cred.user.uid;
+    }
     await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), {
       nome, celular, email, cpf,
       selfie: selfiePassageiroBase64,
@@ -1009,10 +1030,52 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
     mostrarTelaAguardandoAprovacao();
   } catch (e) {
     console.error('[passageiro] erro ao enviar cadastro:', e);
-    mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
+    if (e.code === 'auth/email-already-in-use') mostrarErro('Esse e-mail já tem cadastro — tenta Entrar em vez de cadastrar');
+    else mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Enviar cadastro';
+  }
+});
+
+// ─────────────────────────────────────
+// LOGIN (passageiro que já tem cadastro)
+// ─────────────────────────────────────
+document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('login-pax-erro');
+  erroEl.hidden = true;
+  const email = document.getElementById('login-pax-email').value.trim();
+  const senha = document.getElementById('login-pax-senha').value;
+  if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.hidden = false; return; }
+  if (!authPassageiro) { erroEl.textContent = '⚠️ Ainda conectando ao servidor, tenta de novo em um instante'; erroEl.hidden = false; return; }
+
+  const btn = document.getElementById('btn-fazer-login-passageiro');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  try {
+    await authModRef.signInWithEmailAndPassword(authPassageiro, email, senha);
+    // onAuthStateChanged cuida do resto (verificarCadastroPassageiro)
+  } catch (e) {
+    console.warn('[passageiro] erro no login:', e.code);
+    erroEl.textContent = '❌ E-mail ou senha incorretos';
+    erroEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+
+document.getElementById('link-ir-pro-cadastro')?.addEventListener('click', () => go('screen-cadastro-passageiro'));
+document.getElementById('link-ir-pro-login')?.addEventListener('click', () => go('screen-login-passageiro'));
+document.getElementById('link-esqueci-senha-pax')?.addEventListener('click', async () => {
+  const email = document.getElementById('login-pax-email').value.trim();
+  if (!email) { showToast('⚠️ Digite seu e-mail no campo acima primeiro'); return; }
+  if (!authPassageiro) return;
+  try {
+    await authModRef.sendPasswordResetEmail(authPassageiro, email);
+    showToast('📧 Enviamos um link pra redefinir sua senha');
+  } catch (e) {
+    showToast('⚠️ Não foi possível enviar — confira o e-mail digitado');
   }
 });
 

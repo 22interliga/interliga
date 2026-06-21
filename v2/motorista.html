@@ -39,6 +39,8 @@
       <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="cad-mot-email" placeholder="seu@email.com"></div>
       <div class="cadastro-field"><label>CPF</label><input type="text" class="cadastro-input" id="cad-mot-cpf" placeholder="000.000.000-00" maxlength="14"></div>
       <div class="cadastro-field"><label>Confirme os 2 últimos dígitos do CPF</label><input type="text" class="cadastro-input" id="cad-mot-cpf-confirma" placeholder="00" maxlength="2" inputmode="numeric"></div>
+      <div class="cadastro-field"><label>Crie uma senha</label><input type="password" class="cadastro-input" id="cad-mot-senha" placeholder="Mínimo 6 caracteres"></div>
+      <div class="cadastro-field"><label>Confirme a senha</label><input type="password" class="cadastro-input" id="cad-mot-senha-confirma" placeholder="Repita a senha"></div>
     </div>
 
     <div class="section-label">VEÍCULO</div>
@@ -74,6 +76,23 @@
 
     <div id="cad-mot-erro" class="cadastro-erro" hidden></div>
     <button class="btn-primary" id="btn-enviar-cadastro-motorista">Enviar cadastro</button>
+    <div class="link-secundario" id="link-ir-pro-login-mot">Já tem cadastro? <b>Entrar</b></div>
+  </section>
+
+  <!-- ══════════════════ LOGIN MOTORISTA ══════════════════ -->
+  <section class="screen" id="screen-login-motorista">
+    <div class="page-header">
+      <div class="page-title">Entrar</div>
+      <div class="page-sub">Bem-vindo de volta</div>
+    </div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">
+      <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="login-mot-email" placeholder="seu@email.com"></div>
+      <div class="cadastro-field"><label>Senha</label><input type="password" class="cadastro-input" id="login-mot-senha" placeholder="Sua senha"></div>
+    </div>
+    <div id="login-mot-erro" class="cadastro-erro" hidden></div>
+    <button class="btn-primary" id="btn-fazer-login-motorista">Entrar</button>
+    <div class="link-secundario" id="link-ir-pro-cadastro-mot">Ainda não tem cadastro? <b>Cadastre-se</b></div>
+    <div class="link-secundario" id="link-esqueci-senha-mot" style="margin-top:4px;">Esqueci minha senha</div>
   </section>
 
   <!-- ══════════════════ AGUARDANDO APROVAÇÃO ══════════════════ -->

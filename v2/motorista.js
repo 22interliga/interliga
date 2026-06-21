@@ -6,6 +6,8 @@
 let db = null;
 let firebaseReady = false;
 let fb = {};
+let authMotorista = null;
+let authModRef = null;
 
 async function initFirebase() {
   try {
@@ -13,6 +15,7 @@ async function initFirebase() {
     const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const authMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
     fb = firestoreMod;
+    authModRef = authMod;
     const firebaseConfig = {
       apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
       authDomain: "interliga-app.firebaseapp.com",
@@ -23,18 +26,29 @@ async function initFirebase() {
     };
     const fbApp = initializeApp(firebaseConfig);
     db = fb.getFirestore(fbApp);
-
-    // Autenticação anônima — exige um login (mesmo sem senha) pra poder ler/escrever no banco.
-    // Sem isso, qualquer pessoa na internet acessaria os dados direto, sem nem abrir o app.
-    const auth = authMod.getAuth(fbApp);
-    await authMod.signInAnonymously(auth);
+    authMotorista = authMod.getAuth(fbApp);
 
     firebaseReady = true;
     console.log('Firebase conectado (motorista)');
-    verificarCadastroMotorista();
+
+    // Login real (e-mail/senha) — com sessão salva, entra direto. Sem sessão, pede login.
+    authMod.onAuthStateChanged(authMotorista, (user) => {
+      if (user) {
+        meuMotoristaId = user.uid;
+        verificarCadastroMotorista();
+      } else {
+        meuMotoristaId = null;
+        const telaAtual = document.querySelector('.screen[data-active="true"]')?.id;
+        if (telaAtual !== 'screen-cadastro-motorista') {
+          go('screen-login-motorista');
+        }
+      }
+    });
   } catch (e) {
     console.warn('Firebase nao disponivel:', e);
     firebaseReady = false;
+    meuMotoristaId = obterMotoristaIdReserva();
+    go('screen-home'); // modo totalmente offline — libera a Home sem cadastro, já que não tem como verificar nada
   }
 }
 
@@ -55,7 +69,9 @@ function registrarPerfilMotorista() {
 // ─────────────────────────────────────
 // IDENTIDADE DO MOTORISTA — fixa por dispositivo, usada na fila de prioridade
 // ─────────────────────────────────────
-function obterMotoristaId() {
+// Mantido como reserva: se o Firebase falhar totalmente, ainda gera um ID local
+// pra não quebrar funções que dependem de meuMotoristaId.
+function obterMotoristaIdReserva() {
   let id = localStorage.getItem('interliga_motorista_id');
   if (!id) {
     id = 'mot-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -63,7 +79,7 @@ function obterMotoristaId() {
   }
   return id;
 }
-const meuMotoristaId = obterMotoristaId();
+let meuMotoristaId = null; // definido de verdade pelo login (UID do Firebase Auth)
 
 // ─────────────────────────────────────
 // ESTADO
@@ -1156,6 +1172,8 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
   const email = document.getElementById('cad-mot-email').value.trim();
   const cpf = document.getElementById('cad-mot-cpf').value.replace(/\D/g, '');
   const confirma = document.getElementById('cad-mot-cpf-confirma').value.trim();
+  const senha = document.getElementById('cad-mot-senha').value;
+  const senhaConfirma = document.getElementById('cad-mot-senha-confirma').value;
   const veiculo = document.getElementById('cad-mot-veiculo').value.trim();
   const placa = document.getElementById('cad-mot-placa').value.trim().toUpperCase();
 
@@ -1164,19 +1182,25 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
   if (!email.includes('@') || !email.includes('.')) return mostrarErro('Informe um e-mail válido');
   if (!validarCPF(cpf)) return mostrarErro('CPF inválido — confira os números digitados');
   if (confirma !== cpf.slice(-2)) return mostrarErro('Os 2 últimos dígitos não confirmam o CPF informado');
+  if (senha.length < 6) return mostrarErro('A senha precisa ter pelo menos 6 caracteres');
+  if (senha !== senhaConfirma) return mostrarErro('As senhas não são iguais');
   if (!veiculo) return mostrarErro('Informe o modelo do veículo');
   if (!placa) return mostrarErro('Informe a placa do veículo');
   if (!fotosCadastroMotorista.selfie) return mostrarErro('Tire uma selfie pra concluir o cadastro');
   if (!fotosCadastroMotorista.cnh) return mostrarErro('Envie a foto da CNH');
   if (!fotosCadastroMotorista.crlv) return mostrarErro('Envie a foto do CRLV (documento do veículo)');
   if (!fotosCadastroMotorista.comprovante) return mostrarErro('Envie a foto do comprovante de residência');
-  if (!firebaseReady || !db) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
+  if (!firebaseReady || !db || !authMotorista) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
 
   const btn = document.getElementById('btn-enviar-cadastro-motorista');
   btn.disabled = true;
   btn.textContent = 'Enviando...';
 
   try {
+    if (!meuMotoristaId) {
+      const cred = await authModRef.createUserWithEmailAndPassword(authMotorista, email, senha);
+      meuMotoristaId = cred.user.uid;
+    }
     await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
       nome, celular, email, cpf, veiculo, placa,
       avaliacao: state.motorista.avaliacao || '5.0',
@@ -1194,10 +1218,52 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
     mostrarTelaAguardandoAprovacaoMotorista();
   } catch (e) {
     console.error('[motorista] erro ao enviar cadastro:', e);
-    mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
+    if (e.code === 'auth/email-already-in-use') mostrarErro('Esse e-mail já tem cadastro — tenta Entrar em vez de cadastrar');
+    else mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Enviar cadastro';
+  }
+});
+
+// ─────────────────────────────────────
+// LOGIN (motorista que já tem cadastro)
+// ─────────────────────────────────────
+document.getElementById('btn-fazer-login-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('login-mot-erro');
+  erroEl.hidden = true;
+  const email = document.getElementById('login-mot-email').value.trim();
+  const senha = document.getElementById('login-mot-senha').value;
+  if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.hidden = false; return; }
+  if (!authMotorista) { erroEl.textContent = '⚠️ Ainda conectando ao servidor, tenta de novo em um instante'; erroEl.hidden = false; return; }
+
+  const btn = document.getElementById('btn-fazer-login-motorista');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  try {
+    await authModRef.signInWithEmailAndPassword(authMotorista, email, senha);
+    // onAuthStateChanged cuida do resto (verificarCadastroMotorista)
+  } catch (e) {
+    console.warn('[motorista] erro no login:', e.code);
+    erroEl.textContent = '❌ E-mail ou senha incorretos';
+    erroEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+
+document.getElementById('link-ir-pro-cadastro-mot')?.addEventListener('click', () => go('screen-cadastro-motorista'));
+document.getElementById('link-ir-pro-login-mot')?.addEventListener('click', () => go('screen-login-motorista'));
+document.getElementById('link-esqueci-senha-mot')?.addEventListener('click', async () => {
+  const email = document.getElementById('login-mot-email').value.trim();
+  if (!email) { showToast('⚠️ Digite seu e-mail no campo acima primeiro'); return; }
+  if (!authMotorista) return;
+  try {
+    await authModRef.sendPasswordResetEmail(authMotorista, email);
+    showToast('📧 Enviamos um link pra redefinir sua senha');
+  } catch (e) {
+    showToast('⚠️ Não foi possível enviar — confira o e-mail digitado');
   }
 });
 
