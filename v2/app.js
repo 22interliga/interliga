@@ -194,9 +194,13 @@ function initHomeMap() {
 async function buscarEnderecos(termo) {
   if (!termo || termo.trim().length < 3) return [];
   try {
+    // viewbox + bounded=0 = prioriza resultados perto de Madre de Deus, mas sem excluir
+    // endereços de outras cidades (diferente de forçar o nome da cidade na busca, que travava
+    // buscas de qualquer lugar fora daqui).
     const url = `https://nominatim.openstreetmap.org/search?` +
-      `q=${encodeURIComponent(termo + ', Madre de Deus, Bahia, Brasil')}` +
-      `&format=json&limit=5&countrycodes=br`;
+      `q=${encodeURIComponent(termo)}` +
+      `&format=json&limit=5&countrycodes=br` +
+      `&viewbox=-39.3,-13.3,-38.2,-12.2&bounded=0`;
     const resp = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
     const data = await resp.json();
     return data.map(item => ({
