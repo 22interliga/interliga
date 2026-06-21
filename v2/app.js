@@ -270,6 +270,7 @@ function onEnterRide() {
   const inputDestino = document.getElementById('input-destino');
 
   if (!zonasRiscoCarregadas) carregarZonasRisco();
+  if (!tabelaPrecosCarregada) carregarTabelaPrecos();
 
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
@@ -302,6 +303,26 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+let tabelaPrecosCache = null;
+let tabelaPrecosCarregada = false;
+const TABELA_PRECOS_PADRAO = {
+  x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  multiplicador: 1.0, ativo: true },
+  plus: { bandeirada: 7,  tarifaKm: 3.36, minimo: 12, multiplicador: 1.4, ativo: true },
+  van:  { bandeirada: 10, tarifaKm: 4.80, minimo: 18, multiplicador: 2.0, ativo: true },
+};
+
+async function carregarTabelaPrecos() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, 'precos', 'madre'));
+    tabelaPrecosCache = snap.exists() ? snap.data() : null;
+    tabelaPrecosCarregada = true;
+    calcularPrecos(); // recalcula com os preços certos, se já tinha origem/destino escolhidos
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar tabela de preços, usando padrão:', e);
+  }
 }
 
 // ─────────────────────────────────────
@@ -358,20 +379,25 @@ function calcularPrecos() {
   if (!state.origem || !state.destino) return;
   const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
   const risco = calcularAcrescimoRisco(state.origem, state.destino);
-
-  const tabela = {
-    x:    { base: 5,  porKm: 2.40, min: 8 },
-    plus: { base: 7,  porKm: 3.36, min: 12 },
-    van:  { base: 10, porKm: 4.80, min: 18 },
-  };
+  const tabela = tabelaPrecosCache || TABELA_PRECOS_PADRAO;
 
   for (const cat of ['x', 'plus', 'van']) {
-    const t = tabela[cat];
-    let preco = Math.max(t.min, t.base + km * t.porKm) + risco.acrescimo;
-    preco = preco * (1 + risco.percentual / 100);
-    state.precos[cat] = preco;
+    const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
     const priceEl = document.getElementById(`price-${cat}`);
     const etaEl = document.getElementById(`eta-${cat}`);
+    const itemEl = document.querySelector(`.category-item[data-cat="${cat}"]`);
+
+    if (t.ativo === false) {
+      // Categoria desativada pelo admin pra essa cidade — esconde da lista
+      if (itemEl) itemEl.style.display = 'none';
+      continue;
+    }
+    if (itemEl) itemEl.style.display = '';
+
+    let preco = Math.max(t.minimo, t.bandeirada + km * t.tarifaKm) * Number(t.multiplicador || 1);
+    preco = preco + risco.acrescimo;
+    preco = preco * (1 + risco.percentual / 100);
+    state.precos[cat] = preco;
     if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
     if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
   }

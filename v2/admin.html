@@ -742,30 +742,30 @@ textarea.inp { resize: vertical; }
               <div class="tbl-wrap">
                 <table>
                   <thead><tr><th>CATEGORIA</th><th>BANDEIRADA (R$)</th><th>TARIFA KM (R$)</th><th>PREÇO MÍNIMO (R$)</th><th>MULTIPLICADOR DINÂMICO</th><th>ATIVO</th></tr></thead>
-                  <tbody>
+                  <tbody id="precos-categorias-tbody">
                     <tr>
                       <td><b>🚗 Interliga X</b><br><small style="color:var(--t2)">Até 4 passageiros</small></td>
-                      <td><input class="inp" type="number" value="5.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="2.40" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="8.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="1.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
+                      <td><input class="inp" type="number" id="prec-x-bandeirada" value="5.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-x-tarifakm" value="2.40" step="0.10" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-x-minimo" value="8.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-x-mult" value="1.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
+                      <td><div id="prec-x-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
                     <tr>
                       <td><b>🚙 Interliga Plus</b><br><small style="color:var(--t2)">SUV / Executivo</small></td>
-                      <td><input class="inp" type="number" value="7.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="3.36" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="12.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="1.4" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
+                      <td><input class="inp" type="number" id="prec-plus-bandeirada" value="7.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-plus-tarifakm" value="3.36" step="0.10" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-plus-minimo" value="12.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-plus-mult" value="1.4" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
+                      <td><div id="prec-plus-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
                     <tr>
                       <td><b>🚐 Interliga Van</b><br><small style="color:var(--t2)">Até 8 passageiros</small></td>
-                      <td><input class="inp" type="number" value="10.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="4.80" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="18.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" value="2.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
+                      <td><input class="inp" type="number" id="prec-van-bandeirada" value="10.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-van-tarifakm" value="4.80" step="0.10" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-van-minimo" value="18.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-van-mult" value="2.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
+                      <td><div id="prec-van-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
                   </tbody>
                 </table>
@@ -1032,7 +1032,7 @@ function showSection(id,navEl){
     financeiro: carregarFinanceiro,
     repasses: carregarRepasses,
     monitor: carregarMonitoramento,
-    precificacao: carregarZonasRisco,
+    precificacao: () => { updateCidade(); carregarZonasRisco(); },
   };
   if (carregadores[id]) carregadores[id]();
 }
@@ -1143,8 +1143,52 @@ function addZona(){
   tb.appendChild(tr);
 }
 
-function salvarPrecos(){ showToast('💾 Preços salvos com sucesso!'); }
-function updateCidade(){ showToast('📍 Cidade alterada!'); }
+async function salvarPrecos(){
+  const cidade = document.getElementById('prec-cidade')?.value || 'madre';
+  const dados = {};
+  for (const cat of ['x', 'plus', 'van']) {
+    dados[cat] = {
+      bandeirada: Number(document.getElementById(`prec-${cat}-bandeirada`).value) || 0,
+      tarifaKm: Number(document.getElementById(`prec-${cat}-tarifakm`).value) || 0,
+      minimo: Number(document.getElementById(`prec-${cat}-minimo`).value) || 0,
+      multiplicador: Number(document.getElementById(`prec-${cat}-mult`).value) || 1,
+      ativo: document.getElementById(`prec-${cat}-ativo`).dataset.on !== '0',
+    };
+  }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+  try {
+    await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'precos', cidade), dados, { merge: true });
+    showToast('💾 Preços salvos com sucesso! Já valem pro app do passageiro.');
+  } catch (e) {
+    console.error('[admin] erro ao salvar preços:', e);
+    showToast('⚠️ Erro ao salvar — confirme as regras do Firestore');
+  }
+}
+
+async function updateCidade(){
+  const cidade = document.getElementById('prec-cidade')?.value || 'madre';
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'precos', cidade));
+    const dados = snap.exists() ? snap.data() : null;
+    for (const cat of ['x', 'plus', 'van']) {
+      const c = dados?.[cat];
+      const padrao = { x:{bandeirada:5,tarifaKm:2.40,minimo:8,multiplicador:1.0}, plus:{bandeirada:7,tarifaKm:3.36,minimo:12,multiplicador:1.4}, van:{bandeirada:10,tarifaKm:4.80,minimo:18,multiplicador:2.0} }[cat];
+      const v = c || padrao;
+      document.getElementById(`prec-${cat}-bandeirada`).value = v.bandeirada;
+      document.getElementById(`prec-${cat}-tarifakm`).value = v.tarifaKm;
+      document.getElementById(`prec-${cat}-minimo`).value = v.minimo;
+      document.getElementById(`prec-${cat}-mult`).value = v.multiplicador;
+      const ativoEl = document.getElementById(`prec-${cat}-ativo`);
+      const ativo = c ? c.ativo !== false : true;
+      ativoEl.dataset.on = ativo ? '1' : '0';
+      ativoEl.style.background = ativo ? 'var(--green)' : '#6B7280';
+    }
+    showToast(dados ? '📍 Preços de ' + cidade + ' carregados' : '📍 Cidade sem preços salvos ainda — usando padrão');
+  } catch (e) {
+    console.error('[admin] erro ao carregar preços da cidade:', e);
+  }
+}
 
 // Franqueados
 function toggleFormFranq(){
