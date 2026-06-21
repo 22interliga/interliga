@@ -25,6 +25,76 @@
     </div>
   </section>
 
+  <!-- ══════════════════ CADASTRO MOTORISTA ══════════════════ -->
+  <section class="screen" id="screen-cadastro-motorista">
+    <div class="page-header">
+      <div class="page-title">Cadastro de Motorista</div>
+      <div class="page-sub">Por segurança, precisamos confirmar seus dados e documentos</div>
+    </div>
+
+    <div class="section-label">SEUS DADOS</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="cadastro-field"><label>Nome completo</label><input type="text" class="cadastro-input" id="cad-mot-nome" placeholder="Seu nome completo"></div>
+      <div class="cadastro-field"><label>Celular / WhatsApp</label><input type="tel" class="cadastro-input" id="cad-mot-celular" placeholder="(71) 99999-9999"></div>
+      <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="cad-mot-email" placeholder="seu@email.com"></div>
+      <div class="cadastro-field"><label>CPF</label><input type="text" class="cadastro-input" id="cad-mot-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+      <div class="cadastro-field"><label>Confirme os 2 últimos dígitos do CPF</label><input type="text" class="cadastro-input" id="cad-mot-cpf-confirma" placeholder="00" maxlength="2" inputmode="numeric"></div>
+    </div>
+
+    <div class="section-label">VEÍCULO</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="cadastro-field"><label>Modelo do veículo</label><input type="text" class="cadastro-input" id="cad-mot-veiculo" placeholder="Ex: Honda Civic"></div>
+      <div class="cadastro-field"><label>Placa</label><input type="text" class="cadastro-input" id="cad-mot-placa" placeholder="ABC-1234" maxlength="8"></div>
+    </div>
+
+    <div class="section-label">FOTO DE PERFIL (SELFIE)</div>
+    <div class="form-card" style="text-align:center;">
+      <div id="cad-mot-selfie-preview" class="selfie-preview">📷</div>
+      <label class="btn-upload-selfie">Tirar selfie<input type="file" accept="image/*" capture="user" id="cad-mot-selfie-input" style="display:none;"></label>
+    </div>
+
+    <div class="section-label">DOCUMENTOS</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="text-align:center;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">CNH (foto)</div>
+        <div id="cad-mot-cnh-preview" class="doc-preview">📄</div>
+        <label class="btn-upload-selfie">Enviar foto da CNH<input type="file" accept="image/*" capture="environment" id="cad-mot-cnh-input" style="display:none;"></label>
+      </div>
+      <div style="text-align:center;border-top:1px solid var(--border);padding-top:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">Documento do veículo — CRLV (foto)</div>
+        <div id="cad-mot-crlv-preview" class="doc-preview">📄</div>
+        <label class="btn-upload-selfie">Enviar foto do CRLV<input type="file" accept="image/*" capture="environment" id="cad-mot-crlv-input" style="display:none;"></label>
+      </div>
+      <div style="text-align:center;border-top:1px solid var(--border);padding-top:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">Comprovante de residência (foto)</div>
+        <div id="cad-mot-comprovante-preview" class="doc-preview">📄</div>
+        <label class="btn-upload-selfie">Enviar comprovante<input type="file" accept="image/*" capture="environment" id="cad-mot-comprovante-input" style="display:none;"></label>
+      </div>
+    </div>
+
+    <div id="cad-mot-erro" class="cadastro-erro" hidden></div>
+    <button class="btn-primary" id="btn-enviar-cadastro-motorista">Enviar cadastro</button>
+  </section>
+
+  <!-- ══════════════════ AGUARDANDO APROVAÇÃO ══════════════════ -->
+  <section class="screen" id="screen-aguardando-aprovacao-motorista">
+    <div class="splash" style="background:var(--bg);">
+      <div style="font-size:56px;">⏳</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Cadastro em análise</div>
+      <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;">Estamos confirmando seus dados e documentos. Pode levar algumas horas — o app libera automaticamente quando for aprovado.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ CADASTRO REJEITADO ══════════════════ -->
+  <section class="screen" id="screen-rejeitado-motorista">
+    <div class="splash" style="background:var(--bg);">
+      <div style="font-size:56px;">⚠️</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Cadastro não aprovado</div>
+      <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;" id="rejeicao-mot-motivo-texto">Houve um problema com seus dados ou documentos.</div>
+      <button class="btn-primary" style="width:calc(100% - 80px);margin-top:24px;" id="btn-tentar-cadastro-mot-novamente">Tentar de novo</button>
+    </div>
+  </section>
+
   <!-- ══════════════════ HOME MOTORISTA ══════════════════ -->
   <section class="screen" id="screen-home">
     <header class="driver-header">
@@ -171,6 +241,11 @@
         <div class="route-row"><span class="address-dot address-dot--orange"></span><span id="ongoing-destino">Destino</span></div>
       </div>
 
+      <div class="nav-externa-row">
+        <button class="btn-nav-externa" id="btn-nav-waze">🟦 Navegar no Waze</button>
+        <button class="btn-nav-externa" id="btn-nav-gmaps">🟩 Google Maps</button>
+      </div>
+
       <!-- Chat com passageiro -->
       <div class="chat-panel" id="chat-panel-driver" hidden>
         <div class="chat-messages" id="chat-messages-driver"></div>
@@ -247,7 +322,7 @@
       if (home) home.setAttribute('data-active', 'true');
       console.warn('[fallback] motorista.js pode não ter carregado a tempo — Home forçada.');
     }
-  }, 4000);
+  }, 9000);
 </script>
 </body>
 </html>

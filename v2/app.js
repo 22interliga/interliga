@@ -33,6 +33,7 @@ export function setStorageJSON(key, value) {
   }
 }
 let fb = {}; // funções do firestore, preenchidas após carregar
+let meuPassageiroId = null;
 
 async function initFirebase() {
   try {
@@ -56,10 +57,12 @@ async function initFirebase() {
     // Autenticação anônima — exige um login (mesmo sem senha) pra poder ler/escrever no banco.
     // Sem isso, qualquer pessoa na internet acessaria os dados direto, sem nem abrir o app.
     const auth = authMod.getAuth(fbApp);
-    await authMod.signInAnonymously(auth);
+    const cred = await authMod.signInAnonymously(auth);
+    meuPassageiroId = cred.user.uid;
 
     firebaseReady = true;
     console.log('✅ Firebase conectado');
+    verificarCadastroPassageiro();
   } catch (e) {
     console.warn('Firebase não disponível — app funciona em modo local:', e);
     firebaseReady = false;
@@ -890,6 +893,184 @@ async function alternarGravacaoAudioChat() {
 
 document.getElementById('btn-mic-chat')?.addEventListener('click', alternarGravacaoAudioChat);
 
+// ─────────────────────────────────────
+// ESCOLHA DE PAPEL (motorista / passageiro) — primeira tela que todo mundo vê
+// ─────────────────────────────────────
+document.getElementById('btn-sou-motorista')?.addEventListener('click', () => {
+  localStorage.setItem('interliga_papel', 'motorista');
+  window.location.href = 'motorista.html';
+});
+document.getElementById('btn-sou-passageiro')?.addEventListener('click', () => {
+  localStorage.setItem('interliga_papel', 'passageiro');
+  go('screen-cadastro-passageiro');
+  verificarCadastroPassageiro();
+});
+
+// ─────────────────────────────────────
+// VALIDAÇÃO DE CPF — algoritmo padrão dos 2 dígitos verificadores (sem precisar de API)
+// ─────────────────────────────────────
+function validarCPF(cpf) {
+  cpf = (cpf || '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(cpf[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(cpf[9])) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(cpf[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  return resto === parseInt(cpf[10]);
+}
+
+document.getElementById('cad-pax-cpf')?.addEventListener('input', (e) => {
+  let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+  e.target.value = v;
+});
+
+// ─────────────────────────────────────
+// SELFIE — captura via câmera do celular e compressão antes de salvar
+// (uma foto direto da câmera pode ter vários MB; comprimida fica bem menor)
+// ─────────────────────────────────────
+function comprimirImagemArquivo(file, maxLado = 600, qualidade = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxLado) { height *= maxLado / width; width = maxLado; }
+        else if (height > maxLado) { width *= maxLado / height; height = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', qualidade));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let selfiePassageiroBase64 = null;
+document.getElementById('cad-pax-selfie-input')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    selfiePassageiroBase64 = await comprimirImagemArquivo(file);
+    const preview = document.getElementById('cad-pax-selfie-preview');
+    preview.innerHTML = `<img src="${selfiePassageiroBase64}">`;
+  } catch (err) {
+    showToast('⚠️ Não foi possível processar a foto, tenta de novo');
+  }
+});
+
+// ─────────────────────────────────────
+// ENVIO DO CADASTRO
+// ─────────────────────────────────────
+document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('cad-pax-erro');
+  erroEl.hidden = true;
+
+  const nome = document.getElementById('cad-pax-nome').value.trim();
+  const celular = document.getElementById('cad-pax-celular').value.trim();
+  const email = document.getElementById('cad-pax-email').value.trim();
+  const cpf = document.getElementById('cad-pax-cpf').value.replace(/\D/g, '');
+  const confirma = document.getElementById('cad-pax-cpf-confirma').value.trim();
+
+  function mostrarErro(msg) { erroEl.textContent = '⚠️ ' + msg; erroEl.hidden = false; }
+
+  if (!nome || nome.split(' ').length < 2) return mostrarErro('Informe seu nome completo');
+  if (celular.replace(/\D/g, '').length < 10) return mostrarErro('Informe um celular válido com DDD');
+  if (!email.includes('@') || !email.includes('.')) return mostrarErro('Informe um e-mail válido');
+  if (!validarCPF(cpf)) return mostrarErro('CPF inválido — confira os números digitados');
+  if (confirma !== cpf.slice(-2)) return mostrarErro('Os 2 últimos dígitos não confirmam o CPF informado');
+  if (!selfiePassageiroBase64) return mostrarErro('Tire uma selfie pra concluir o cadastro');
+  if (!firebaseReady || !db || !meuPassageiroId) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
+
+  const btn = document.getElementById('btn-enviar-cadastro-passageiro');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), {
+      nome, celular, email, cpf,
+      selfie: selfiePassageiroBase64,
+      verificacao: 'pendente',
+      criadoEm: fb.serverTimestamp(),
+    });
+    localStorage.setItem('interliga_pax_nome', nome);
+    mostrarTelaAguardandoAprovacao();
+  } catch (e) {
+    console.error('[passageiro] erro ao enviar cadastro:', e);
+    mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar cadastro';
+  }
+});
+
+// ─────────────────────────────────────
+// VERIFICAÇÃO DO STATUS DO CADASTRO — decide qual tela mostrar, e fica
+// escutando em tempo real enquanto está pendente (libera sozinho quando aprovar)
+// ─────────────────────────────────────
+let cadastroPassageiroListenerUnsub = null;
+
+async function verificarCadastroPassageiro() {
+  if (localStorage.getItem('interliga_papel') !== 'passageiro') return;
+  if (!firebaseReady || !db || !meuPassageiroId) return;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, 'passageiros', meuPassageiroId));
+    if (!snap.exists()) {
+      go('screen-cadastro-passageiro');
+      return;
+    }
+    aplicarStatusCadastro(snap.data());
+    if (snap.data().verificacao === 'pendente') {
+      escutarStatusCadastro();
+    }
+  } catch (e) {
+    console.warn('[passageiro] erro ao verificar cadastro, liberando o app pra não travar o usuário:', e);
+    go('screen-home');
+  }
+}
+
+function aplicarStatusCadastro(dados) {
+  if (dados.verificacao === 'aprovado') {
+    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
+    go('screen-home');
+  } else if (dados.verificacao === 'rejeitado') {
+    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
+    document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
+    go('screen-rejeitado');
+  } else {
+    mostrarTelaAguardandoAprovacao();
+  }
+}
+
+function mostrarTelaAguardandoAprovacao() {
+  go('screen-aguardando-aprovacao');
+  escutarStatusCadastro();
+}
+
+function escutarStatusCadastro() {
+  if (cadastroPassageiroListenerUnsub || !firebaseReady || !db || !meuPassageiroId) return;
+  cadastroPassageiroListenerUnsub = fb.onSnapshot(fb.doc(db, 'passageiros', meuPassageiroId), (snap) => {
+    if (!snap.exists()) return;
+    aplicarStatusCadastro(snap.data());
+  });
+}
+
+document.getElementById('btn-tentar-cadastro-novamente')?.addEventListener('click', () => {
+  go('screen-cadastro-passageiro');
+});
+
 document.getElementById('btn-open-chat')?.addEventListener('click', () => {
   document.getElementById('chat-panel').hidden = false;
   document.getElementById('chat-input')?.focus();
@@ -1427,9 +1608,20 @@ function disparaCorridaAgendada(ag) {
 }
 
 function boot() {
-  initFirebase(); // assíncrono, não bloqueia a UI
+  initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro
   iniciarVerificacaoAgendamentos();
-  setTimeout(() => go('screen-home'), 1500); // splash por 1.5s
+  setTimeout(() => {
+    const papel = localStorage.getItem('interliga_papel');
+    if (!papel) {
+      go('screen-role-choice');
+    } else if (papel === 'motorista') {
+      window.location.href = 'motorista.html';
+    } else {
+      // já escolheu ser passageiro antes — fica no splash mais um instante
+      // até o Firebase responder e verificarCadastroPassageiro() decidir a tela certa
+      if (firebaseReady) verificarCadastroPassageiro();
+    }
+  }, 1500);
 }
 
 if (document.readyState === 'loading') {

@@ -31,7 +31,7 @@ async function initFirebase() {
 
     firebaseReady = true;
     console.log('Firebase conectado (motorista)');
-    registrarPerfilMotorista(); // cadastra esse motorista permanentemente (não só enquanto online)
+    verificarCadastroMotorista();
   } catch (e) {
     console.warn('Firebase nao disponivel:', e);
     firebaseReady = false;
@@ -641,6 +641,33 @@ function renderRotaMotorista() {
 }
 
 // ─────────────────────────────────────
+// NAVEGAÇÃO EXTERNA — Waze / Google Maps até o próximo ponto da rota
+// (este app não tem GPS de navegação próprio; abre o app externo de verdade)
+// ─────────────────────────────────────
+function obterProximoPontoNavegacao() {
+  if (sequenciaRotaMotorista.length > 0) {
+    const proximo = sequenciaRotaMotorista[indiceRotaAtualMotorista + 1];
+    if (proximo && typeof proximo.lat === 'number' && typeof proximo.lon === 'number') return proximo;
+  }
+  const corrida = state.corridaAtual;
+  if (corrida && typeof corrida.destinoLat === 'number') {
+    return { lat: corrida.destinoLat, lon: corrida.destinoLon, texto: corrida.destino };
+  }
+  return null;
+}
+
+document.getElementById('btn-nav-waze')?.addEventListener('click', () => {
+  const p = obterProximoPontoNavegacao();
+  if (!p) { showToast('⚠️ Sem coordenadas pra navegar ainda'); return; }
+  window.open(`https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes`, '_blank');
+});
+document.getElementById('btn-nav-gmaps')?.addEventListener('click', () => {
+  const p = obterProximoPontoNavegacao();
+  if (!p) { showToast('⚠️ Sem coordenadas pra navegar ainda'); return; }
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`, '_blank');
+});
+
+// ─────────────────────────────────────
 // ESCUTAR CANCELAMENTO — se o passageiro cancelar, motorista é avisado
 // ─────────────────────────────────────
 let cancelamentoListenerUnsub = null;
@@ -1045,11 +1072,196 @@ document.querySelector('[data-go="screen-earnings"]')?.addEventListener('click',
 // ─────────────────────────────────────
 // INICIALIZAÇÃO
 // ─────────────────────────────────────
-function boot() {
-  initFirebase();
-  setTimeout(() => {
+// ─────────────────────────────────────
+// VALIDAÇÃO DE CPF — mesmo algoritmo padrão dos 2 dígitos verificadores
+// ─────────────────────────────────────
+function validarCPF(cpf) {
+  cpf = (cpf || '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(cpf[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(cpf[9])) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(cpf[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  return resto === parseInt(cpf[10]);
+}
+
+document.getElementById('cad-mot-cpf')?.addEventListener('input', (e) => {
+  let v = e.target.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{0,3})/, '$1.$2');
+  e.target.value = v;
+});
+
+// ─────────────────────────────────────
+// FOTOS (selfie + documentos) — comprimidas antes de salvar, pra não pesar no Firestore
+// ─────────────────────────────────────
+function comprimirImagemArquivo(file, maxLado = 700, qualidade = 0.6) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxLado) { height *= maxLado / width; width = maxLado; }
+        else if (height > maxLado) { width *= maxLado / height; height = maxLado; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', qualidade));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+const fotosCadastroMotorista = { selfie: null, cnh: null, crlv: null, comprovante: null };
+
+function ligarUploadFoto(inputId, previewId, chave, emoji) {
+  document.getElementById(inputId)?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const base64 = await comprimirImagemArquivo(file);
+      fotosCadastroMotorista[chave] = base64;
+      document.getElementById(previewId).innerHTML = `<img src="${base64}">`;
+    } catch (err) {
+      showToast('⚠️ Não foi possível processar a foto, tenta de novo');
+    }
+  });
+}
+ligarUploadFoto('cad-mot-selfie-input', 'cad-mot-selfie-preview', 'selfie');
+ligarUploadFoto('cad-mot-cnh-input', 'cad-mot-cnh-preview', 'cnh');
+ligarUploadFoto('cad-mot-crlv-input', 'cad-mot-crlv-preview', 'crlv');
+ligarUploadFoto('cad-mot-comprovante-input', 'cad-mot-comprovante-preview', 'comprovante');
+
+// ─────────────────────────────────────
+// ENVIO DO CADASTRO
+// ─────────────────────────────────────
+document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('cad-mot-erro');
+  erroEl.hidden = true;
+  function mostrarErro(msg) { erroEl.textContent = '⚠️ ' + msg; erroEl.hidden = false; }
+
+  const nome = document.getElementById('cad-mot-nome').value.trim();
+  const celular = document.getElementById('cad-mot-celular').value.trim();
+  const email = document.getElementById('cad-mot-email').value.trim();
+  const cpf = document.getElementById('cad-mot-cpf').value.replace(/\D/g, '');
+  const confirma = document.getElementById('cad-mot-cpf-confirma').value.trim();
+  const veiculo = document.getElementById('cad-mot-veiculo').value.trim();
+  const placa = document.getElementById('cad-mot-placa').value.trim().toUpperCase();
+
+  if (!nome || nome.split(' ').length < 2) return mostrarErro('Informe seu nome completo');
+  if (celular.replace(/\D/g, '').length < 10) return mostrarErro('Informe um celular válido com DDD');
+  if (!email.includes('@') || !email.includes('.')) return mostrarErro('Informe um e-mail válido');
+  if (!validarCPF(cpf)) return mostrarErro('CPF inválido — confira os números digitados');
+  if (confirma !== cpf.slice(-2)) return mostrarErro('Os 2 últimos dígitos não confirmam o CPF informado');
+  if (!veiculo) return mostrarErro('Informe o modelo do veículo');
+  if (!placa) return mostrarErro('Informe a placa do veículo');
+  if (!fotosCadastroMotorista.selfie) return mostrarErro('Tire uma selfie pra concluir o cadastro');
+  if (!fotosCadastroMotorista.cnh) return mostrarErro('Envie a foto da CNH');
+  if (!fotosCadastroMotorista.crlv) return mostrarErro('Envie a foto do CRLV (documento do veículo)');
+  if (!fotosCadastroMotorista.comprovante) return mostrarErro('Envie a foto do comprovante de residência');
+  if (!firebaseReady || !db) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
+
+  const btn = document.getElementById('btn-enviar-cadastro-motorista');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
+      nome, celular, email, cpf, veiculo, placa,
+      avaliacao: state.motorista.avaliacao || '5.0',
+      selfie: fotosCadastroMotorista.selfie,
+      docCnh: fotosCadastroMotorista.cnh,
+      docCrlv: fotosCadastroMotorista.crlv,
+      docComprovante: fotosCadastroMotorista.comprovante,
+      verificacao: 'pendente',
+      atualizadoEm: fb.serverTimestamp(),
+    }, { merge: true });
+
+    state.motorista.nome = nome;
+    state.motorista.veiculo = veiculo;
+    state.motorista.placa = placa;
+    mostrarTelaAguardandoAprovacaoMotorista();
+  } catch (e) {
+    console.error('[motorista] erro ao enviar cadastro:', e);
+    mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar cadastro';
+  }
+});
+
+// ─────────────────────────────────────
+// VERIFICAÇÃO DO STATUS DO CADASTRO
+// ─────────────────────────────────────
+let cadastroMotoristaListenerUnsub = null;
+
+async function verificarCadastroMotorista() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, 'motoristas', meuMotoristaId));
+    if (!snap.exists() || !snap.data().verificacao) {
+      go('screen-cadastro-motorista');
+      return;
+    }
+    const dados = snap.data();
+    if (dados.nome) state.motorista.nome = dados.nome;
+    if (dados.veiculo) state.motorista.veiculo = dados.veiculo;
+    if (dados.placa) state.motorista.placa = dados.placa;
+    aplicarStatusCadastroMotorista(dados);
+  } catch (e) {
+    console.warn('[motorista] erro ao verificar cadastro, liberando Home pra não travar:', e);
     go('screen-home');
-  }, 1500);
+  }
+}
+
+function aplicarStatusCadastroMotorista(dados) {
+  if (dados.verificacao === 'aprovado') {
+    if (cadastroMotoristaListenerUnsub) { cadastroMotoristaListenerUnsub(); cadastroMotoristaListenerUnsub = null; }
+    go('screen-home');
+  } else if (dados.verificacao === 'rejeitado') {
+    if (cadastroMotoristaListenerUnsub) { cadastroMotoristaListenerUnsub(); cadastroMotoristaListenerUnsub = null; }
+    document.getElementById('rejeicao-mot-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados ou documentos. Tente cadastrar de novo, com calma.';
+    go('screen-rejeitado-motorista');
+  } else {
+    mostrarTelaAguardandoAprovacaoMotorista();
+  }
+}
+
+function mostrarTelaAguardandoAprovacaoMotorista() {
+  go('screen-aguardando-aprovacao-motorista');
+  if (cadastroMotoristaListenerUnsub || !firebaseReady || !db) return;
+  cadastroMotoristaListenerUnsub = fb.onSnapshot(fb.doc(db, 'motoristas', meuMotoristaId), (snap) => {
+    if (!snap.exists()) return;
+    aplicarStatusCadastroMotorista(snap.data());
+  });
+}
+
+document.getElementById('btn-tentar-cadastro-mot-novamente')?.addEventListener('click', () => {
+  go('screen-cadastro-motorista');
+});
+
+function boot() {
+  initFirebase(); // assíncrono — quando conectar, chama verificarCadastroMotorista() que decide a tela certa
+  setTimeout(() => {
+    // Rede de segurança: se o Firebase não respondeu em 6s (sem internet, erro etc.),
+    // libera a Home mesmo assim, em vez de travar o motorista pra sempre no splash.
+    const splash = document.getElementById('screen-splash');
+    if (splash && splash.getAttribute('data-active') === 'true') {
+      console.warn('[motorista] Firebase demorou pra responder — liberando Home em modo offline.');
+      go('screen-home');
+    }
+  }, 6000);
 }
 
 if (document.readyState === 'loading') {

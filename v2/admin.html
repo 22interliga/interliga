@@ -206,6 +206,7 @@ textarea.inp { resize: vertical; }
       <div style="flex:1;overflow-y:auto;padding:8px 0;">
         <div class="nav-group">VISÃO GERAL</div>
         <div class="nav-item active" onclick="showSection('dashboard',this)"><span>📊</span> Dashboard</div>
+        <div class="nav-item" onclick="showSection('verificacoes',this)"><span>🛂</span> Verificações <span class="nav-badge" id="nav-badge-verificacoes" style="display:none;">0</span></div>
         <div class="nav-item" onclick="showSection('monitor',this)"><span>🗺️</span> Monitoramento <span class="nav-badge">12</span></div>
         <div class="nav-group">USUÁRIOS</div>
         <div class="nav-item" onclick="showSection('passageiros',this)"><span>👤</span> Passageiros</div>
@@ -258,6 +259,21 @@ textarea.inp { resize: vertical; }
         <div class="content-inner">
 
           <!-- DASHBOARD -->
+          <div class="section" id="s-verificacoes">
+            <div class="section-header"><div class="section-title">🛂 Verificações Pendentes</div></div>
+            <p style="color:var(--t2);font-size:12px;margin-bottom:16px;">Confira a selfie e os documentos antes de aprovar. Enquanto não aprovar, a pessoa não consegue usar o app.</p>
+
+            <div class="ct" style="margin-bottom:10px;">🧍 Passageiros</div>
+            <div id="verif-passageiros-lista" style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
+              <div class="card" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
+            </div>
+
+            <div class="ct" style="margin-bottom:10px;">🚗 Motoristas</div>
+            <div id="verif-motoristas-lista" style="display:flex;flex-direction:column;gap:12px;">
+              <div class="card" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
+            </div>
+          </div>
+
           <div class="section active" id="s-dashboard">
             <div class="stat-grid">
               <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" id="dash-faturamento-hoje">—</div><div class="stat-lbl">Faturamento hoje</div></div>
@@ -945,6 +961,7 @@ function entrarNoPainel(user) {
   if (nm) nm.textContent = user.email.split('@')[0];
   if (rl) rl.textContent = 'Admin';
   showSection('dashboard', document.querySelector('.nav-item'));
+  carregarVerificacoesPendentes();
   showToast('✅ Bem-vindo!');
 }
 
@@ -1027,6 +1044,7 @@ function showSection(id,navEl){
   // Carrega dados reais do Firebase ao entrar em cada seção já conectada
   const carregadores = {
     dashboard: carregarDashboard,
+    verificacoes: carregarVerificacoesPendentes,
     motoristas: carregarMotoristas,
     corridas: carregarCorridas,
     financeiro: carregarFinanceiro,
@@ -1648,6 +1666,112 @@ async function removerZonaRisco(id){
     console.error('[admin] erro ao remover área de risco:', e);
     showToast('⚠️ Erro ao remover');
   }
+}
+
+// ═══════════════════════════════════════
+// VERIFICAÇÕES — fila de aprovação de cadastros (passageiros e motoristas)
+// ═══════════════════════════════════════
+function cartaoVerificacao(tipo, id, d){
+  const fotos = tipo === 'passageiro'
+    ? [['Selfie', d.selfie]]
+    : [['Selfie', d.selfie], ['CNH', d.docCnh], ['CRLV', d.docCrlv], ['Comprovante', d.docComprovante]];
+
+  const fotosHtml = fotos.map(([label, src]) => src
+    ? `<div style="text-align:center;"><img src="${src}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--bd);"><div style="font-size:10px;color:var(--t2);margin-top:4px;">${label}</div></div>`
+    : `<div style="text-align:center;"><div style="width:90px;height:90px;background:var(--s1);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:11px;">sem foto</div><div style="font-size:10px;color:var(--t2);margin-top:4px;">${label}</div></div>`
+  ).join('');
+
+  const extra = tipo === 'motorista' ? `<div style="font-size:12px;color:var(--t2);">${d.veiculo || '—'} · ${d.placa || '—'}</div>` : '';
+  const fnAprovar = tipo === 'passageiro' ? 'aprovarPassageiro' : 'aprovarMotorista';
+  const fnRejeitar = tipo === 'passageiro' ? 'rejeitarPassageiro' : 'rejeitarMotorista';
+
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;">${d.nome || 'Sem nome'}</div>
+        <div style="font-size:12px;color:var(--t2);">${d.celular || '—'} · ${d.email || '—'}</div>
+        <div style="font-size:12px;color:var(--t2);">CPF: ${formatCpfExibicao(d.cpf)}</div>
+        ${extra}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="pbtn" style="background:var(--green);" onclick="${fnAprovar}('${id}')">✓ Aprovar</button>
+        <button class="pbtn" style="background:var(--red);" onclick="${fnRejeitar}('${id}')">✕ Rejeitar</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">${fotosHtml}</div>
+  </div>`;
+}
+
+function formatCpfExibicao(cpf){
+  if (!cpf) return '—';
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+async function carregarVerificacoesPendentes(){
+  if (!dbAdmin) return;
+  try {
+    const [snapPax, snapMot] = await Promise.all([
+      fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'passageiros'), fbAdmin.where('verificacao', '==', 'pendente'))),
+      fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'motoristas'), fbAdmin.where('verificacao', '==', 'pendente'))),
+    ]);
+
+    const listaPax = document.getElementById('verif-passageiros-lista');
+    if (snapPax.empty) {
+      listaPax.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum passageiro pendente</div>';
+    } else {
+      listaPax.innerHTML = snapPax.docs.map(d => cartaoVerificacao('passageiro', d.id, d.data())).join('');
+    }
+
+    const listaMot = document.getElementById('verif-motoristas-lista');
+    if (snapMot.empty) {
+      listaMot.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum motorista pendente</div>';
+    } else {
+      listaMot.innerHTML = snapMot.docs.map(d => cartaoVerificacao('motorista', d.id, d.data())).join('');
+    }
+
+    const total = snapPax.size + snapMot.size;
+    const badge = document.getElementById('nav-badge-verificacoes');
+    if (badge) {
+      badge.textContent = total;
+      badge.style.display = total > 0 ? 'inline-block' : 'none';
+    }
+  } catch (e) {
+    console.error('[admin] erro ao carregar verificações:', e);
+    showToast('⚠️ Erro ao carregar verificações pendentes');
+  }
+}
+
+async function aprovarPassageiro(id){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'passageiros', id), { verificacao: 'aprovado' });
+    showToast('✅ Passageiro aprovado!');
+    carregarVerificacoesPendentes();
+  } catch (e) { console.error(e); showToast('⚠️ Erro ao aprovar'); }
+}
+async function rejeitarPassageiro(id){
+  const motivo = prompt('Motivo da rejeição (o passageiro vai ver essa mensagem):', 'Não foi possível confirmar seus dados. Cadastre-se novamente com calma.');
+  if (motivo === null) return;
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'passageiros', id), { verificacao: 'rejeitado', motivoRejeicao: motivo });
+    showToast('🚫 Passageiro rejeitado');
+    carregarVerificacoesPendentes();
+  } catch (e) { console.error(e); showToast('⚠️ Erro ao rejeitar'); }
+}
+async function aprovarMotorista(id){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', id), { verificacao: 'aprovado' });
+    showToast('✅ Motorista aprovado!');
+    carregarVerificacoesPendentes();
+  } catch (e) { console.error(e); showToast('⚠️ Erro ao aprovar'); }
+}
+async function rejeitarMotorista(id){
+  const motivo = prompt('Motivo da rejeição (o motorista vai ver essa mensagem):', 'Não foi possível confirmar seus documentos. Cadastre-se novamente com fotos mais nítidas.');
+  if (motivo === null) return;
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', id), { verificacao: 'rejeitado', motivoRejeicao: motivo });
+    showToast('🚫 Motorista rejeitado');
+    carregarVerificacoesPendentes();
+  } catch (e) { console.error(e); showToast('⚠️ Erro ao rejeitar'); }
 }
 </script>
 </body>

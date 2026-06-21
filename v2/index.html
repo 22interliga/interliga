@@ -24,6 +24,65 @@
     </div>
   </section>
 
+  <!-- ══════════════════ ESCOLHA DE PAPEL ══════════════════ -->
+  <section class="screen" id="screen-role-choice">
+    <div class="splash">
+      <img src="icon-512.png" alt="Interliga" class="splash-icon" style="margin-bottom:28px;">
+      <div style="color:white;font-size:19px;font-weight:700;">Bem-vindo ao Interliga</div>
+      <div style="color:rgba(255,255,255,0.6);font-size:14px;margin:6px 0 26px;">Como você vai usar o app?</div>
+      <button class="btn-primary" style="width:calc(100% - 40px);margin:0 0 12px;" id="btn-sou-passageiro">🧍 Sou Passageiro</button>
+      <button class="btn-primary" style="width:calc(100% - 40px);margin:0;background:linear-gradient(90deg,var(--blue),#3B5BFF);box-shadow:0 8px 20px rgba(91,108,255,0.3);" id="btn-sou-motorista">🚗 Sou Motorista</button>
+    </div>
+  </section>
+
+  <!-- ══════════════════ CADASTRO PASSAGEIRO ══════════════════ -->
+  <section class="screen" id="screen-cadastro-passageiro">
+    <div class="page-header">
+      <div class="page-title">Cadastro de Passageiro</div>
+      <div class="page-sub">Precisamos confirmar quem é você, por segurança</div>
+    </div>
+
+    <div class="section-label">SEUS DADOS</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="cadastro-field"><label>Nome completo</label><input type="text" class="cadastro-input" id="cad-pax-nome" placeholder="Seu nome completo"></div>
+      <div class="cadastro-field"><label>Celular / WhatsApp</label><input type="tel" class="cadastro-input" id="cad-pax-celular" placeholder="(71) 99999-9999"></div>
+      <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="cad-pax-email" placeholder="seu@email.com"></div>
+      <div class="cadastro-field"><label>CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+      <div class="cadastro-field"><label>Confirme os 2 últimos dígitos do CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf-confirma" placeholder="00" maxlength="2" inputmode="numeric"></div>
+    </div>
+
+    <div class="section-label">FOTO DE PERFIL (SELFIE)</div>
+    <div class="form-card" style="text-align:center;">
+      <div id="cad-pax-selfie-preview" class="selfie-preview">📷</div>
+      <label class="btn-upload-selfie">
+        Tirar selfie
+        <input type="file" accept="image/*" capture="user" id="cad-pax-selfie-input" style="display:none;">
+      </label>
+    </div>
+
+    <div id="cad-pax-erro" class="cadastro-erro" hidden></div>
+    <button class="btn-primary" id="btn-enviar-cadastro-passageiro">Enviar cadastro</button>
+  </section>
+
+  <!-- ══════════════════ AGUARDANDO APROVAÇÃO ══════════════════ -->
+  <section class="screen" id="screen-aguardando-aprovacao">
+    <div class="splash" style="background:var(--bg);">
+      <div style="font-size:56px;">⏳</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Cadastro em análise</div>
+      <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;">Estamos confirmando seus dados. Pode levar algumas horas — não precisa fazer nada, o app libera automaticamente quando for aprovado.</div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ CADASTRO REJEITADO ══════════════════ -->
+  <section class="screen" id="screen-rejeitado">
+    <div class="splash" style="background:var(--bg);">
+      <div style="font-size:56px;">⚠️</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Cadastro não aprovado</div>
+      <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;" id="rejeicao-motivo-texto">Houve um problema com seus dados.</div>
+      <button class="btn-primary" style="width:calc(100% - 80px);margin-top:24px;" id="btn-tentar-cadastro-novamente">Tentar de novo</button>
+    </div>
+  </section>
+
   <!-- ══════════════════ HOME ══════════════════ -->
   <section class="screen" id="screen-home">
     <header class="home-header">
