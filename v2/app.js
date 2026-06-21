@@ -996,7 +996,7 @@ document.getElementById('btn-add-stop-ongoing')?.addEventListener('click', () =>
   document.getElementById('add-stop-modal').hidden = false;
   const input = document.getElementById('add-stop-input');
   if (input && !input._wired) {
-    attachAddressAutocomplete(input, (r) => { paradaSelecionadaModal = r; });
+    attachAddressAutocomplete(input, (r) => { paradaSelecionadaModal = r; }, document.getElementById('add-stop-suggestions'));
     input._wired = true;
   }
   setTimeout(() => input?.focus(), 100);
@@ -1099,12 +1099,13 @@ function onEnterSchedule() {
 
   const inputOrigem = document.getElementById('sched-origem');
   const inputDestino = document.getElementById('sched-destino');
+  const caixaSugestoesAgendamento = document.getElementById('sched-suggestions');
   if (inputOrigem && !inputOrigem._wired) {
-    attachAddressAutocomplete(inputOrigem, (r) => { schedOrigemSelecionada = r; });
+    attachAddressAutocomplete(inputOrigem, (r) => { schedOrigemSelecionada = r; }, caixaSugestoesAgendamento);
     inputOrigem._wired = true;
   }
   if (inputDestino && !inputDestino._wired) {
-    attachAddressAutocomplete(inputDestino, (r) => { schedDestinoSelecionada = r; });
+    attachAddressAutocomplete(inputDestino, (r) => { schedDestinoSelecionada = r; }, caixaSugestoesAgendamento);
     inputDestino._wired = true;
   }
 }
@@ -1211,6 +1212,10 @@ document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', 
   if (!destino) { showToast('⚠️ Informe o destino'); inputDestino.focus(); return; }
 
   const agendamentos = getStorageJSON('interliga_agendamentos', []);
+  const dataDisparo = new Date(calYear, calMonth, parseInt(selectedDay, 10));
+  const [horaSel, minutoSel] = selectedSlot.split(':').map(Number);
+  dataDisparo.setHours(horaSel, minutoSel || 0, 0, 0);
+
   agendamentos.unshift({
     origem, destino,
     origemLat: schedOrigemSelecionada?.lat || null,
@@ -1219,6 +1224,8 @@ document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', 
     destinoLon: schedDestinoSelecionada?.lon || null,
     data: `${selectedDay} de ${MESES[calMonth]}`,
     hora: selectedSlot,
+    disparoEm: dataDisparo.toISOString(),
+    disparada: false,
     criadoEm: new Date().toISOString(),
   });
   setStorageJSON('interliga_agendamentos', agendamentos.slice(0, 20));
@@ -1239,8 +1246,72 @@ document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', 
 // ─────────────────────────────────────
 // INICIALIZAÇÃO
 // ─────────────────────────────────────
+// ─────────────────────────────────────
+// DISPARO DE AGENDAMENTOS — quando a hora marcada chega, cria a corrida de
+// verdade e chama motorista, do mesmo jeito que uma corrida pedida na hora.
+// IMPORTANTE: só funciona se o app estiver aberto (em primeiro ou segundo plano)
+// perto do horário marcado — não existe um servidor disparando isso sozinho.
+// ─────────────────────────────────────
+let agendamentosWatchdogInterval = null;
+
+function iniciarVerificacaoAgendamentos() {
+  clearInterval(agendamentosWatchdogInterval);
+  verificarAgendamentosPendentes();
+  agendamentosWatchdogInterval = setInterval(verificarAgendamentosPendentes, 30000);
+}
+
+async function verificarAgendamentosPendentes() {
+  try {
+    const agendamentos = getStorageJSON('interliga_agendamentos', []);
+    if (agendamentos.length === 0) return;
+    const agora = Date.now();
+    let mudou = false;
+
+    for (const ag of agendamentos) {
+      if (ag.disparada || !ag.disparoEm) continue;
+      const momentoDisparo = new Date(ag.disparoEm).getTime();
+      if (agora < momentoDisparo) continue; // ainda não chegou a hora
+
+      ag.disparada = true;
+      mudou = true;
+
+      if (agora - momentoDisparo < 10 * 60 * 1000) {
+        // Chegou a hora (com até 10 min de tolerância) — dispara a corrida de verdade
+        disparaCorridaAgendada(ag);
+      } else {
+        // Passou muito tempo do horário (app ficou fechado) — não dispara tarde, só marca como expirado
+        console.warn('[passageiro] agendamento expirado sem disparar (app estava fechado na hora):', ag);
+      }
+    }
+    if (mudou) setStorageJSON('interliga_agendamentos', agendamentos);
+  } catch (e) { console.warn('[passageiro] erro ao verificar agendamentos:', e); }
+}
+
+function disparaCorridaAgendada(ag) {
+  if (state.corridaId) return; // já tem corrida em andamento, não sobrepõe
+
+  state.origem = { texto: ag.origem, lat: ag.origemLat, lon: ag.origemLon };
+  state.destino = { texto: ag.destino, lat: ag.destinoLat, lon: ag.destinoLon };
+
+  const preco = (ag.origemLat && ag.destinoLat)
+    ? Math.max(8, 5 + haversineKm(ag.origemLat, ag.origemLon, ag.destinoLat, ag.destinoLon) * 2.40)
+    : 18;
+
+  go('screen-tracking');
+  montarSequenciaInicial();
+  document.getElementById('block-searching').hidden = false;
+  document.getElementById('block-driver').hidden = true;
+  document.getElementById('chat-panel').hidden = true;
+  document.getElementById('tracking-title').textContent = '🔔 Corrida agendada — buscando motorista...';
+  document.getElementById('tracking-sub').textContent = 'Aguarde um instante';
+  showToast('🔔 Hora da sua corrida agendada! Chamando motorista...');
+
+  criarCorrida(state.origem, state.destino, preco, 'x');
+}
+
 function boot() {
   initFirebase(); // assíncrono, não bloqueia a UI
+  iniciarVerificacaoAgendamentos();
   setTimeout(() => go('screen-home'), 1500); // splash por 1.5s
 }
 

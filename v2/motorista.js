@@ -317,6 +317,39 @@ function falarEmVoz(texto) {
   } catch (e) { console.warn('[motorista] erro ao falar em voz:', e); }
 }
 
+// ─────────────────────────────────────
+// ESCUTAR CANCELAMENTO DURANTE A OFERTA — se o passageiro cancelar enquanto
+// ainda está chamando este motorista (antes de aceitar), para tudo na hora
+// em vez de continuar tocando/falando até o contador de 15s zerar sozinho.
+// ─────────────────────────────────────
+let ofertaCancelamentoListenerUnsub = null;
+
+function escutarCancelamentoOferta(corridaId) {
+  if (!firebaseReady || !db) return;
+  pararEscutaOferta();
+  ofertaCancelamentoListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', corridaId), (snap) => {
+    const data = snap.data();
+    if (!data || state.corridaAtualId !== corridaId) return;
+    if (data.status === 'cancelada') {
+      pararEscutaOferta();
+      clearInterval(state.countdownInterval);
+      clearInterval(state.somRepeticaoInterval);
+      try { window.speechSynthesis?.cancel(); } catch (e) {}
+      document.getElementById('request-card').hidden = true;
+      document.getElementById('request-empty').hidden = false;
+      document.getElementById('new-ride-banner').hidden = true;
+      state.corridaAtual = null;
+      state.corridaAtualId = null;
+      showToast('❌ O passageiro cancelou essa corrida');
+      go('screen-home');
+    }
+  }, (erro) => console.error('[motorista] erro no listener de cancelamento da oferta:', erro));
+}
+
+function pararEscutaOferta() {
+  if (ofertaCancelamentoListenerUnsub) { ofertaCancelamentoListenerUnsub(); ofertaCancelamentoListenerUnsub = null; }
+}
+
 function notificarNovaCorrida(corrida) {
   console.log('[motorista] Nova corrida recebida:', corrida);
   state.corridaAtual = corrida;
@@ -324,6 +357,7 @@ function notificarNovaCorrida(corrida) {
 
   tocarSomNovaCorrida();
   falarEmVoz('Nova corrida disponível!');
+  escutarCancelamentoOferta(corrida.id);
 
   // Banner na home
   const banner = document.getElementById('new-ride-banner');
@@ -423,6 +457,7 @@ async function avancarFilaOuReabrir(corridaId, corrida) {
 function recusarCorrida() {
   clearInterval(state.countdownInterval);
   clearInterval(state.somRepeticaoInterval);
+  pararEscutaOferta();
 
   const corridaId = state.corridaAtualId;
   const corrida = state.corridaAtual;
@@ -444,6 +479,7 @@ document.getElementById('btn-aceitar')?.addEventListener('click', aceitarCorrida
 async function aceitarCorrida() {
   clearInterval(state.countdownInterval);
   clearInterval(state.somRepeticaoInterval);
+  pararEscutaOferta();
   const corrida = state.corridaAtual;
   if (!corrida) {
     showToast('⚠️ Esta corrida já não está disponível');
