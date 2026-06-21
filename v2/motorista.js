@@ -11,6 +11,7 @@ async function initFirebase() {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
     const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
     fb = firestoreMod;
     const firebaseConfig = {
       apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
@@ -22,12 +23,33 @@ async function initFirebase() {
     };
     const fbApp = initializeApp(firebaseConfig);
     db = fb.getFirestore(fbApp);
+
+    // Autenticação anônima — exige um login (mesmo sem senha) pra poder ler/escrever no banco.
+    // Sem isso, qualquer pessoa na internet acessaria os dados direto, sem nem abrir o app.
+    const auth = authMod.getAuth(fbApp);
+    await authMod.signInAnonymously(auth);
+
     firebaseReady = true;
     console.log('Firebase conectado (motorista)');
+    registrarPerfilMotorista(); // cadastra esse motorista permanentemente (não só enquanto online)
   } catch (e) {
     console.warn('Firebase nao disponivel:', e);
     firebaseReady = false;
   }
+}
+
+// Cadastra/atualiza o perfil deste motorista na coleção permanente 'motoristas' —
+// diferente de 'motoristas_disponiveis', que existe só enquanto ele está online.
+// É essa coleção permanente que o Painel Admin usa pra listar todos os motoristas já cadastrados.
+function registrarPerfilMotorista() {
+  if (!firebaseReady || !db) return;
+  fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
+    nome: state.motorista.nome,
+    veiculo: state.motorista.veiculo,
+    placa: state.motorista.placa,
+    avaliacao: state.motorista.avaliacao,
+    atualizadoEm: fb.serverTimestamp(),
+  }, { merge: true }).catch((e) => console.warn('[motorista] erro ao registrar perfil:', e));
 }
 
 // ─────────────────────────────────────

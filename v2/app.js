@@ -38,6 +38,7 @@ async function initFirebase() {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
     const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js');
     fb = firestoreMod;
 
     const firebaseConfig = {
@@ -51,6 +52,12 @@ async function initFirebase() {
 
     const fbApp = initializeApp(firebaseConfig);
     db = fb.getFirestore(fbApp);
+
+    // Autenticação anônima — exige um login (mesmo sem senha) pra poder ler/escrever no banco.
+    // Sem isso, qualquer pessoa na internet acessaria os dados direto, sem nem abrir o app.
+    const auth = authMod.getAuth(fbApp);
+    await authMod.signInAnonymously(auth);
+
     firebaseReady = true;
     console.log('✅ Firebase conectado');
   } catch (e) {
