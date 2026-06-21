@@ -378,7 +378,25 @@ async function criarCorrida(origem, destino, preco, categoria) {
         criadoEm: fb.serverTimestamp(),
       });
       state.corridaId = docRef.id;
+
+      // Monta a fila de prioridade: motorista mais próximo primeiro (empate decide pela melhor avaliação).
+      // Se ainda não houver motoristas disponíveis cadastrados, fica em modo aberto (oferece pra todo mundo).
+      try {
+        const fila = await montarFilaPrioridade(origem);
+        if (fila.length > 0) {
+          await fb.updateDoc(docRef, {
+            filaMotoristas: fila,
+            filaIndiceAtual: 0,
+            motoristaAlvoAtual: fila[0],
+            ofertaExpiraEm: Date.now() + 15000,
+          });
+        }
+      } catch (e) {
+        console.warn('[passageiro] erro ao montar fila de prioridade, seguindo em modo aberto:', e);
+      }
+
       ouvirAceiteCorrida(docRef.id);
+      iniciarFilaWatchdog(docRef.id);
       sincronizarRotaNoFirebase(); // garante que paradas pré-definidas já apareçam pro motorista
     } catch (e) {
       console.warn('Erro ao salvar corrida no Firebase, seguindo apenas local:', e);
@@ -387,6 +405,71 @@ async function criarCorrida(origem, destino, preco, categoria) {
   } else {
     simularBuscaLocal();
   }
+}
+
+// ─────────────────────────────────────
+// FILA DE PRIORIDADE — monta a ordem de oferta por proximidade (e avaliação em caso de empate)
+// ─────────────────────────────────────
+async function montarFilaPrioridade(origem) {
+  if (!firebaseReady || !db) return [];
+  try {
+    const snap = await fb.getDocs(fb.collection(db, 'motoristas_disponiveis'));
+    const agora = Date.now();
+    const candidatos = [];
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const atualizadoMs = d.atualizadoEm?.toMillis ? d.atualizadoEm.toMillis() : null;
+      // Ignora motorista com localização desatualizada há mais de 2 min (provavelmente fechou o app)
+      if (atualizadoMs && (agora - atualizadoMs) > 2 * 60 * 1000) return;
+      if (typeof d.lat !== 'number' || typeof d.lon !== 'number') return;
+      const distanciaKm = (origem?.lat && origem?.lon)
+        ? haversineKm(origem.lat, origem.lon, d.lat, d.lon)
+        : 999;
+      candidatos.push({ id: docSnap.id, distanciaKm, avaliacao: Number(d.avaliacao) || 0 });
+    });
+    // Mais próximo primeiro; diferenças pequenas de distância (<300m) são decididas pela melhor avaliação
+    candidatos.sort((a, b) => {
+      if (Math.abs(a.distanciaKm - b.distanciaKm) > 0.3) return a.distanciaKm - b.distanciaKm;
+      return b.avaliacao - a.avaliacao;
+    });
+    return candidatos.map(c => c.id);
+  } catch (e) {
+    console.warn('[passageiro] erro ao consultar motoristas disponíveis:', e);
+    return [];
+  }
+}
+
+// Rede de segurança: se o motorista da vez não responder (app fechado, sem internet etc.),
+// avança a fila mesmo sem depender do aparelho dele — assim a corrida nunca fica travada esperando alguém que não vai responder.
+let filaWatchdogInterval = null;
+
+function iniciarFilaWatchdog(corridaId) {
+  clearInterval(filaWatchdogInterval);
+  filaWatchdogInterval = setInterval(async () => {
+    if (!db || !corridaId) { clearInterval(filaWatchdogInterval); return; }
+    try {
+      const snap = await fb.getDoc(fb.doc(db, 'corridas', corridaId));
+      const data = snap.data();
+      if (!data || data.status !== 'aguardando') { clearInterval(filaWatchdogInterval); return; }
+      const fila = data.filaMotoristas || [];
+      if (fila.length === 0) return; // modo aberto — nada a avançar
+      const expirou = data.ofertaExpiraEm && Date.now() > data.ofertaExpiraEm + 5000; // 5s de margem
+      if (!expirou) return;
+      let indiceAtual = typeof data.filaIndiceAtual === 'number' ? data.filaIndiceAtual : 0;
+      let proximoIndice = indiceAtual + 1;
+      if (proximoIndice >= fila.length) proximoIndice = 0; // deu a volta — avisa todo mundo de novo
+      await fb.updateDoc(fb.doc(db, 'corridas', corridaId), {
+        filaIndiceAtual: proximoIndice,
+        motoristaAlvoAtual: fila[proximoIndice],
+        ofertaExpiraEm: Date.now() + 15000,
+      });
+    } catch (e) { console.warn('[passageiro] erro no watchdog da fila:', e); }
+  }, 5000);
+}
+
+function pararFilaWatchdog() {
+  clearInterval(filaWatchdogInterval);
+  filaWatchdogInterval = null;
 }
 
 // Atualiza o status de uma corrida no histórico local (localStorage), sempre pelo ID fixo
@@ -431,6 +514,7 @@ function ouvirAceiteCorrida(corridaId) {
     if (data.status === 'aceita' && !jaExibiuMotoristaEncontrado) {
       jaExibiuMotoristaEncontrado = true;
       console.log('[passageiro] motorista aceitou! Exibindo tela de motorista encontrado.');
+      pararFilaWatchdog();
       exibirMotoristaEncontrado({
         nome: data.motoristaNome || 'Motorista',
         veiculo: data.motoristaVeiculo || '',
@@ -559,7 +643,12 @@ function iniciarChatCorrida() {
     snap.docChanges().forEach(change => {
       if (change.type === 'added') {
         const msg = change.doc.data();
-        renderChatMessage(msg.texto, msg.de === 'passageiro' ? 'me' : 'them');
+        const tipo = msg.de === 'passageiro' ? 'me' : 'them';
+        if (msg.tipo === 'audio') {
+          renderChatMessage(null, tipo, msg.audioData);
+        } else {
+          renderChatMessage(msg.texto, tipo);
+        }
       }
     });
   });
@@ -580,11 +669,18 @@ function tocarSomNotificacaoChat() {
   } catch (e) {}
 }
 
-function renderChatMessage(texto, tipo) {
+function renderChatMessage(texto, tipo, audioDataUrl = null) {
   const container = document.getElementById('chat-messages');
   const div = document.createElement('div');
-  div.className = `chat-msg chat-msg--${tipo}`;
-  div.textContent = texto;
+  div.className = `chat-msg chat-msg--${tipo}` + (audioDataUrl ? ' chat-msg--audio' : '');
+  if (audioDataUrl) {
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = audioDataUrl;
+    div.appendChild(audio);
+  } else {
+    div.textContent = texto;
+  }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   if (tipo === 'them' || tipo === 'sys') tocarSomNotificacaoChat();
@@ -602,6 +698,17 @@ async function enviarMensagemChat(texto) {
   }
 }
 
+async function enviarAudioChat(audioDataUrl) {
+  renderChatMessage(null, 'me', audioDataUrl);
+  if (firebaseReady && db && state.corridaId) {
+    try {
+      await fb.addDoc(fb.collection(db, 'corridas', state.corridaId, 'mensagens'), {
+        tipo: 'audio', audioData: audioDataUrl, de: 'passageiro', ts: fb.serverTimestamp(),
+      });
+    } catch (e) { console.warn('Erro ao enviar áudio:', e); }
+  }
+}
+
 document.getElementById('btn-send-chat')?.addEventListener('click', () => {
   const input = document.getElementById('chat-input');
   enviarMensagemChat(input.value);
@@ -613,6 +720,58 @@ document.getElementById('chat-input')?.addEventListener('keydown', (e) => {
 document.querySelectorAll('.chat-quick-btn').forEach(btn => {
   btn.addEventListener('click', () => enviarMensagemChat(btn.dataset.msg));
 });
+
+// ─────────────────────────────────────
+// MENSAGEM DE VOZ NO CHAT (gravação pelo microfone)
+// ─────────────────────────────────────
+function blobParaBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+let gravadorAudioChat = null;
+let pedacosAudioChat = [];
+let gravandoAudioChat = false;
+let timeoutGravacaoChat = null;
+
+async function alternarGravacaoAudioChat() {
+  const btnMic = document.getElementById('btn-mic-chat');
+  if (gravandoAudioChat) {
+    gravadorAudioChat?.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    gravadorAudioChat = new MediaRecorder(stream);
+    pedacosAudioChat = [];
+    gravadorAudioChat.ondataavailable = (e) => pedacosAudioChat.push(e.data);
+    gravadorAudioChat.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearTimeout(timeoutGravacaoChat);
+      gravandoAudioChat = false;
+      btnMic?.classList.remove('is-recording');
+      const blob = new Blob(pedacosAudioChat, { type: 'audio/webm' });
+      if (blob.size > 0) {
+        const base64 = await blobParaBase64(blob);
+        enviarAudioChat(base64);
+      }
+    };
+    gravadorAudioChat.start();
+    gravandoAudioChat = true;
+    btnMic?.classList.add('is-recording');
+    showToast('🎙️ Gravando... toque de novo para enviar');
+    clearTimeout(timeoutGravacaoChat);
+    timeoutGravacaoChat = setTimeout(() => { if (gravandoAudioChat) gravadorAudioChat?.stop(); }, 30000); // limite de 30s
+  } catch (e) {
+    showToast('⚠️ Não foi possível acessar o microfone');
+  }
+}
+
+document.getElementById('btn-mic-chat')?.addEventListener('click', alternarGravacaoAudioChat);
 
 document.getElementById('btn-open-chat')?.addEventListener('click', () => {
   document.getElementById('chat-panel').hidden = false;
@@ -661,6 +820,7 @@ document.querySelectorAll('.cancel-reason').forEach(btn => {
 // ─────────────────────────────────────
 function cancelarBuscaCorrida() {
   if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
+  pararFilaWatchdog();
   if (firebaseReady && db && state.corridaId && !String(state.corridaId).startsWith('local-')) {
     fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), { status: 'cancelada' }).catch(() => {});
   }

@@ -31,6 +31,19 @@ async function initFirebase() {
 }
 
 // ─────────────────────────────────────
+// IDENTIDADE DO MOTORISTA — fixa por dispositivo, usada na fila de prioridade
+// ─────────────────────────────────────
+function obterMotoristaId() {
+  let id = localStorage.getItem('interliga_motorista_id');
+  if (!id) {
+    id = 'mot-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('interliga_motorista_id', id);
+  }
+  return id;
+}
+const meuMotoristaId = obterMotoristaId();
+
+// ─────────────────────────────────────
 // ESTADO
 // ─────────────────────────────────────
 const state = {
@@ -121,9 +134,11 @@ document.getElementById('online-toggle')?.addEventListener('click', () => {
   if (state.online) {
     showToast('🟢 Você está online — buscando corridas...');
     iniciarEscutaCorridas();
+    iniciarDisponibilidade();
   } else {
     showToast('🔴 Você está offline');
     pararEscutaCorridas();
+    pararDisponibilidade();
   }
 });
 
@@ -139,6 +154,44 @@ function atualizarStatsHome() {
     .filter(c => new Date(c.data).toDateString() === hoje)
     .reduce((acc, c) => acc + (c.valor || 0), 0);
   document.getElementById('earnings-today').textContent = 'R$ ' + ganhosHoje.toFixed(2).replace('.', ',');
+}
+
+// ─────────────────────────────────────
+// DISPONIBILIDADE — publica localização do motorista livre pro Firebase,
+// pra que o passageiro consiga montar a fila por proximidade/avaliação.
+// Só roda enquanto o motorista está Online E sem corrida ativa.
+// ─────────────────────────────────────
+let intervalDisponibilidade = null;
+
+function publicarDisponibilidade() {
+  if (!firebaseReady || !db || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      fb.setDoc(fb.doc(db, 'motoristas_disponiveis', meuMotoristaId), {
+        nome: state.motorista.nome,
+        avaliacao: state.motorista.avaliacao,
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        atualizadoEm: fb.serverTimestamp(),
+      }).catch((e) => console.warn('[motorista] erro ao publicar disponibilidade:', e));
+    },
+    () => {},
+    { timeout: 5000 }
+  );
+}
+
+function iniciarDisponibilidade() {
+  publicarDisponibilidade();
+  clearInterval(intervalDisponibilidade);
+  intervalDisponibilidade = setInterval(publicarDisponibilidade, 20000); // atualiza a cada 20s
+}
+
+function pararDisponibilidade() {
+  clearInterval(intervalDisponibilidade);
+  intervalDisponibilidade = null;
+  if (firebaseReady && db) {
+    fb.deleteDoc(fb.doc(db, 'motoristas_disponiveis', meuMotoristaId)).catch(() => {});
+  }
 }
 
 // ─────────────────────────────────────
@@ -200,8 +253,9 @@ function iniciarEscutaCorridas() {
       state.corridasListenerUnsub = fb.onSnapshot(q, (snap) => {
         console.log('[motorista] snapshot de corridas recebido. docs:', snap.docs.length);
         snap.docChanges().forEach(change => {
-          if (change.type === 'added') {
+          if (change.type === 'added' || change.type === 'modified') {
             const corrida = { id: change.doc.id, ...change.doc.data() };
+            if (corrida.status !== 'aguardando') return;
 
             // Ignorar corridas muito antigas (lixo de testes anteriores)
             const criadoEmMs = corrida.criadoEm?.toMillis ? corrida.criadoEm.toMillis() : null;
@@ -210,7 +264,17 @@ function iniciarEscutaCorridas() {
               return;
             }
 
-            console.log('[motorista] corrida nova detectada:', corrida);
+            // Fila de prioridade: só notifica quem é a vez (motoristaAlvoAtual).
+            // Sem fila definida (corrida antiga ou sem motoristas disponíveis cadastrados) = modo aberto, notifica todo mundo.
+            const souAlvo = !corrida.motoristaAlvoAtual || corrida.motoristaAlvoAtual === meuMotoristaId;
+            if (!souAlvo) return;
+
+            // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila voltou pra mim)
+            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.filaIndiceAtual ?? 0);
+            if (state._ultimaOfertaProcessada === chaveOferta) return;
+            state._ultimaOfertaProcessada = chaveOferta;
+
+            console.log('[motorista] corrida nova/oferta detectada:', corrida);
             notificarNovaCorrida(corrida);
           }
         });
@@ -239,12 +303,27 @@ function pararEscutaCorridas() {
   state.corridasListenerUnsub = null;
 }
 
+// ─────────────────────────────────────
+// VOZ — avisos falados em voz alta, pro motorista não precisar ficar olhando a tela
+// ─────────────────────────────────────
+function falarEmVoz(texto) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // não deixa acumular falas em fila
+    const utter = new SpeechSynthesisUtterance(texto);
+    utter.lang = 'pt-BR';
+    utter.rate = 1;
+    window.speechSynthesis.speak(utter);
+  } catch (e) { console.warn('[motorista] erro ao falar em voz:', e); }
+}
+
 function notificarNovaCorrida(corrida) {
   console.log('[motorista] Nova corrida recebida:', corrida);
   state.corridaAtual = corrida;
   state.corridaAtualId = corrida.id;
 
   tocarSomNovaCorrida();
+  falarEmVoz('Nova corrida disponível!');
 
   // Banner na home
   const banner = document.getElementById('new-ride-banner');
@@ -319,14 +398,37 @@ function iniciarCountdown() {
 }
 
 document.getElementById('btn-recusar')?.addEventListener('click', recusarCorrida);
+// Avança a corrida pro próximo motorista da fila de prioridade. Se já passou
+// por todo mundo, volta pro primeiro da lista (reoferece pra todo mundo de novo),
+// em vez de matar a corrida — segue tentando até alguém aceitar.
+async function avancarFilaOuReabrir(corridaId, corrida) {
+  const fila = corrida.filaMotoristas || [];
+  if (fila.length === 0) return; // modo aberto (sem fila) — nada a avançar, segue 'aguardando' pra todo mundo
+
+  let indiceAtual = typeof corrida.filaIndiceAtual === 'number' ? corrida.filaIndiceAtual : 0;
+  let proximoIndice = indiceAtual + 1;
+  if (proximoIndice >= fila.length) proximoIndice = 0; // deu a volta — avisa todo mundo de novo
+
+  const recusantes = Array.isArray(corrida.recusantes) ? [...corrida.recusantes] : [];
+  if (!recusantes.includes(meuMotoristaId)) recusantes.push(meuMotoristaId);
+
+  await fb.updateDoc(fb.doc(db, 'corridas', corridaId), {
+    filaIndiceAtual: proximoIndice,
+    motoristaAlvoAtual: fila[proximoIndice],
+    ofertaExpiraEm: Date.now() + 15000,
+    recusantes,
+  });
+}
+
 function recusarCorrida() {
   clearInterval(state.countdownInterval);
   clearInterval(state.somRepeticaoInterval);
 
   const corridaId = state.corridaAtualId;
-  if (firebaseReady && db && corridaId && !String(corridaId).startsWith('local-')) {
-    fb.updateDoc(fb.doc(db, 'corridas', corridaId), { status: 'recusada' }).catch((e) =>
-      console.error('[motorista] erro ao marcar corrida como recusada:', e)
+  const corrida = state.corridaAtual;
+  if (firebaseReady && db && corridaId && !String(corridaId).startsWith('local-') && corrida) {
+    avancarFilaOuReabrir(corridaId, corrida).catch((e) =>
+      console.error('[motorista] erro ao avançar fila na recusa:', e)
     );
   }
 
@@ -352,20 +454,41 @@ async function aceitarCorrida() {
     return;
   }
 
-  // Atualizar status no Firebase
+  // Atualizar status no Firebase — usando transação, pra garantir que só o
+  // primeiro motorista a clicar "aceitar" consiga, mesmo se dois clicarem juntos
   if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
     try {
-      await fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
-        status: 'aceita',
-        motoristaNome: state.motorista.nome,
-        motoristaVeiculo: state.motorista.veiculo,
-        motoristaPlaca: state.motorista.placa,
-        motoristaAvaliacao: state.motorista.avaliacao,
+      const conseguiu = await fb.runTransaction(db, async (tx) => {
+        const ref = fb.doc(db, 'corridas', state.corridaAtualId);
+        const snap = await tx.get(ref);
+        const data = snap.data();
+        if (!data || data.status !== 'aguardando') return false; // outro motorista já pegou, ou foi cancelada
+        tx.update(ref, {
+          status: 'aceita',
+          motoristaId: meuMotoristaId,
+          motoristaNome: state.motorista.nome,
+          motoristaVeiculo: state.motorista.veiculo,
+          motoristaPlaca: state.motorista.placa,
+          motoristaAvaliacao: state.motorista.avaliacao,
+        });
+        return true;
       });
+      if (!conseguiu) {
+        showToast('⚠️ Essa corrida já foi aceita por outro motorista');
+        document.getElementById('request-card').hidden = true;
+        document.getElementById('request-empty').hidden = false;
+        document.getElementById('new-ride-banner').hidden = true;
+        state.corridaAtual = null;
+        state.corridaAtualId = null;
+        go('screen-home');
+        return;
+      }
     } catch (e) {
       console.error('[motorista] Falha ao atualizar Firebase:', e);
     }
   }
+
+  pararDisponibilidade(); // fico fora da fila de novas ofertas enquanto rodo essa corrida
 
   // Também atualizar localStorage (mesmo dispositivo / fallback)
   try {
@@ -403,10 +526,14 @@ function onEnterOngoing() {
   setText('passenger-rating', '⭐ 4.9');
 
   chegouAoCliente = false;
+  sequenciaRotaMotorista = [];
+  indiceRotaAtualMotorista = 0;
   const btnCheguei = document.getElementById('btn-cheguei');
   const btnFinalizar = document.getElementById('btn-finalizar-corrida');
+  const btnSeguir = document.getElementById('btn-seguir-viagem');
   if (btnCheguei) btnCheguei.hidden = false;
   if (btnFinalizar) btnFinalizar.hidden = true;
+  if (btnSeguir) btnSeguir.hidden = true;
 
   try { initMapOngoing(corrida); } catch (e) { console.error('[motorista] erro ao iniciar mapa ongoing:', e); }
   try { iniciarChatMotorista(); } catch (e) { console.error('[motorista] erro ao iniciar chat:', e); }
@@ -470,11 +597,16 @@ function escutarCancelamentoCorrida() {
     if (data.status === 'cancelada') {
       pararEscutaCancelamento();
       pararEscutaChat();
+      pararEscutaRota();
       pararBroadcastPosicao();
       marcadorMotoristaMap = null;
+      sequenciaRotaMotorista = [];
+      indiceRotaAtualMotorista = 0;
       state.corridaAtual = null;
       state.corridaAtualId = null;
+      falarEmVoz('Atenção! O passageiro cancelou a corrida.');
       showToast('❌ Passageiro cancelou a corrida');
+      if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
       go('screen-home');
     }
   }, (erro) => console.error('[motorista] erro no listener de cancelamento:', erro));
@@ -567,31 +699,45 @@ function initMapOngoing(corrida) {
 document.getElementById('btn-cheguei')?.addEventListener('click', () => {
   console.log('[motorista] btn-cheguei clicado. sequenciaRotaMotorista:', sequenciaRotaMotorista, 'indiceRotaAtualMotorista:', indiceRotaAtualMotorista);
 
-  chegouAoCliente = true;
-  document.getElementById('btn-cheguei').hidden = true;
-
   const totalPontos = sequenciaRotaMotorista.length;
   const temParadaPendente = totalPontos > 2 && indiceRotaAtualMotorista < totalPontos - 2;
 
   console.log('[motorista] totalPontos:', totalPontos, 'temParadaPendente:', temParadaPendente);
 
   if (temParadaPendente) {
-    // Ainda há parada(s) antes do destino final — avisa chegada na parada atual
-    document.getElementById('ongoing-eta-badge').textContent = '🟢 Aguardando na parada';
-    showToast('🔔 Passageiro avisado que você chegou na parada');
-    enviarMsgChatMotorista('🚗 Motorista chegou! Aguardando para seguir viagem.', true);
-    // Mostra novamente o botão "cheguei" para a próxima etapa, após pequeno delay
-    setTimeout(() => {
-      chegouAoCliente = false;
-      document.getElementById('btn-cheguei').hidden = false;
-    }, 3000);
+    // Chegou numa parada intermediária — mostra botão para seguir viagem
+    document.getElementById('btn-cheguei').hidden = true;
+    document.getElementById('btn-seguir-viagem').hidden = false;
+    document.getElementById('ongoing-eta-badge').textContent = '🟢 Chegou na parada ' + (indiceRotaAtualMotorista + 1);
+    showToast('🔔 Parada registrada');
+    enviarMsgChatMotorista('🚗 Motorista chegou na parada! Aguardando para seguir viagem.', true);
   } else {
     // Chegou no destino final — libera finalizar corrida
+    chegouAoCliente = true;
+    document.getElementById('btn-cheguei').hidden = true;
     document.getElementById('btn-finalizar-corrida').hidden = false;
     document.getElementById('ongoing-eta-badge').textContent = '🟢 Você chegou!';
     showToast('🔔 Passageiro avisado que você chegou');
     enviarMsgChatMotorista('🚗 Motorista chegou ao seu local!', true);
   }
+});
+
+document.getElementById('btn-seguir-viagem')?.addEventListener('click', () => {
+  indiceRotaAtualMotorista++;
+  renderRotaMotorista();
+
+  // Sincroniza com o Firebase para o passageiro também ver a rota atualizada
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+      indiceRotaAtual: indiceRotaAtualMotorista,
+    }).catch((e) => console.error('[motorista] erro ao sincronizar avanço de rota:', e));
+  }
+
+  document.getElementById('btn-seguir-viagem').hidden = true;
+  document.getElementById('btn-cheguei').hidden = false;
+  document.getElementById('ongoing-eta-badge').textContent = '🕒 -- até o próximo destino';
+  showToast('▶ Seguindo para: ' + (sequenciaRotaMotorista[indiceRotaAtualMotorista + 1]?.texto || 'destino'));
+  enviarMsgChatMotorista('🚗 Motorista seguiu viagem!', true);
 });
 
 document.getElementById('btn-finalizar-corrida')?.addEventListener('click', finalizarCorrida);
@@ -626,6 +772,7 @@ function finalizarCorrida() {
   indiceRotaAtualMotorista = 0;
 
   showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.preco || 18).toFixed(2).replace('.', ','));
+  if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
   go('screen-home');
   atualizarStatsHome();
 }
@@ -647,7 +794,11 @@ function iniciarChatMotorista() {
       if (change.type === 'added') {
         const msg = change.doc.data();
         if (msg.de !== 'motorista') {
-          renderChatMessageMotorista(msg.texto, 'them');
+          if (msg.tipo === 'audio') {
+            renderChatMessageMotorista(null, 'them', msg.audioData);
+          } else {
+            renderChatMessageMotorista(msg.texto, 'them');
+          }
         }
       }
     });
@@ -673,12 +824,19 @@ function tocarSomNotificacaoChat() {
   } catch (e) {}
 }
 
-function renderChatMessageMotorista(texto, tipo) {
+function renderChatMessageMotorista(texto, tipo, audioDataUrl = null) {
   const container = document.getElementById('chat-messages-driver');
   if (!container) return;
   const div = document.createElement('div');
-  div.className = `chat-msg chat-msg--${tipo}`;
-  div.textContent = texto;
+  div.className = `chat-msg chat-msg--${tipo}` + (audioDataUrl ? ' chat-msg--audio' : '');
+  if (audioDataUrl) {
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = audioDataUrl;
+    div.appendChild(audio);
+  } else {
+    div.textContent = texto;
+  }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
   if (tipo === 'them') tocarSomNotificacaoChat();
@@ -696,6 +854,17 @@ async function enviarMsgChatMotorista(texto, isSystem = false) {
   }
 }
 
+async function enviarAudioChatMotorista(audioDataUrl) {
+  renderChatMessageMotorista(null, 'me', audioDataUrl);
+  if (firebaseReady && db && state.corridaAtualId) {
+    try {
+      await fb.addDoc(fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'), {
+        tipo: 'audio', audioData: audioDataUrl, de: 'motorista', ts: fb.serverTimestamp(),
+      });
+    } catch (e) { console.warn('Erro ao enviar áudio:', e); }
+  }
+}
+
 document.getElementById('btn-send-chat-driver')?.addEventListener('click', () => {
   const input = document.getElementById('chat-input-driver');
   enviarMsgChatMotorista(input.value);
@@ -709,6 +878,58 @@ document.getElementById('btn-chat-driver')?.addEventListener('click', () => {
   document.getElementById('chat-panel-driver').hidden = false;
   document.getElementById('chat-input-driver')?.focus();
 });
+
+// ─────────────────────────────────────
+// MENSAGEM DE VOZ NO CHAT (gravação pelo microfone)
+// ─────────────────────────────────────
+function blobParaBase64Motorista(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+let gravadorAudioChatMotorista = null;
+let pedacosAudioChatMotorista = [];
+let gravandoAudioChatMotorista = false;
+let timeoutGravacaoChatMotorista = null;
+
+async function alternarGravacaoAudioChatMotorista() {
+  const btnMic = document.getElementById('btn-mic-chat-driver');
+  if (gravandoAudioChatMotorista) {
+    gravadorAudioChatMotorista?.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    gravadorAudioChatMotorista = new MediaRecorder(stream);
+    pedacosAudioChatMotorista = [];
+    gravadorAudioChatMotorista.ondataavailable = (e) => pedacosAudioChatMotorista.push(e.data);
+    gravadorAudioChatMotorista.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearTimeout(timeoutGravacaoChatMotorista);
+      gravandoAudioChatMotorista = false;
+      btnMic?.classList.remove('is-recording');
+      const blob = new Blob(pedacosAudioChatMotorista, { type: 'audio/webm' });
+      if (blob.size > 0) {
+        const base64 = await blobParaBase64Motorista(blob);
+        enviarAudioChatMotorista(base64);
+      }
+    };
+    gravadorAudioChatMotorista.start();
+    gravandoAudioChatMotorista = true;
+    btnMic?.classList.add('is-recording');
+    showToast('🎙️ Gravando... toque de novo para enviar');
+    clearTimeout(timeoutGravacaoChatMotorista);
+    timeoutGravacaoChatMotorista = setTimeout(() => { if (gravandoAudioChatMotorista) gravadorAudioChatMotorista?.stop(); }, 30000);
+  } catch (e) {
+    showToast('⚠️ Não foi possível acessar o microfone');
+  }
+}
+
+document.getElementById('btn-mic-chat-driver')?.addEventListener('click', alternarGravacaoAudioChatMotorista);
 
 // Número do bot Interliga (Railway/Baileys) — faz a ponte anônima entre motorista e passageiro
 const BOT_NUMERO = '5571981899571';

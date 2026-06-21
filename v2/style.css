@@ -154,13 +154,13 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .card-grid {
   padding: 18px 20px 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
 }
 .card-dark {
   background: var(--ink);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 14px 12px;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -490,6 +490,11 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .chat-input-row input { flex: 1; border: 1.5px solid var(--border); border-radius: 20px; padding: 8px 14px; font-size: 14px; }
 .chat-input-row button { width: 36px; height: 36px; border-radius: 50%; background: var(--orange); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .chat-input-row button svg { width: 16px; height: 16px; }
+.btn-mic { background: var(--surface) !important; color: var(--text-soft) !important; border: 1.5px solid var(--border); }
+.btn-mic.is-recording { background: var(--red) !important; color: white !important; border-color: var(--red); animation: mic-pulse 1s infinite; }
+@keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.chat-msg--audio { padding: 6px 8px; }
+.chat-msg--audio audio { width: 200px; height: 32px; display: block; }
 
 /* ═══════════════════════════════════════
    TRIPS / EMPTY STATE

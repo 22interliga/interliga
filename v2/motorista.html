@@ -176,6 +176,9 @@
         <div class="chat-messages" id="chat-messages-driver"></div>
         <div class="chat-input-row">
           <input type="text" id="chat-input-driver" placeholder="Responder passageiro...">
+          <button id="btn-mic-chat-driver" type="button" class="btn-mic" title="Mensagem de voz">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+          </button>
           <button id="btn-send-chat-driver">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
           </button>
@@ -183,6 +186,7 @@
       </div>
 
       <button class="btn-arrived" id="btn-cheguei">🔔 Avisar que cheguei</button>
+      <button class="btn-arrived" id="btn-seguir-viagem" hidden>▶ Seguir viagem (próxima parada/destino)</button>
       <button class="btn-primary" id="btn-finalizar-corrida" hidden>✓ Finalizar corrida</button>
     </div>
   </section>
