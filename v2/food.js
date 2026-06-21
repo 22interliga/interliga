@@ -311,13 +311,13 @@ function confirmarPedidoFood() {
   foodState.carrinho = [];
   atualizarCartBar();
 
-  simularProgressoPedido(restaurante);
+  simularProgressoPedido(restaurante, pedidoId);
 }
 
 // ─────────────────────────────────────
 // SIMULAÇÃO DE PROGRESSO DO PEDIDO (demo — sem backend real ainda)
 // ─────────────────────────────────────
-function simularProgressoPedido(restaurante) {
+function simularProgressoPedido(restaurante, pedidoId) {
   const etapas = [
     { step: 'preparando', titulo: '👨‍🍳 Preparando seu pedido', tempo: 8000 },
     { step: 'entrega', titulo: '🛵 Saiu para entrega', tempo: 16000 },
@@ -343,8 +343,10 @@ function simularProgressoPedido(restaurante) {
       document.getElementById('food-tracking-title').textContent = etapa.titulo;
 
       // Atualizar status no localStorage (e remover banner quando entregue)
+      // — só se o pedido ativo agora ainda for este mesmo pedido (evita timer antigo
+      // sobrescrever um pedido mais novo, se o usuário fizer outro pedido rapidamente)
       const pedidoAtivo = JSON.parse(localStorage.getItem('interliga_pedido_ativo') || 'null');
-      if (pedidoAtivo) {
+      if (pedidoAtivo && pedidoAtivo.id === pedidoId) {
         if (etapa.step === 'entregue') {
           localStorage.removeItem('interliga_pedido_ativo');
         } else {

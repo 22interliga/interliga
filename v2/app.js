@@ -8,6 +8,30 @@
 // ─────────────────────────────────────
 let db = null;
 let firebaseReady = false;
+
+// ─────────────────────────────────────
+// LOCALSTORAGE SEGURO — nunca deixa um dado corrompido quebrar a tela
+// ─────────────────────────────────────
+export function getStorageJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn(`[storage] dado corrompido em "${key}", usando valor padrão:`, e);
+    return fallback;
+  }
+}
+
+export function setStorageJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    console.warn(`[storage] falha ao salvar "${key}" (storage cheio?):`, e);
+    return false;
+  }
+}
 let fb = {}; // funções do firestore, preenchidas após carregar
 
 async function initFirebase() {
@@ -45,6 +69,7 @@ const state = {
   categoriaEscolhida: 'x',
   precos: { x: null, plus: null, van: null },
   corridaId: null,
+  corridaLocalId: null, // ID fixo do registro no localStorage — nunca muda, mesmo após corridaId virar o ID do Firebase
   corridaListenerUnsub: null,
   chatListenerUnsub: null,
 };
@@ -194,9 +219,7 @@ export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam
 
   const search = debounce(async () => {
     const termo = inputEl.value;
-    alert('[DEBUG] Buscando: "' + termo + '" | suggestionsBox válida: ' + !!suggestionsBox);
     const results = await buscarEnderecos(termo);
-    alert('[DEBUG] Resultados encontrados: ' + results.length);
     if (results.length === 0) {
       suggestionsBox.classList.remove('is-open');
       suggestionsBox.innerHTML = '';
@@ -341,11 +364,12 @@ async function criarCorrida(origem, destino, preco, categoria) {
   };
 
   // Sempre salvar local primeiro (garante histórico mesmo offline)
-  const historico = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
+  const historico = getStorageJSON('interliga_corridas', []);
   const localId = 'local-' + Date.now();
   historico.unshift({ ...corridaLocal, id: localId });
-  localStorage.setItem('interliga_corridas', JSON.stringify(historico.slice(0, 50)));
+  setStorageJSON('interliga_corridas', historico.slice(0, 50));
   state.corridaId = localId;
+  state.corridaLocalId = localId; // fixo — usado pra sempre achar esse registro no histórico, mesmo depois do corridaId virar o ID do Firebase
 
   if (firebaseReady && db) {
     try {
@@ -363,6 +387,22 @@ async function criarCorrida(origem, destino, preco, categoria) {
   } else {
     simularBuscaLocal();
   }
+}
+
+// Atualiza o status de uma corrida no histórico local (localStorage), sempre pelo ID fixo
+// (state.corridaLocalId), que nunca muda — diferente de state.corridaId, que é sobrescrito
+// pelo ID do Firebase assim que a corrida é sincronizada.
+function atualizarStatusHistoricoLocal(novoStatus, extra = {}) {
+  if (!state.corridaLocalId) return;
+  try {
+    const historico = getStorageJSON('interliga_corridas', []);
+    const idx = historico.findIndex(c => c.id === state.corridaLocalId);
+    if (idx >= 0) {
+      historico[idx].status = novoStatus;
+      Object.assign(historico[idx], extra);
+      setStorageJSON('interliga_corridas', historico);
+    }
+  } catch (e) { console.warn('[historico local] erro ao atualizar status:', e); }
 }
 
 // Fallback sem Firebase: simula encontrar motorista para não travar a demo
@@ -405,12 +445,7 @@ function ouvirAceiteCorrida(corridaId) {
       pararEscutaPosicaoMotorista();
 
       // Atualizar status no histórico local (para aparecer corretamente em Minhas Viagens)
-      try {
-        const historico = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
-        const idx = historico.findIndex(c => c.id === state.corridaId);
-        if (idx >= 0) historico[idx].status = 'finalizada';
-        localStorage.setItem('interliga_corridas', JSON.stringify(historico));
-      } catch (e) {}
+      atualizarStatusHistoricoLocal('finalizada');
 
       showToast('✅ Corrida finalizada! Obrigado por viajar com a Interliga.');
       go('screen-home');
@@ -629,6 +664,7 @@ function cancelarBuscaCorrida() {
   if (firebaseReady && db && state.corridaId && !String(state.corridaId).startsWith('local-')) {
     fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), { status: 'cancelada' }).catch(() => {});
   }
+  atualizarStatusHistoricoLocal('cancelada');
   showToast('Solicitação cancelada');
   go('screen-home');
 }
@@ -649,8 +685,9 @@ function confirmarCancelamento() {
 
   const temMulta = timestampAceite && (Date.now() - timestampAceite) >= TEMPO_GRACA_CANCEL_MS;
 
-  if (state.corridaListenerUnsub) state.corridaListenerUnsub();
-  if (state.chatListenerUnsub) state.chatListenerUnsub();
+  if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
+  if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
+  pararEscutaPosicaoMotorista(); // essencial: sem isso, o rastreio ao vivo trava na próxima corrida
   if (firebaseReady && db && state.corridaId && !state.corridaId.startsWith('local-')) {
     fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), {
       status: 'cancelada',
@@ -658,6 +695,7 @@ function confirmarCancelamento() {
       multaCobrada: temMulta,
     }).catch(() => {});
   }
+  atualizarStatusHistoricoLocal('cancelada', { multaCobrada: temMulta });
 
   if (temMulta) {
     showToast('❌ Corrida cancelada · Multa de R$ 5,00 cobrada');
@@ -716,7 +754,6 @@ function renderParadas() {
     if (input._wired) return;
     const idx = parseInt(input.dataset.stopIdx, 10);
     const suggestionsBox = container.querySelector(`.stop-suggestions[data-suggestions-idx="${idx}"]`);
-    alert('[DEBUG] Conectando autocomplete na parada ' + idx + '. suggestionsBox encontrada: ' + !!suggestionsBox);
     attachAddressAutocomplete(input, (r) => {
       paradasExtras[idx].texto = r.texto;
       paradasExtras[idx].lat = r.lat;
@@ -848,7 +885,7 @@ function sincronizarRotaNoFirebase() {
 // ÚLTIMA CORRIDA (Home)
 // ─────────────────────────────────────
 function renderLastRide() {
-  const historico = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
+  const historico = getStorageJSON('interliga_corridas', []);
   if (historico.length === 0) return;
   const ultima = historico[0];
   document.getElementById('last-ride-title').textContent = ultima.destino;
@@ -857,7 +894,7 @@ function renderLastRide() {
 }
 
 function renderTripsScreen() {
-  const historico = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
+  const historico = getStorageJSON('interliga_corridas', []);
   const listEl = document.getElementById('trips-list');
   if (!listEl) return;
 
@@ -913,7 +950,7 @@ function onEnterSchedule() {
 }
 
 function renderAgendamentos() {
-  const agendamentos = JSON.parse(localStorage.getItem('interliga_agendamentos') || '[]');
+  const agendamentos = getStorageJSON('interliga_agendamentos', []);
   const listEl = document.getElementById('scheduled-list');
   const emptyEl = document.getElementById('scheduled-empty');
   if (!listEl) return;
@@ -939,9 +976,9 @@ document.getElementById('scheduled-list')?.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-cancel-sched]');
   if (!btn) return;
   const idx = parseInt(btn.dataset.cancelSched, 10);
-  const agendamentos = JSON.parse(localStorage.getItem('interliga_agendamentos') || '[]');
+  const agendamentos = getStorageJSON('interliga_agendamentos', []);
   agendamentos.splice(idx, 1);
-  localStorage.setItem('interliga_agendamentos', JSON.stringify(agendamentos));
+  setStorageJSON('interliga_agendamentos', agendamentos);
   showToast('Agendamento cancelado');
   renderAgendamentos();
 });
@@ -1013,7 +1050,7 @@ document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', 
   if (!origem) { showToast('⚠️ Informe o endereço de embarque'); inputOrigem.focus(); return; }
   if (!destino) { showToast('⚠️ Informe o destino'); inputDestino.focus(); return; }
 
-  const agendamentos = JSON.parse(localStorage.getItem('interliga_agendamentos') || '[]');
+  const agendamentos = getStorageJSON('interliga_agendamentos', []);
   agendamentos.unshift({
     origem, destino,
     origemLat: schedOrigemSelecionada?.lat || null,
@@ -1024,7 +1061,7 @@ document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', 
     hora: selectedSlot,
     criadoEm: new Date().toISOString(),
   });
-  localStorage.setItem('interliga_agendamentos', JSON.stringify(agendamentos.slice(0, 20)));
+  setStorageJSON('interliga_agendamentos', agendamentos.slice(0, 20));
 
   showToast('✅ Corrida agendada com sucesso!');
 
