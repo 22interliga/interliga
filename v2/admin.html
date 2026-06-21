@@ -790,6 +790,52 @@ textarea.inp { resize: vertical; }
               </div>
             </div>
 
+            <!-- Áreas de risco -->
+            <div class="card" style="margin-bottom:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                <div class="ct">🚨 Áreas de Risco</div>
+              </div>
+              <p style="color:var(--t2);font-size:12px;margin-bottom:14px;">Acréscimo aplicado quando a ORIGEM OU O DESTINO da corrida cai numa dessas áreas. Pode ser por raio no mapa ou por nome de rua/bairro (compara com o texto do endereço digitado).</p>
+
+              <div class="tbl-wrap" style="margin-bottom:16px;">
+                <table>
+                  <thead><tr><th>ÁREA</th><th>TIPO</th><th>DETALHE</th><th>ACRÉSCIMO</th><th>AÇÃO</th></tr></thead>
+                  <tbody id="zonas-risco-tbody"><tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+
+              <div style="border-top:1px solid var(--bd);padding-top:14px;">
+                <div class="ct" style="margin-bottom:10px;font-size:13px;">+ Adicionar área de risco</div>
+                <div class="g2" style="margin-bottom:10px;">
+                  <div class="fl"><div class="lbl">NOME DA ÁREA</div><input class="inp" id="risco-nome" placeholder="Ex: Centro Antigo"/></div>
+                  <div class="fl"><div class="lbl">TIPO</div>
+                    <select class="inp" id="risco-tipo" onchange="alternarTipoRisco()">
+                      <option value="nome">Por nome de rua/bairro</option>
+                      <option value="raio">Por raio no mapa</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="risco-campo-nome" class="fl" style="margin-bottom:10px;">
+                  <div class="lbl">TERMO DE BUSCA (rua ou bairro)</div>
+                  <input class="inp" id="risco-termo" placeholder="Ex: Rua das Acácias"/>
+                </div>
+
+                <div id="risco-campo-raio" style="display:none;margin-bottom:10px;">
+                  <div class="lbl">CLIQUE NO MAPA PRA MARCAR O CENTRO DA ÁREA</div>
+                  <div id="risco-map" style="width:100%;height:220px;border-radius:10px;margin:8px 0;background:var(--s1);"></div>
+                  <div class="fl"><div class="lbl">RAIO (metros)</div><input class="inp" type="number" id="risco-raio" value="500" min="50" step="50" style="max-width:150px;"/></div>
+                  <div style="font-size:11px;color:var(--t2);margin-top:4px;" id="risco-ponto-status">Nenhum ponto marcado ainda</div>
+                </div>
+
+                <div class="g2" style="margin-bottom:14px;">
+                  <div class="fl"><div class="lbl">ACRÉSCIMO (R$)</div><input class="inp" type="number" id="risco-acrescimo" value="0" step="0.5"/></div>
+                  <div class="fl"><div class="lbl">MULTIPLICA (%)</div><input class="inp" type="number" id="risco-percentual" value="0" step="5"/></div>
+                </div>
+                <button class="pbtn" onclick="adicionarZonaRisco()">+ Adicionar área</button>
+              </div>
+            </div>
+
             <!-- Dinâmico manual -->
             <div class="card" style="margin-bottom:14px;">
               <div class="ct" style="margin-bottom:14px;">⚡ Multiplicador Dinâmico Manual</div>
@@ -986,6 +1032,7 @@ function showSection(id,navEl){
     financeiro: carregarFinanceiro,
     repasses: carregarRepasses,
     monitor: carregarMonitoramento,
+    precificacao: carregarZonasRisco,
   };
   if (carregadores[id]) carregadores[id]();
 }
@@ -1445,6 +1492,117 @@ async function atualizarMarcadoresMonitoramento(){
     });
   } catch (e) {
     console.error('[admin] erro ao atualizar marcadores do mapa:', e);
+  }
+}
+
+// ═══════════════════════════════════════
+// ÁREAS DE RISCO — acréscimo de preço por raio no mapa ou nome de rua/bairro
+// ═══════════════════════════════════════
+let riscoMapInstance = null;
+let riscoMapMarker = null;
+let riscoPontoSelecionado = null; // { lat, lon }
+
+function alternarTipoRisco(){
+  const tipo = document.getElementById('risco-tipo').value;
+  document.getElementById('risco-campo-nome').style.display = tipo === 'nome' ? 'block' : 'none';
+  document.getElementById('risco-campo-raio').style.display = tipo === 'raio' ? 'block' : 'none';
+  if (tipo === 'raio') {
+    setTimeout(inicializarMapaRisco, 50); // espera o card ficar visível antes de montar o mapa
+  }
+}
+
+function inicializarMapaRisco(){
+  if (riscoMapInstance || typeof L === 'undefined') return;
+  const el = document.getElementById('risco-map');
+  if (!el) return;
+  riscoMapInstance = L.map('risco-map').setView([-12.74, -38.78], 13); // Madre de Deus, BA
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(riscoMapInstance);
+  riscoMapInstance.on('click', (e) => {
+    riscoPontoSelecionado = { lat: e.latlng.lat, lon: e.latlng.lng };
+    if (riscoMapMarker) riscoMapInstance.removeLayer(riscoMapMarker);
+    riscoMapMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(riscoMapInstance);
+    const status = document.getElementById('risco-ponto-status');
+    if (status) status.textContent = `📍 Ponto marcado: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+  });
+  setTimeout(() => riscoMapInstance.invalidateSize(), 100);
+}
+
+async function carregarZonasRisco(){
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'zonas_risco'));
+    const zonas = [];
+    snap.forEach(d => zonas.push({ id: d.id, ...d.data() }));
+
+    const tbody = document.getElementById('zonas-risco-tbody');
+    if (zonas.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Nenhuma área de risco cadastrada ainda</td></tr>';
+      return;
+    }
+    tbody.innerHTML = zonas.map(z => {
+      const detalhe = z.tipo === 'raio'
+        ? `${Number(z.raioMetros||0)}m em volta de um ponto`
+        : `Contém "${z.termoBusca || ''}"`;
+      const acresc = [
+        Number(z.acrescimo) > 0 ? formatMoeda(z.acrescimo) : null,
+        Number(z.percentual) > 0 ? `+${z.percentual}%` : null,
+      ].filter(Boolean).join(' · ') || '—';
+      return `<tr><td><b>${z.nome || 'Sem nome'}</b></td><td>${z.tipo === 'raio' ? '📍 Raio' : '🔤 Nome'}</td><td>${detalhe}</td><td>${acresc}</td><td><span class="icon-btn" onclick="removerZonaRisco('${z.id}')">🗑️</span></td></tr>`;
+    }).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar áreas de risco:', e);
+    showToast('⚠️ Erro ao carregar áreas de risco');
+  }
+}
+
+async function adicionarZonaRisco(){
+  const nome = document.getElementById('risco-nome').value.trim();
+  const tipo = document.getElementById('risco-tipo').value;
+  const acrescimo = Number(document.getElementById('risco-acrescimo').value) || 0;
+  const percentual = Number(document.getElementById('risco-percentual').value) || 0;
+
+  if (!nome) { showToast('⚠️ Informe um nome pra área'); return; }
+  if (acrescimo <= 0 && percentual <= 0) { showToast('⚠️ Informe um acréscimo (R$ ou %)'); return; }
+
+  const dados = { nome, tipo, acrescimo, percentual, criadoEm: fbAdmin.serverTimestamp() };
+
+  if (tipo === 'nome') {
+    const termo = document.getElementById('risco-termo').value.trim();
+    if (!termo) { showToast('⚠️ Informe o nome da rua/bairro'); return; }
+    dados.termoBusca = termo;
+  } else {
+    if (!riscoPontoSelecionado) { showToast('⚠️ Clique no mapa pra marcar o centro da área'); return; }
+    dados.lat = riscoPontoSelecionado.lat;
+    dados.lon = riscoPontoSelecionado.lon;
+    dados.raioMetros = Number(document.getElementById('risco-raio').value) || 500;
+  }
+
+  try {
+    await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'zonas_risco'), dados);
+    showToast('✅ Área de risco adicionada!');
+    document.getElementById('risco-nome').value = '';
+    document.getElementById('risco-termo').value = '';
+    document.getElementById('risco-acrescimo').value = '0';
+    document.getElementById('risco-percentual').value = '0';
+    riscoPontoSelecionado = null;
+    if (riscoMapMarker && riscoMapInstance) { riscoMapInstance.removeLayer(riscoMapMarker); riscoMapMarker = null; }
+    const status = document.getElementById('risco-ponto-status');
+    if (status) status.textContent = 'Nenhum ponto marcado ainda';
+    carregarZonasRisco();
+  } catch (e) {
+    console.error('[admin] erro ao adicionar área de risco:', e);
+    showToast('⚠️ Erro ao salvar — confirme se publicou as novas regras do Firestore');
+  }
+}
+
+async function removerZonaRisco(id){
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'zonas_risco', id));
+    showToast('🗑️ Área de risco removida');
+    carregarZonasRisco();
+  } catch (e) {
+    console.error('[admin] erro ao remover área de risco:', e);
+    showToast('⚠️ Erro ao remover');
   }
 }
 </script>

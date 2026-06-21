@@ -269,6 +269,8 @@ function onEnterRide() {
   const inputOrigem = document.getElementById('input-origem');
   const inputDestino = document.getElementById('input-destino');
 
+  if (!zonasRiscoCarregadas) carregarZonasRisco();
+
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
     inputOrigem._wired = true;
@@ -302,9 +304,60 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ─────────────────────────────────────
+// ÁREAS DE RISCO — acréscimo de preço definido pelo admin (por raio no mapa
+// ou por nome de rua/bairro). Vale se a ORIGEM OU O DESTINO cair na área.
+// ─────────────────────────────────────
+let zonasRiscoCache = [];
+let zonasRiscoCarregadas = false;
+
+async function carregarZonasRisco() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDocs(fb.collection(db, 'zonas_risco'));
+    zonasRiscoCache = [];
+    snap.forEach(d => zonasRiscoCache.push({ id: d.id, ...d.data() }));
+    zonasRiscoCarregadas = true;
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar áreas de risco:', e);
+  }
+}
+
+function pontoNaZonaRisco(ponto, zona) {
+  if (!ponto) return false;
+  if (zona.tipo === 'raio') {
+    if (typeof ponto.lat !== 'number' || typeof zona.lat !== 'number') return false;
+    const distKm = haversineKm(ponto.lat, ponto.lon, zona.lat, zona.lon);
+    return distKm * 1000 <= Number(zona.raioMetros || 0);
+  }
+  if (zona.tipo === 'nome') {
+    const termo = (zona.termoBusca || '').trim().toLowerCase();
+    if (!termo) return false;
+    return (ponto.texto || '').toLowerCase().includes(termo);
+  }
+  return false;
+}
+
+// Soma o acréscimo (R$) e o percentual de todas as zonas de risco que a origem OU o destino tocam
+function calcularAcrescimoRisco(origem, destino) {
+  let acrescimo = 0, percentual = 0;
+  const zonasAtingidas = [];
+  for (const zona of zonasRiscoCache) {
+    const bateOrigem = pontoNaZonaRisco(origem, zona);
+    const bateDestino = pontoNaZonaRisco(destino, zona);
+    if (bateOrigem || bateDestino) {
+      acrescimo += Number(zona.acrescimo || 0);
+      percentual += Number(zona.percentual || 0);
+      zonasAtingidas.push(zona.nome || 'Área de risco');
+    }
+  }
+  return { acrescimo, percentual, zonasAtingidas };
+}
+
 function calcularPrecos() {
   if (!state.origem || !state.destino) return;
   const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
+  const risco = calcularAcrescimoRisco(state.origem, state.destino);
 
   const tabela = {
     x:    { base: 5,  porKm: 2.40, min: 8 },
@@ -314,12 +367,23 @@ function calcularPrecos() {
 
   for (const cat of ['x', 'plus', 'van']) {
     const t = tabela[cat];
-    const preco = Math.max(t.min, t.base + km * t.porKm);
+    let preco = Math.max(t.min, t.base + km * t.porKm) + risco.acrescimo;
+    preco = preco * (1 + risco.percentual / 100);
     state.precos[cat] = preco;
     const priceEl = document.getElementById(`price-${cat}`);
     const etaEl = document.getElementById(`eta-${cat}`);
     if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
     if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
+  }
+
+  const notaRisco = document.getElementById('risk-note');
+  if (notaRisco) {
+    if (risco.zonasAtingidas.length > 0) {
+      notaRisco.hidden = false;
+      notaRisco.textContent = '📍 Inclui acréscimo de área de risco: ' + risco.zonasAtingidas.join(', ');
+    } else {
+      notaRisco.hidden = true;
+    }
   }
 }
 

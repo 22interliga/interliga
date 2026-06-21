@@ -305,6 +305,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
    CATEGORY LIST
 ═══════════════════════════════════════ */
 .category-list { margin: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.risk-note { margin: 10px 20px 0; padding: 10px 14px; background: rgba(245,158,11,0.12); color: #B45309; border-radius: 10px; font-size: 12px; font-weight: 600; }
 .category-item {
   background: var(--surface);
   border: 2px solid var(--border);
