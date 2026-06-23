@@ -222,7 +222,7 @@ function publicarDisponibilidade() {
 function iniciarDisponibilidade() {
   publicarDisponibilidade();
   clearInterval(intervalDisponibilidade);
-  intervalDisponibilidade = setInterval(publicarDisponibilidade, 20000); // atualiza a cada 20s
+  intervalDisponibilidade = setInterval(publicarDisponibilidade, 45000); // atualiza a cada 45s (antes era 20s — reduz consumo de escritas no Firebase)
 }
 
 function pararDisponibilidade() {
