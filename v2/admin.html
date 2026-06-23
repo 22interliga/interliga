@@ -179,6 +179,10 @@ textarea.inp { resize: vertical; }
 <body>
 
 <!-- LOGIN -->
+<div id="loading-overlay" style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99999;">
+  <div style="color:var(--t2);font-size:14px;">Carregando...</div>
+</div>
+
 <div id="login-wrap">
   <div class="lcard">
     <div class="ltitle">INTER<span>LIGA</span></div>
@@ -944,15 +948,23 @@ async function iniciarFirebaseAdmin() {
 
     // Se já tiver uma sessão válida (já logou antes neste navegador), entra direto sem pedir senha de novo
     fbAdmin.onAuthStateChanged(authAdmin, (user) => {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = 'none';
       if (user) entrarNoPainel(user);
     });
   } catch (e) {
     console.error('[admin] Firebase não carregou:', e);
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
     const err = document.getElementById('lerr');
     if (err) { err.textContent = '⚠️ Erro ao conectar ao servidor. Verifique sua internet.'; err.style.display = 'block'; }
   }
 }
 iniciarFirebaseAdmin();
+setTimeout(() => {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.style.display = 'none';
+}, 5000);
 
 // Decide se quem logou é admin master (vê tudo) ou franqueado (só a cidade dele).
 // Se não for nenhum dos dois, recusa o acesso.
@@ -1306,6 +1318,7 @@ async function salvarFranqueado(){
     await deleteApp(appSecundario);
 
     showToast('✅ Acesso criado para ' + nome + '!');
+    alert('Acesso criado!\n\nMande esses dados pro franqueado:\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\n(Anote agora — depois de fechar essa janela não tem mais como ver essa senha de novo.)');
     toggleFormFranq();
     document.getElementById('franq-nome').value = '';
     document.getElementById('franq-email').value = '';
