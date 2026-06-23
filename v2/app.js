@@ -326,7 +326,30 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-let tabelaPrecosCache = null;
+// ─────────────────────────────────────
+// CIDADES OPERADAS — usado pra marcar automaticamente em qual cidade cada
+// corrida acontece (pelo ponto mais próximo), pra dar pros franqueados verem
+// só o que é da cidade deles.
+// ─────────────────────────────────────
+const CIDADES_INTERLIGA = [
+  { codigo: 'madre',    nome: 'Madre de Deus',          lat: -12.7440, lon: -38.6170 },
+  { codigo: 'sfc',      nome: 'São Francisco do Conde',  lat: -12.6275, lon: -38.6800 },
+  { codigo: 'candeias', nome: 'Candeias',                lat: -12.6678, lon: -38.5506 },
+  { codigo: 'simoes',   nome: 'Simões Filho',            lat: -12.7870, lon: -38.3990 },
+];
+
+function detectarCidade(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') return 'madre';
+  let maisProxima = CIDADES_INTERLIGA[0];
+  let menorDist = haversineKm(lat, lon, maisProxima.lat, maisProxima.lon);
+  for (const c of CIDADES_INTERLIGA.slice(1)) {
+    const d = haversineKm(lat, lon, c.lat, c.lon);
+    if (d < menorDist) { menorDist = d; maisProxima = c; }
+  }
+  return maisProxima.codigo;
+}
+
+let tabelaPrecosCachePorCidade = {};
 let tabelaPrecosCarregada = false;
 const TABELA_PRECOS_PADRAO = {
   x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  multiplicador: 1.0, ativo: true },
@@ -337,8 +360,10 @@ const TABELA_PRECOS_PADRAO = {
 async function carregarTabelaPrecos() {
   if (!firebaseReady || !db) return;
   try {
-    const snap = await fb.getDoc(fb.doc(db, 'precos', 'madre'));
-    tabelaPrecosCache = snap.exists() ? snap.data() : null;
+    await Promise.all(CIDADES_INTERLIGA.map(async (c) => {
+      const snap = await fb.getDoc(fb.doc(db, 'precos', c.codigo));
+      if (snap.exists()) tabelaPrecosCachePorCidade[c.codigo] = snap.data();
+    }));
     tabelaPrecosCarregada = true;
     calcularPrecos(); // recalcula com os preços certos, se já tinha origem/destino escolhidos
   } catch (e) {
@@ -384,7 +409,9 @@ function pontoNaZonaRisco(ponto, zona) {
 function calcularAcrescimoRisco(origem, destino) {
   let acrescimo = 0, percentual = 0;
   const zonasAtingidas = [];
+  const cidadeCorrida = detectarCidade(origem?.lat, origem?.lon);
   for (const zona of zonasRiscoCache) {
+    if (zona.cidade && zona.cidade !== cidadeCorrida) continue; // zona é de outra cidade (franqueado diferente)
     const bateOrigem = pontoNaZonaRisco(origem, zona);
     const bateDestino = pontoNaZonaRisco(destino, zona);
     if (bateOrigem || bateDestino) {
@@ -400,7 +427,8 @@ function calcularPrecos() {
   if (!state.origem || !state.destino) return;
   const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
   const risco = calcularAcrescimoRisco(state.origem, state.destino);
-  const tabela = tabelaPrecosCache || TABELA_PRECOS_PADRAO;
+  const cidade = detectarCidade(state.origem.lat, state.origem.lon);
+  const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
 
   for (const cat of ['x', 'plus', 'van']) {
     const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
@@ -472,11 +500,12 @@ document.getElementById('btn-confirmar-corrida')?.addEventListener('click', asyn
 // CRIAR CORRIDA NO FIRESTORE + OUVIR ACEITE
 // ─────────────────────────────────────
 async function criarCorrida(origem, destino, preco, categoria) {
+  const cidade = detectarCidade(origem.lat, origem.lon);
   const corridaLocal = {
     origem: origem.texto, destino: destino.texto,
     origemLat: origem.lat, origemLon: origem.lon,
     destinoLat: destino.lat, destinoLon: destino.lon,
-    preco, categoria,
+    preco, categoria, cidade,
     status: 'aguardando',
     criadoEm: new Date().toISOString(),
   };
@@ -500,7 +529,7 @@ async function criarCorrida(origem, destino, preco, categoria) {
       // Monta a fila de prioridade: motorista mais próximo primeiro (empate decide pela melhor avaliação).
       // Se ainda não houver motoristas disponíveis cadastrados, fica em modo aberto (oferece pra todo mundo).
       try {
-        const fila = await montarFilaPrioridade(origem);
+        const fila = await montarFilaPrioridade(origem, cidade);
         if (fila.length > 0) {
           await fb.updateDoc(docRef, {
             filaMotoristas: fila,
@@ -528,7 +557,7 @@ async function criarCorrida(origem, destino, preco, categoria) {
 // ─────────────────────────────────────
 // FILA DE PRIORIDADE — monta a ordem de oferta por proximidade (e avaliação em caso de empate)
 // ─────────────────────────────────────
-async function montarFilaPrioridade(origem) {
+async function montarFilaPrioridade(origem, cidade) {
   if (!firebaseReady || !db) return [];
   try {
     const snap = await fb.getDocs(fb.collection(db, 'motoristas_disponiveis'));
@@ -540,6 +569,8 @@ async function montarFilaPrioridade(origem) {
       // Ignora motorista com localização desatualizada há mais de 2 min (provavelmente fechou o app)
       if (atualizadoMs && (agora - atualizadoMs) > 2 * 60 * 1000) return;
       if (typeof d.lat !== 'number' || typeof d.lon !== 'number') return;
+      // Motorista é fixo na cidade dele — não entra na fila de corrida de outra cidade
+      if (cidade && d.cidade && d.cidade !== cidade) return;
       const distanciaKm = (origem?.lat && origem?.lon)
         ? haversineKm(origem.lat, origem.lon, d.lat, d.lon)
         : 999;
@@ -1022,6 +1053,7 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
     }
     await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), {
       nome, celular, email, cpf,
+      cidade: document.getElementById('cad-pax-cidade').value,
       selfie: selfiePassageiroBase64,
       verificacao: 'pendente',
       criadoEm: fb.serverTimestamp(),
@@ -1105,16 +1137,21 @@ async function verificarCadastroPassageiro() {
 }
 
 function aplicarStatusCadastro(dados) {
+  if (dados.bloqueado === true) {
+    document.getElementById('bloqueio-motivo-texto').textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
+    go('screen-bloqueado');
+    return;
+  }
   if (dados.verificacao === 'aprovado') {
-    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
     go('screen-home');
   } else if (dados.verificacao === 'rejeitado') {
-    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
     document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
     go('screen-rejeitado');
   } else {
-    mostrarTelaAguardandoAprovacao();
+    go('screen-aguardando-aprovacao');
   }
+  // Mantém o listener vivo mesmo depois de aprovado, pra detectar um bloqueio que aconteça depois
+  escutarStatusCadastro();
 }
 
 function mostrarTelaAguardandoAprovacao() {

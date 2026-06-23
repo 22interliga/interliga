@@ -225,7 +225,7 @@ textarea.inp { resize: vertical; }
         <div class="nav-item" onclick="showSection('notificacoes',this)"><span>🔔</span> Notificações</div>
         <div class="nav-item" onclick="showSection('mapa-calor',this)"><span>🗺️</span> Mapa de Calor</div>
         <div class="nav-item" onclick="showSection('relatorios',this)"><span>📊</span> Relatórios</div>
-        <div class="nav-item" onclick="showSection('franqueados',this)"><span>🤝</span> Franqueados</div>
+        <div class="nav-item" data-somente-master onclick="showSection('franqueados',this)"><span>🤝</span> Franqueados</div>
         <div class="nav-group">CONFIGURAÇÕES</div>
         <div class="nav-item" onclick="showSection('precificacao',this)"><span>💲</span> Precificação</div>
         <div class="nav-item" onclick="showSection('chat',this)"><span>💬</span> Chat & Ligações <span class="nav-badge">5</span></div>
@@ -253,6 +253,8 @@ textarea.inp { resize: vertical; }
           <div class="notif-btn">🔔</div>
         </div>
       </div>
+
+      <div id="aviso-franqueado-cidade" style="display:none;background:rgba(91,108,255,0.12);color:var(--blue-lt);padding:8px 24px;font-size:12px;font-weight:600;"></div>
 
       <!-- CONTENT -->
       <div class="content">
@@ -451,11 +453,18 @@ textarea.inp { resize: vertical; }
               <div id="form-franq" style="display:none;background:var(--s1);border-radius:12px;padding:14px;margin-bottom:14px;">
                 <div class="g2" style="margin-bottom:10px;">
                   <div class="fl"><div class="lbl">NOME DO FRANQUEADO</div><input class="inp" id="franq-nome" placeholder="Ex: João Franqueado"/></div>
-                  <div class="fl"><div class="lbl">CIDADE</div><input class="inp" id="franq-cidade" placeholder="Ex: Itacaré - BA"/></div>
+                  <div class="fl"><div class="lbl">CIDADE</div>
+                    <select class="inp" id="franq-cidade">
+                      <option value="madre">Madre de Deus — BA</option>
+                      <option value="sfc">São Francisco do Conde — BA</option>
+                      <option value="candeias">Candeias — BA</option>
+                      <option value="simoes">Simões Filho — BA</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="g2" style="margin-bottom:10px;">
                   <div class="fl"><div class="lbl">E-MAIL DE ACESSO</div><input class="inp" id="franq-email" type="email" placeholder="franqueado@interliga.com.br"/></div>
-                  <div class="fl"><div class="lbl">SENHA</div><input class="inp" id="franq-senha" type="password" placeholder="Mínimo 8 caracteres"/></div>
+                  <div class="fl"><div class="lbl">SENHA</div><input class="inp" id="franq-senha" type="password" placeholder="Mínimo 6 caracteres"/></div>
                 </div>
                 <div class="g2" style="margin-bottom:14px;">
                   <div class="fl"><div class="lbl">PLANO</div><select class="inp" id="franq-plano"><option>Básico — R$ 299/mês</option><option>Médio — R$ 599/mês</option><option>Premium — R$ 999/mês</option></select></div>
@@ -669,22 +678,20 @@ textarea.inp { resize: vertical; }
           <div class="section" id="s-mapa-calor">
             <div class="section-header"><div class="section-title">🗺️ Mapa de Calor</div></div>
             <div class="stat-grid" style="margin-bottom:16px;">
-              <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-val">Madre de Deus</div><div class="stat-lbl">Zona mais ativa</div></div>
-              <div class="stat-card"><div class="stat-icon">⏰</div><div class="stat-val">17h–20h</div><div class="stat-lbl">Horário pico</div></div>
-              <div class="stat-card"><div class="stat-icon">🚗</div><div class="stat-val">312</div><div class="stat-lbl">Motoristas na região</div></div>
-              <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-val">94%</div><div class="stat-lbl">Taxa de atendimento</div></div>
+              <div class="stat-card"><div class="stat-icon">📍</div><div class="stat-val" id="calor-zona-ativa">—</div><div class="stat-lbl">Zona mais ativa</div></div>
+              <div class="stat-card"><div class="stat-icon">⏰</div><div class="stat-val" id="calor-horario-pico">—</div><div class="stat-lbl">Horário pico</div></div>
+              <div class="stat-card"><div class="stat-icon">🚗</div><div class="stat-val" id="calor-motoristas-online">—</div><div class="stat-lbl">Motoristas online agora</div></div>
+              <div class="stat-card"><div class="stat-icon">🚕</div><div class="stat-val" id="calor-total-corridas">—</div><div class="stat-lbl">Corridas no período</div></div>
+            </div>
+            <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+              <div id="calor-map" style="width:100%;height:420px;background:var(--s1);"></div>
             </div>
             <div class="card">
-              <div class="ct" style="margin-bottom:14px;">Zonas de Alta Demanda</div>
+              <div class="ct" style="margin-bottom:14px;">Demanda por Cidade</div>
               <div class="tbl-wrap">
                 <table>
-                  <thead><tr><th>ZONA</th><th>CORRIDAS/DIA</th><th>MOTORISTAS</th><th>TEMPO MÉDIO</th><th>DEMANDA</th></tr></thead>
-                  <tbody>
-                    <tr><td>🔴 <b>Centro — Madre de Deus</b></td><td>284</td><td>45</td><td>4 min</td><td><div style="background:var(--red);height:8px;border-radius:4px;width:90%;"></div></td></tr>
-                    <tr><td>🟠 <b>Porto — São Francisco</b></td><td>192</td><td>32</td><td>6 min</td><td><div style="background:var(--or);height:8px;border-radius:4px;width:65%;"></div></td></tr>
-                    <tr><td>🟡 <b>BR-324 / Acesso</b></td><td>124</td><td>28</td><td>8 min</td><td><div style="background:var(--yellow);height:8px;border-radius:4px;width:45%;"></div></td></tr>
-                    <tr><td>🟢 <b>Bairros residenciais</b></td><td>87</td><td>22</td><td>12 min</td><td><div style="background:var(--green);height:8px;border-radius:4px;width:30%;"></div></td></tr>
-                  </tbody>
+                  <thead><tr><th>CIDADE</th><th>CORRIDAS</th><th>DEMANDA</th></tr></thead>
+                  <tbody id="calor-cidades-tbody"><tr><td colspan="3" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -912,6 +919,7 @@ textarea.inp { resize: vertical; }
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
 let fbAdmin = {}; // funções do firestore/auth, preenchidas após carregar
 let dbAdmin = null;
@@ -921,6 +929,9 @@ let authAdmin = null;
 // direto no Firebase (Authentication), não aqui — isso aqui é só pra checar
 // se quem logou é de fato um admin reconhecido, depois que o Firebase já confirmou a senha.
 const EMAILS_ADMIN = ['admin@interliga.com.br', 'miqueias@interliga.com.br'];
+const NOMES_CIDADES = { madre: 'Madre de Deus', sfc: 'São Francisco do Conde', candeias: 'Candeias', simoes: 'Simões Filho' };
+let meuPapelAdmin = 'master'; // 'master' ou 'franqueado'
+let minhaCidadeFranqueado = null;
 
 async function iniciarFirebaseAdmin() {
   try {
@@ -942,9 +953,7 @@ async function iniciarFirebaseAdmin() {
 
     // Se já tiver uma sessão válida (já logou antes neste navegador), entra direto sem pedir senha de novo
     fbAdmin.onAuthStateChanged(authAdmin, (user) => {
-      if (user && EMAILS_ADMIN.includes((user.email || '').toLowerCase())) {
-        entrarNoPainel(user);
-      }
+      if (user) entrarNoPainel(user);
     });
   } catch (e) {
     console.error('[admin] Firebase não carregou:', e);
@@ -954,16 +963,71 @@ async function iniciarFirebaseAdmin() {
 }
 iniciarFirebaseAdmin();
 
-function entrarNoPainel(user) {
+// Decide se quem logou é admin master (vê tudo) ou franqueado (só a cidade dele).
+// Se não for nenhum dos dois, recusa o acesso.
+async function descobrirPapel(user) {
+  if (EMAILS_ADMIN.includes((user.email || '').toLowerCase())) {
+    return { papel: 'master', cidade: null };
+  }
+  try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'franqueados', user.uid));
+    if (snap.exists()) {
+      if (snap.data().ativo === false) return 'bloqueado';
+      return { papel: 'franqueado', cidade: snap.data().cidade };
+    }
+  } catch (e) {
+    console.error('[admin] erro ao verificar franqueado:', e);
+  }
+  return null;
+}
+
+async function entrarNoPainel(user) {
+  const info = await descobrirPapel(user);
+  if (info === 'bloqueado') {
+    showToast('🚫 Seu acesso foi bloqueado. Fale com o admin master.');
+    if (authAdmin) fbAdmin.signOut(authAdmin).catch(() => {});
+    return;
+  }
+  if (!info) {
+    showToast('❌ Esta conta não tem acesso ao painel admin');
+    if (authAdmin) fbAdmin.signOut(authAdmin).catch(() => {});
+    return;
+  }
+  meuPapelAdmin = info.papel;
+  minhaCidadeFranqueado = info.cidade;
+
   document.getElementById('login-wrap').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'block';
   const nm = document.querySelector('.admin-name');
   const rl = document.querySelector('.admin-role');
   if (nm) nm.textContent = user.email.split('@')[0];
-  if (rl) rl.textContent = 'Admin';
+  if (rl) rl.textContent = meuPapelAdmin === 'master' ? 'Superadmin' : 'Franqueado · ' + (NOMES_CIDADES[minhaCidadeFranqueado] || minhaCidadeFranqueado);
+
+  aplicarVisibilidadePapel();
   showSection('dashboard', document.querySelector('.nav-item'));
   carregarVerificacoesPendentes();
   showToast('✅ Bem-vindo!');
+}
+
+// Esconde o que é só do admin master, e trava a cidade de quem é franqueado
+function aplicarVisibilidadePapel() {
+  document.querySelectorAll('[data-somente-master]').forEach(el => {
+    el.style.display = meuPapelAdmin === 'master' ? '' : 'none';
+  });
+  const avisoFranqueado = document.getElementById('aviso-franqueado-cidade');
+  if (avisoFranqueado) {
+    if (meuPapelAdmin === 'franqueado') {
+      avisoFranqueado.style.display = 'block';
+      avisoFranqueado.textContent = '📍 Você está vendo somente os dados de ' + (NOMES_CIDADES[minhaCidadeFranqueado] || minhaCidadeFranqueado) + '.';
+    } else {
+      avisoFranqueado.style.display = 'none';
+    }
+  }
+  const seletorCidadePrecos = document.getElementById('prec-cidade');
+  if (seletorCidadePrecos && meuPapelAdmin === 'franqueado') {
+    seletorCidadePrecos.value = minhaCidadeFranqueado;
+    seletorCidadePrecos.disabled = true;
+  }
 }
 
 async function login() {
@@ -984,13 +1048,7 @@ async function login() {
   }
   try {
     const cred = await fbAdmin.signInWithEmailAndPassword(authAdmin, e, s);
-    if (!EMAILS_ADMIN.includes((cred.user.email || '').toLowerCase())) {
-      await fbAdmin.signOut(authAdmin);
-      err.textContent = '❌ Este e-mail não tem acesso ao painel admin';
-      err.style.display = 'block';
-      return;
-    }
-    entrarNoPainel(cred.user);
+    await entrarNoPainel(cred.user);
   } catch (ex) {
     console.warn('[admin] erro no login:', ex.code);
     err.textContent = '❌ E-mail ou senha incorretos';
@@ -1052,6 +1110,8 @@ function showSection(id,navEl){
     financeiro: carregarFinanceiro,
     repasses: carregarRepasses,
     monitor: carregarMonitoramento,
+    franqueados: carregarFranqueados,
+    'mapa-calor': carregarMapaCalor,
     precificacao: () => { updateCidade(); carregarZonasRisco(); },
   };
   if (carregadores[id]) carregadores[id]();
@@ -1216,42 +1276,127 @@ function toggleFormFranq(){
   if(f) f.style.display=f.style.display==='none'?'block':'none';
 }
 
-function salvarFranqueado(){
-  const nome=(document.getElementById('franq-nome')?.value||'').trim();
-  const email=(document.getElementById('franq-email')?.value||'').trim();
-  const cidade=(document.getElementById('franq-cidade')?.value||'').trim();
-  const plano=document.getElementById('franq-plano')?.value||'';
-  const perm=document.getElementById('franq-perm')?.value||'';
-  if(!nome||!email){showToast('⚠️ Preencha nome e e-mail!');return;}
-  const tb=document.getElementById('franq-tbody');
-  if(tb){
-    const tr=document.createElement('tr');
-    const planoKey=plano.includes('Básico')?'blue':plano.includes('Médio')?'yellow':'green';
-    tr.innerHTML=`<td><b>${nome}</b></td><td style="color:var(--t2)">${email}</td><td>${cidade}</td><td><span class="badge ${planoKey}">${plano.split('—')[0].trim()}</span></td><td style="color:var(--t2);font-size:12px;">${perm}</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn" onclick="resetSenhaFranq('${nome}')">🔑</span> <span class="icon-btn">✏️</span> <span class="icon-btn" onclick="showToast('🚫 Bloqueado!')">🚫</span></td>`;
-    tb.appendChild(tr);
+// Cria a conta do franqueado SEM deslogar o admin master — usa uma instância
+// secundária e independente do Firebase só pra esse cadastro, depois descarta.
+async function salvarFranqueado(){
+  const nome = (document.getElementById('franq-nome')?.value||'').trim();
+  const email = (document.getElementById('franq-email')?.value||'').trim().toLowerCase();
+  const cidade = document.getElementById('franq-cidade')?.value || 'madre';
+  const senha = document.getElementById('franq-senha')?.value || '';
+  const plano = document.getElementById('franq-plano')?.value||'';
+  const perm = document.getElementById('franq-perm')?.value||'';
+
+  if (!nome || !email) { showToast('⚠️ Preencha nome e e-mail!'); return; }
+  if (senha.length < 6) { showToast('⚠️ A senha precisa ter pelo menos 6 caracteres'); return; }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  try {
+    const { initializeApp, deleteApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const firebaseConfig = {
+      apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+      authDomain: "interliga-app.firebaseapp.com",
+      projectId: "interliga-app",
+      storageBucket: "interliga-app.firebasestorage.app",
+      messagingSenderId: "913895237568",
+      appId: "1:913895237568:web:faad95e8af089150e54a25",
+    };
+    const appSecundario = initializeApp(firebaseConfig, 'criar-franqueado-' + Date.now());
+    const authSecundario = fbAdmin.getAuth(appSecundario);
+    const cred = await fbAdmin.createUserWithEmailAndPassword(authSecundario, email, senha);
+
+    await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'franqueados', cred.user.uid), {
+      nome, email, cidade, plano, permissao: perm, ativo: true,
+      criadoEm: fbAdmin.serverTimestamp(),
+    });
+
+    await fbAdmin.signOut(authSecundario);
+    await deleteApp(appSecundario);
+
+    showToast('✅ Acesso criado para ' + nome + '!');
+    toggleFormFranq();
+    document.getElementById('franq-nome').value = '';
+    document.getElementById('franq-email').value = '';
+    document.getElementById('franq-senha').value = '';
+    carregarFranqueados();
+  } catch (e) {
+    console.error('[admin] erro ao criar franqueado:', e);
+    if (e.code === 'auth/email-already-in-use') showToast('⚠️ Esse e-mail já tem uma conta');
+    else showToast('⚠️ Erro ao criar acesso — ' + (e.code || e.message));
   }
-  toggleFormFranq();
-  showToast('✅ Acesso criado para '+nome+'!');
 }
 
-function resetSenhaFranq(nome){
-  const nova = Math.random().toString(36).slice(-8);
-  showToast('🔑 Nova senha de '+nome+': '+nova);
+async function carregarFranqueados(){
+  if (!dbAdmin) return;
+  const tb = document.getElementById('franq-tbody');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'franqueados'));
+    if (snap.empty) {
+      tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--t2);padding:20px;">Nenhum franqueado cadastrado ainda</td></tr>';
+      return;
+    }
+    tb.innerHTML = snap.docs.map(d => {
+      const f = d.data();
+      const ativo = f.ativo !== false;
+      return `<tr>
+        <td><b>${f.nome || '—'}</b></td>
+        <td style="color:var(--t2)">${f.email || '—'}</td>
+        <td>${NOMES_CIDADES[f.cidade] || f.cidade || '—'}</td>
+        <td><span class="badge yellow">${(f.plano || '—').split('—')[0].trim()}</span></td>
+        <td style="color:var(--t2);font-size:12px;">${f.permissao || '—'}</td>
+        <td>${ativo ? '<span class="badge green">Ativo</span>' : '<span class="badge red">Bloqueado</span>'}</td>
+        <td>
+          <span class="icon-btn" onclick="resetSenhaFranq('${f.email}')">🔑</span>
+          <span class="icon-btn" onclick="alternarBloqueioFranqueado('${d.id}', ${ativo})">${ativo ? '🚫' : '✅'}</span>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar franqueados:', e);
+    tb.innerHTML = `<tr><td colspan="7" style="color:var(--red);padding:20px;">⚠️ Erro ao carregar: ${e.code || e.message}</td></tr>`;
+  }
 }
 
-function alterarSenhaAdmin(){
-  const emailAtual=(document.getElementById('adm-email-atual')?.value||'').trim().toLowerCase();
-  const emailNovo=(document.getElementById('adm-email-novo')?.value||'').trim().toLowerCase();
-  const senhaAtual=document.getElementById('adm-senha-atual')?.value||'';
-  const senhaNova=document.getElementById('adm-senha-nova')?.value||'';
-  const adm=ADMINS.find(a=>a.email===emailAtual&&a.senha===senhaAtual);
-  if(!adm){showToast('❌ Senha atual incorreta!');return;}
-  if(senhaNova.length<8){showToast('⚠️ Nova senha deve ter mínimo 8 caracteres!');return;}
-  adm.email=emailNovo||emailAtual;
-  adm.senha=senhaNova;
-  showToast('✅ Credenciais alteradas com sucesso!');
-  document.getElementById('adm-senha-atual').value='';
-  document.getElementById('adm-senha-nova').value='';
+async function resetSenhaFranq(email){
+  if (!authAdmin || !email) return;
+  try {
+    await fbAdmin.sendPasswordResetEmail(authAdmin, email);
+    showToast('📧 E-mail de redefinição enviado para ' + email);
+  } catch (e) {
+    showToast('⚠️ Erro ao enviar — ' + (e.code || e.message));
+  }
+}
+
+async function alternarBloqueioFranqueado(id, estaAtivo){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'franqueados', id), { ativo: !estaAtivo });
+    showToast(estaAtivo ? '🚫 Franqueado bloqueado' : '✅ Franqueado reativado');
+    carregarFranqueados();
+  } catch (e) {
+    showToast('⚠️ Erro ao atualizar — ' + (e.code || e.message));
+  }
+}
+
+async function alterarSenhaAdmin(){
+  const senhaAtual = document.getElementById('adm-senha-atual')?.value || '';
+  const senhaNova = document.getElementById('adm-senha-nova')?.value || '';
+  const user = authAdmin?.currentUser;
+
+  if (!user) { showToast('⚠️ Sessão expirada, faça login de novo'); return; }
+  if (!senhaAtual) { showToast('⚠️ Informe sua senha atual'); return; }
+  if (senhaNova.length < 6) { showToast('⚠️ Nova senha deve ter pelo menos 6 caracteres'); return; }
+
+  try {
+    const credencial = fbAdmin.EmailAuthProvider.credential(user.email, senhaAtual);
+    await fbAdmin.reauthenticateWithCredential(user, credencial);
+    await fbAdmin.updatePassword(user, senhaNova);
+    showToast('✅ Senha alterada com sucesso!');
+    document.getElementById('adm-senha-atual').value = '';
+    document.getElementById('adm-senha-nova').value = '';
+  } catch (e) {
+    console.error('[admin] erro ao trocar senha:', e);
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') showToast('❌ Senha atual incorreta!');
+    else showToast('⚠️ Erro ao trocar senha — ' + (e.code || e.message));
+  }
 }
 
 // Cupons
@@ -1306,8 +1451,9 @@ let _todosMotoristasCache = [];
 async function buscarTodasCorridas(){
   if (!dbAdmin) return [];
   const snap = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'corridas'), fbAdmin.limit(500)));
-  const lista = [];
+  let lista = [];
   snap.forEach(d => lista.push({ id: d.id, ...d.data() }));
+  if (meuPapelAdmin === 'franqueado') lista = lista.filter(c => c.cidade === minhaCidadeFranqueado);
   lista.sort((a, b) => {
     const ta = a.criadoEm?.toMillis ? a.criadoEm.toMillis() : 0;
     const tb = b.criadoEm?.toMillis ? b.criadoEm.toMillis() : 0;
@@ -1325,8 +1471,9 @@ async function buscarTodosMotoristas(){
   const onlineIds = new Set();
   const disponiveis = {};
   snapDisp.forEach(d => { onlineIds.add(d.id); disponiveis[d.id] = d.data(); });
-  const lista = [];
+  let lista = [];
   snapMot.forEach(d => lista.push({ id: d.id, ...d.data(), online: onlineIds.has(d.id), posicao: disponiveis[d.id] || null }));
+  if (meuPapelAdmin === 'franqueado') lista = lista.filter(m => m.cidade === minhaCidadeFranqueado);
   return lista;
 }
 
@@ -1407,6 +1554,7 @@ async function carregarPassageiros(){
     const linhas = [];
     snap.forEach(d => {
       const p = d.data();
+      if (meuPapelAdmin === 'franqueado' && p.cidade !== minhaCidadeFranqueado) return;
       const bloqueado = p.bloqueado === true;
       let statusHtml;
       if (bloqueado) statusHtml = '<span class="badge red">🚫 Bloqueado</span>';
@@ -1418,7 +1566,7 @@ async function carregarPassageiros(){
         : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioPassageiro('${d.id}', true)">🚫 Bloquear</button>`;
       linhas.push(`<tr><td><b>${p.nome || 'Sem nome'}</b></td><td>${p.celular || '—'}</td><td>${formatCpfExibicao(p.cpf)}</td><td>${statusHtml}</td><td>${btnHtml}</td></tr>`);
     });
-    tbody.innerHTML = linhas.join('');
+    tbody.innerHTML = linhas.length ? linhas.join('') : '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:24px;">Nenhum passageiro nessa cidade ainda</td></tr>';
   } catch (e) {
     console.error('[admin] erro ao carregar passageiros:', e);
     showToast('⚠️ Erro ao carregar passageiros');
@@ -1619,11 +1767,82 @@ let adminMapInstance = null;
 let adminMapMarkers = [];
 let adminMonitorListenersAtivos = false;
 
+const CIDADES_INTERLIGA_ADMIN = {
+  madre: [-12.7440, -38.6170],
+  sfc: [-12.6275, -38.6800],
+  candeias: [-12.6678, -38.5506],
+  simoes: [-12.7870, -38.3990],
+};
+
+let calorMapInstance = null;
+let calorHeatLayer = null;
+
+async function carregarMapaCalor(){
+  try {
+    const corridas = _todasCorridasCache.length ? _todasCorridasCache : await buscarTodasCorridas();
+    _todasCorridasCache = corridas;
+    const motoristas = _todosMotoristasCache.length ? _todosMotoristasCache : await buscarTodosMotoristas();
+    _todosMotoristasCache = motoristas;
+
+    // Conta corridas por cidade
+    const porCidade = {};
+    corridas.forEach(c => { const cid = c.cidade || 'madre'; porCidade[cid] = (porCidade[cid] || 0) + 1; });
+    const cidadesOrdenadas = Object.entries(porCidade).sort((a, b) => b[1] - a[1]);
+
+    document.getElementById('calor-zona-ativa').textContent = cidadesOrdenadas.length
+      ? (NOMES_CIDADES[cidadesOrdenadas[0][0]] || cidadesOrdenadas[0][0]) : '—';
+    document.getElementById('calor-total-corridas').textContent = corridas.length;
+    document.getElementById('calor-motoristas-online').textContent = motoristas.filter(m => m.online).length;
+
+    // Horário de pico (hora do dia com mais corridas criadas)
+    const porHora = {};
+    corridas.forEach(c => {
+      const ms = c.criadoEm?.toMillis ? c.criadoEm.toMillis() : null;
+      if (!ms) return;
+      const h = new Date(ms).getHours();
+      porHora[h] = (porHora[h] || 0) + 1;
+    });
+    const horasOrdenadas = Object.entries(porHora).sort((a, b) => b[1] - a[1]);
+    document.getElementById('calor-horario-pico').textContent = horasOrdenadas.length
+      ? `${horasOrdenadas[0][0]}h–${(Number(horasOrdenadas[0][0]) + 1) % 24}h` : '—';
+
+    const maxCidade = cidadesOrdenadas.length ? cidadesOrdenadas[0][1] : 1;
+    const tbody = document.getElementById('calor-cidades-tbody');
+    tbody.innerHTML = cidadesOrdenadas.length
+      ? cidadesOrdenadas.map(([cid, qtd]) => `
+          <tr><td><b>${NOMES_CIDADES[cid] || cid}</b></td><td>${qtd}</td>
+          <td><div style="background:var(--or);height:8px;border-radius:4px;width:${Math.max(10, (qtd / maxCidade) * 100)}%;"></div></td></tr>
+        `).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--t2);padding:20px;">Nenhuma corrida ainda</td></tr>';
+
+    // Mapa com a densidade real de pontos de origem das corridas
+    if (!calorMapInstance && typeof L !== 'undefined') {
+      const centro = meuPapelAdmin === 'franqueado'
+        ? CIDADES_INTERLIGA_ADMIN[minhaCidadeFranqueado] || [-12.74, -38.78]
+        : [-12.74, -38.78];
+      calorMapInstance = L.map('calor-map').setView(centro, meuPapelAdmin === 'franqueado' ? 13 : 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(calorMapInstance);
+    }
+    if (calorMapInstance) {
+      if (calorHeatLayer) calorMapInstance.removeLayer(calorHeatLayer);
+      const pontos = corridas.filter(c => typeof c.origemLat === 'number').map(c => [c.origemLat, c.origemLon, 0.6]);
+      if (pontos.length > 0 && typeof L.heatLayer === 'function') {
+        calorHeatLayer = L.heatLayer(pontos, { radius: 30, blur: 25, maxZoom: 16 }).addTo(calorMapInstance);
+      }
+      setTimeout(() => calorMapInstance.invalidateSize(), 100);
+    }
+  } catch (e) {
+    console.error('[admin] erro ao carregar mapa de calor:', e);
+    showToast('⚠️ Erro ao carregar mapa de calor');
+  }
+}
+
 async function carregarMonitoramento(){
   if (!adminMapInstance) {
     const el = document.getElementById('admin-map');
     if (!el || typeof L === 'undefined') return;
-    adminMapInstance = L.map('admin-map', { zoomControl: true }).setView([-12.74, -38.78], 12); // Madre de Deus, BA
+    const centro = meuPapelAdmin === 'franqueado' ? (CIDADES_INTERLIGA_ADMIN[minhaCidadeFranqueado] || [-12.74, -38.78]) : [-12.74, -38.78];
+    adminMapInstance = L.map('admin-map', { zoomControl: true }).setView(centro, meuPapelAdmin === 'franqueado' ? 13 : 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(adminMapInstance);
   }
   await atualizarMarcadoresMonitoramento();
@@ -1645,6 +1864,7 @@ async function atualizarMarcadoresMonitoramento(){
     const snapDisp = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'motoristas_disponiveis'));
     snapDisp.forEach(d => {
       const data = d.data();
+      if (meuPapelAdmin === 'franqueado' && data.cidade && data.cidade !== minhaCidadeFranqueado) return;
       if (typeof data.lat !== 'number' || typeof data.lon !== 'number') return;
       const marker = L.circleMarker([data.lat, data.lon], { radius: 7, color: '#22C55E', fillColor: '#22C55E', fillOpacity: 0.85 })
         .bindPopup(`🟢 ${data.nome || 'Motorista'} (disponível)`);
@@ -1655,6 +1875,7 @@ async function atualizarMarcadoresMonitoramento(){
     const snapCorridas = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'corridas'), fbAdmin.where('status', '==', 'aceita')));
     snapCorridas.forEach(d => {
       const data = d.data();
+      if (meuPapelAdmin === 'franqueado' && data.cidade && data.cidade !== minhaCidadeFranqueado) return;
       if (typeof data.origemLat !== 'number') return;
       const marker = L.circleMarker([data.origemLat, data.origemLon], { radius: 8, color: '#1270C2', fillColor: '#1270C2', fillOpacity: 0.85 })
         .bindPopup(`🔵 ${data.motoristaNome || 'Motorista'} — ${data.origem || ''} → ${data.destino || ''}`);
@@ -1702,8 +1923,9 @@ async function carregarZonasRisco(){
   if (!dbAdmin) return;
   try {
     const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'zonas_risco'));
-    const zonas = [];
+    let zonas = [];
     snap.forEach(d => zonas.push({ id: d.id, ...d.data() }));
+    if (meuPapelAdmin === 'franqueado') zonas = zonas.filter(z => !z.cidade || z.cidade === minhaCidadeFranqueado);
 
     const tbody = document.getElementById('zonas-risco-tbody');
     if (zonas.length === 0) {
@@ -1735,7 +1957,11 @@ async function adicionarZonaRisco(){
   if (!nome) { showToast('⚠️ Informe um nome pra área'); return; }
   if (acrescimo <= 0 && percentual <= 0) { showToast('⚠️ Informe um acréscimo (R$ ou %)'); return; }
 
-  const dados = { nome, tipo, acrescimo, percentual, criadoEm: fbAdmin.serverTimestamp() };
+  const dados = {
+    nome, tipo, acrescimo, percentual,
+    cidade: meuPapelAdmin === 'franqueado' ? minhaCidadeFranqueado : null,
+    criadoEm: fbAdmin.serverTimestamp(),
+  };
 
   if (tipo === 'nome') {
     const termo = document.getElementById('risco-termo').value.trim();
@@ -1825,12 +2051,15 @@ async function carregarVerificacoesPendentes(){
 
   try {
     const snapPax = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'passageiros'), fbAdmin.where('verificacao', '==', 'pendente')));
-    if (snapPax.empty) {
+    const docsPax = meuPapelAdmin === 'franqueado'
+      ? snapPax.docs.filter(d => d.data().cidade === minhaCidadeFranqueado)
+      : snapPax.docs;
+    if (docsPax.length === 0) {
       listaPax.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum passageiro pendente</div>';
     } else {
-      listaPax.innerHTML = snapPax.docs.map(d => cartaoVerificacao('passageiro', d.id, d.data())).join('');
+      listaPax.innerHTML = docsPax.map(d => cartaoVerificacao('passageiro', d.id, d.data())).join('');
     }
-    totalPendentes += snapPax.size;
+    totalPendentes += docsPax.length;
   } catch (e) {
     console.error('[admin] erro ao carregar passageiros pendentes:', e);
     listaPax.innerHTML = `<div class="card" style="color:var(--red);padding:20px;">⚠️ Erro ao carregar passageiros: <b>${e.code || e.message}</b><br><span style="font-size:11px;color:var(--t2);">Confira se a regra do Firestore pra "passageiros" foi publicada.</span></div>`;
@@ -1838,12 +2067,15 @@ async function carregarVerificacoesPendentes(){
 
   try {
     const snapMot = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'motoristas'), fbAdmin.where('verificacao', '==', 'pendente')));
-    if (snapMot.empty) {
+    const docsMot = meuPapelAdmin === 'franqueado'
+      ? snapMot.docs.filter(d => d.data().cidade === minhaCidadeFranqueado)
+      : snapMot.docs;
+    if (docsMot.length === 0) {
       listaMot.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum motorista pendente</div>';
     } else {
-      listaMot.innerHTML = snapMot.docs.map(d => cartaoVerificacao('motorista', d.id, d.data())).join('');
+      listaMot.innerHTML = docsMot.map(d => cartaoVerificacao('motorista', d.id, d.data())).join('');
     }
-    totalPendentes += snapMot.size;
+    totalPendentes += docsMot.length;
   } catch (e) {
     console.error('[admin] erro ao carregar motoristas pendentes:', e);
     listaMot.innerHTML = `<div class="card" style="color:var(--red);padding:20px;">⚠️ Erro ao carregar motoristas: <b>${e.code || e.message}</b><br><span style="font-size:11px;color:var(--t2);">Confira se a regra do Firestore pra "motoristas" foi publicada.</span></div>`;

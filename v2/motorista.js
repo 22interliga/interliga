@@ -208,6 +208,7 @@ function publicarDisponibilidade() {
       fb.setDoc(fb.doc(db, 'motoristas_disponiveis', meuMotoristaId), {
         nome: state.motorista.nome,
         avaliacao: state.motorista.avaliacao,
+        cidade: state.motorista.cidade || 'madre',
         lat: pos.coords.latitude,
         lon: pos.coords.longitude,
         atualizadoEm: fb.serverTimestamp(),
@@ -1176,6 +1177,7 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
   const senhaConfirma = document.getElementById('cad-mot-senha-confirma').value;
   const veiculo = document.getElementById('cad-mot-veiculo').value.trim();
   const placa = document.getElementById('cad-mot-placa').value.trim().toUpperCase();
+  const cidade = document.getElementById('cad-mot-cidade').value;
 
   if (!nome || nome.split(' ').length < 2) return mostrarErro('Informe seu nome completo');
   if (celular.replace(/\D/g, '').length < 10) return mostrarErro('Informe um celular válido com DDD');
@@ -1202,7 +1204,7 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
       meuMotoristaId = cred.user.uid;
     }
     await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
-      nome, celular, email, cpf, veiculo, placa,
+      nome, celular, email, cpf, veiculo, placa, cidade,
       avaliacao: state.motorista.avaliacao || '5.0',
       selfie: fotosCadastroMotorista.selfie,
       docCnh: fotosCadastroMotorista.cnh,
@@ -1215,6 +1217,7 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
     state.motorista.nome = nome;
     state.motorista.veiculo = veiculo;
     state.motorista.placa = placa;
+    state.motorista.cidade = cidade;
     mostrarTelaAguardandoAprovacaoMotorista();
   } catch (e) {
     console.error('[motorista] erro ao enviar cadastro:', e);
@@ -1283,6 +1286,7 @@ async function verificarCadastroMotorista() {
     const dados = snap.data();
     if (dados.nome) state.motorista.nome = dados.nome;
     if (dados.veiculo) state.motorista.veiculo = dados.veiculo;
+    if (dados.cidade) state.motorista.cidade = dados.cidade;
     if (dados.placa) state.motorista.placa = dados.placa;
     aplicarStatusCadastroMotorista(dados);
   } catch (e) {
@@ -1292,16 +1296,37 @@ async function verificarCadastroMotorista() {
 }
 
 function aplicarStatusCadastroMotorista(dados) {
+  if (dados.bloqueado === true) {
+    // Força offline na hora — não pode continuar recebendo corridas se foi bloqueado
+    state.online = false;
+    pararEscutaCorridas();
+    pararDisponibilidade();
+    const btnOnline = document.getElementById('online-toggle');
+    if (btnOnline) { btnOnline.dataset.online = 'false'; btnOnline.querySelector('.online-label').textContent = 'Offline'; }
+    const elMotivo = document.getElementById('bloqueio-mot-motivo-texto');
+    if (elMotivo) elMotivo.textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
+    go('screen-bloqueado-motorista');
+    escutarStatusCadastroMotorista();
+    return;
+  }
   if (dados.verificacao === 'aprovado') {
-    if (cadastroMotoristaListenerUnsub) { cadastroMotoristaListenerUnsub(); cadastroMotoristaListenerUnsub = null; }
     go('screen-home');
   } else if (dados.verificacao === 'rejeitado') {
-    if (cadastroMotoristaListenerUnsub) { cadastroMotoristaListenerUnsub(); cadastroMotoristaListenerUnsub = null; }
     document.getElementById('rejeicao-mot-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados ou documentos. Tente cadastrar de novo, com calma.';
     go('screen-rejeitado-motorista');
   } else {
-    mostrarTelaAguardandoAprovacaoMotorista();
+    go('screen-aguardando-aprovacao-motorista');
   }
+  // Mantém o listener vivo mesmo depois de aprovado, pra detectar um bloqueio que aconteça depois
+  escutarStatusCadastroMotorista();
+}
+
+function escutarStatusCadastroMotorista() {
+  if (cadastroMotoristaListenerUnsub || !firebaseReady || !db) return;
+  cadastroMotoristaListenerUnsub = fb.onSnapshot(fb.doc(db, 'motoristas', meuMotoristaId), (snap) => {
+    if (!snap.exists()) return;
+    aplicarStatusCadastroMotorista(snap.data());
+  });
 }
 
 function mostrarTelaAguardandoAprovacaoMotorista() {

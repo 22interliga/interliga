@@ -49,6 +49,14 @@
       <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="cad-pax-email" placeholder="seu@email.com"></div>
       <div class="cadastro-field"><label>CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf" placeholder="000.000.000-00" maxlength="14"></div>
       <div class="cadastro-field"><label>Confirme os 2 últimos dígitos do CPF</label><input type="text" class="cadastro-input" id="cad-pax-cpf-confirma" placeholder="00" maxlength="2" inputmode="numeric"></div>
+      <div class="cadastro-field"><label>Cidade onde mora</label>
+        <select class="cadastro-input" id="cad-pax-cidade">
+          <option value="madre">Madre de Deus — BA</option>
+          <option value="sfc">São Francisco do Conde — BA</option>
+          <option value="candeias">Candeias — BA</option>
+          <option value="simoes">Simões Filho — BA</option>
+        </select>
+      </div>
       <div class="cadastro-field"><label>Crie uma senha</label><input type="password" class="cadastro-input" id="cad-pax-senha" placeholder="Mínimo 6 caracteres"></div>
       <div class="cadastro-field"><label>Confirme a senha</label><input type="password" class="cadastro-input" id="cad-pax-senha-confirma" placeholder="Repita a senha"></div>
     </div>
@@ -99,6 +107,15 @@
       <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Cadastro não aprovado</div>
       <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;" id="rejeicao-motivo-texto">Houve um problema com seus dados.</div>
       <button class="btn-primary" style="width:calc(100% - 80px);margin-top:24px;" id="btn-tentar-cadastro-novamente">Tentar de novo</button>
+    </div>
+  </section>
+
+  <!-- ══════════════════ CONTA BLOQUEADA ══════════════════ -->
+  <section class="screen" id="screen-bloqueado">
+    <div class="splash" style="background:var(--bg);">
+      <div style="font-size:56px;">🚫</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:16px;">Conta bloqueada</div>
+      <div style="font-size:14px;color:var(--text-soft);margin-top:8px;text-align:center;padding:0 40px;" id="bloqueio-motivo-texto">Sua conta foi bloqueada.</div>
     </div>
   </section>
 
