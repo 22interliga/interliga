@@ -262,15 +262,9 @@ textarea.inp { resize: vertical; }
 
           <!-- DASHBOARD -->
           <div class="section" id="s-verificacoes">
-            <div class="section-header"><div class="section-title">🛂 Verificações Pendentes</div></div>
-            <p style="color:var(--t2);font-size:12px;margin-bottom:16px;">Confira a selfie e os documentos antes de aprovar. Enquanto não aprovar, a pessoa não consegue usar o app.</p>
+            <div class="section-header"><div class="section-title">🛂 Verificações Pendentes — Motoristas</div></div>
+            <p style="color:var(--t2);font-size:12px;margin-bottom:16px;">Confira a selfie e os documentos antes de aprovar. Enquanto não aprovar, o motorista não consegue receber corridas. Passageiro não passa por essa aprovação — só fica sujeito a bloqueio na aba Passageiros, se necessário.</p>
 
-            <div class="ct" style="margin-bottom:10px;">🧍 Passageiros</div>
-            <div id="verif-passageiros-lista" style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
-              <div class="card" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
-            </div>
-
-            <div class="ct" style="margin-bottom:10px;">🚗 Motoristas</div>
             <div id="verif-motoristas-lista" style="display:flex;flex-direction:column;gap:12px;">
               <div class="card" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
             </div>
@@ -501,15 +495,12 @@ textarea.inp { resize: vertical; }
             <!-- Alterar senha admin -->
             <div class="card" style="margin-bottom:14px;">
               <div class="ct" style="margin-bottom:14px;">🔒 Alterar Senha — Painel Admin</div>
-              <div class="g2" style="margin-bottom:10px;">
-                <div class="fl"><div class="lbl">LOGIN ATUAL</div><input class="inp" id="adm-email-atual" value="miqueias@interliga.com.br" type="email"/></div>
-                <div class="fl"><div class="lbl">NOVO LOGIN (e-mail)</div><input class="inp" id="adm-email-novo" type="email" placeholder="Novo e-mail de acesso"/></div>
-              </div>
+              <div class="fl" style="margin-bottom:10px;"><div class="lbl">LOGIN ATUAL</div><input class="inp" id="adm-email-atual" disabled/></div>
               <div class="g2" style="margin-bottom:14px;">
                 <div class="fl"><div class="lbl">SENHA ATUAL</div><input class="inp" id="adm-senha-atual" type="password" placeholder="••••••••"/></div>
-                <div class="fl"><div class="lbl">NOVA SENHA</div><input class="inp" id="adm-senha-nova" type="password" placeholder="Mínimo 8 caracteres"/></div>
+                <div class="fl"><div class="lbl">NOVA SENHA</div><input class="inp" id="adm-senha-nova" type="password" placeholder="Mínimo 6 caracteres"/></div>
               </div>
-              <button class="sbtn" onclick="alterarSenhaAdmin()">🔒 Alterar credenciais</button>
+              <button class="sbtn" onclick="alterarSenhaAdmin()">🔒 Alterar senha</button>
             </div>
 
             <!-- Mensalidades -->
@@ -1002,6 +993,8 @@ async function entrarNoPainel(user) {
   const rl = document.querySelector('.admin-role');
   if (nm) nm.textContent = user.email.split('@')[0];
   if (rl) rl.textContent = meuPapelAdmin === 'master' ? 'Superadmin' : 'Franqueado · ' + (NOMES_CIDADES[minhaCidadeFranqueado] || minhaCidadeFranqueado);
+  const campoEmailAtual = document.getElementById('adm-email-atual');
+  if (campoEmailAtual) campoEmailAtual.value = user.email;
 
   aplicarVisibilidadePapel();
   showSection('dashboard', document.querySelector('.nav-item'));
@@ -1556,11 +1549,9 @@ async function carregarPassageiros(){
       const p = d.data();
       if (meuPapelAdmin === 'franqueado' && p.cidade !== minhaCidadeFranqueado) return;
       const bloqueado = p.bloqueado === true;
-      let statusHtml;
-      if (bloqueado) statusHtml = '<span class="badge red">🚫 Bloqueado</span>';
-      else if (p.verificacao === 'aprovado') statusHtml = '<span class="badge green">✅ Aprovado</span>';
-      else if (p.verificacao === 'rejeitado') statusHtml = '<span class="badge red">❌ Rejeitado</span>';
-      else statusHtml = '<span class="badge yellow">⏳ Pendente</span>';
+      const statusHtml = bloqueado
+        ? '<span class="badge red">🚫 Bloqueado</span>'
+        : '<span class="badge green">✅ Ativo</span>';
       const btnHtml = bloqueado
         ? `<button class="pbtn" style="background:var(--green);" onclick="alternarBloqueioPassageiro('${d.id}', false)">✓ Reativar</button>`
         : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioPassageiro('${d.id}', true)">🚫 Bloquear</button>`;
@@ -2045,25 +2036,8 @@ function formatCpfExibicao(cpf){
 async function carregarVerificacoesPendentes(){
   if (!dbAdmin) return;
 
-  const listaPax = document.getElementById('verif-passageiros-lista');
   const listaMot = document.getElementById('verif-motoristas-lista');
   let totalPendentes = 0;
-
-  try {
-    const snapPax = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'passageiros'), fbAdmin.where('verificacao', '==', 'pendente')));
-    const docsPax = meuPapelAdmin === 'franqueado'
-      ? snapPax.docs.filter(d => d.data().cidade === minhaCidadeFranqueado)
-      : snapPax.docs;
-    if (docsPax.length === 0) {
-      listaPax.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum passageiro pendente</div>';
-    } else {
-      listaPax.innerHTML = docsPax.map(d => cartaoVerificacao('passageiro', d.id, d.data())).join('');
-    }
-    totalPendentes += docsPax.length;
-  } catch (e) {
-    console.error('[admin] erro ao carregar passageiros pendentes:', e);
-    listaPax.innerHTML = `<div class="card" style="color:var(--red);padding:20px;">⚠️ Erro ao carregar passageiros: <b>${e.code || e.message}</b><br><span style="font-size:11px;color:var(--t2);">Confira se a regra do Firestore pra "passageiros" foi publicada.</span></div>`;
-  }
 
   try {
     const snapMot = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'motoristas'), fbAdmin.where('verificacao', '==', 'pendente')));

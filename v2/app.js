@@ -1055,11 +1055,11 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
       nome, celular, email, cpf,
       cidade: document.getElementById('cad-pax-cidade').value,
       selfie: selfiePassageiroBase64,
-      verificacao: 'pendente',
+      verificacao: 'aprovado', // passageiro não passa por aprovação manual — só fica sujeito a bloqueio se necessário
       criadoEm: fb.serverTimestamp(),
     });
     localStorage.setItem('interliga_pax_nome', nome);
-    mostrarTelaAguardandoAprovacao();
+    aplicarStatusCadastro({ verificacao: 'aprovado' });
   } catch (e) {
     console.error('[passageiro] erro ao enviar cadastro:', e);
     if (e.code === 'auth/email-already-in-use') mostrarErro('Esse e-mail já tem cadastro — tenta Entrar em vez de cadastrar');
