@@ -208,8 +208,31 @@ function initHomeMap() {
 // ─────────────────────────────────────
 // GEOCODING REAL — Nominatim (OpenStreetMap)
 // ─────────────────────────────────────
+let estabelecimentosCache = [];
+let estabelecimentosCarregados = false;
+
+async function carregarEstabelecimentos() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDocs(fb.collection(db, 'estabelecimentos'));
+    estabelecimentosCache = [];
+    snap.forEach(d => estabelecimentosCache.push({ id: d.id, ...d.data() }));
+    estabelecimentosCarregados = true;
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar estabelecimentos:', e);
+  }
+}
+
 async function buscarEnderecos(termo) {
   if (!termo || termo.trim().length < 3) return [];
+  const termoBusca = termo.trim().toLowerCase();
+
+  // Estabelecimentos cadastrados pelo admin (mais confiável que o mapa público
+  // pra cidade pequena) aparecem primeiro, se o nome combinar com o que foi digitado.
+  const estabelecimentosEncontrados = estabelecimentosCache
+    .filter(e => (e.nome || '').toLowerCase().includes(termoBusca))
+    .map(e => ({ texto: `📍 ${e.nome}${e.endereco ? ' — ' + e.endereco : ''}`, lat: e.lat, lon: e.lon }));
+
   try {
     // viewbox + bounded=0 = prioriza resultados perto de Madre de Deus, mas sem excluir
     // endereços de outras cidades (diferente de forçar o nome da cidade na busca, que travava
@@ -220,14 +243,15 @@ async function buscarEnderecos(termo) {
       `&viewbox=-39.3,-13.3,-38.2,-12.2&bounded=0`;
     const resp = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
     const data = await resp.json();
-    return data.map(item => ({
+    const resultadosMapa = data.map(item => ({
       texto: item.display_name,
       lat: parseFloat(item.lat),
       lon: parseFloat(item.lon),
     }));
+    return [...estabelecimentosEncontrados, ...resultadosMapa].slice(0, 6);
   } catch (e) {
     console.warn('Erro no geocoding:', e);
-    return [];
+    return estabelecimentosEncontrados;
   }
 }
 
@@ -292,6 +316,7 @@ function onEnterRide() {
 
   if (!zonasRiscoCarregadas) carregarZonasRisco();
   if (!tabelaPrecosCarregada) carregarTabelaPrecos();
+  if (!estabelecimentosCarregados) carregarEstabelecimentos();
 
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });

@@ -232,6 +232,7 @@ textarea.inp { resize: vertical; }
         <div class="nav-item" data-somente-master onclick="showSection('franqueados',this)"><span>🤝</span> Franqueados</div>
         <div class="nav-group">CONFIGURAÇÕES</div>
         <div class="nav-item" onclick="showSection('precificacao',this)"><span>💲</span> Precificação</div>
+        <div class="nav-item" onclick="showSection('estabelecimentos',this)"><span>📍</span> Pontos de Referência</div>
         <div class="nav-item" onclick="showSection('chat',this)"><span>💬</span> Chat & Ligações <span class="nav-badge">5</span></div>
       </div>
       <div class="sidebar-footer">
@@ -734,6 +735,34 @@ textarea.inp { resize: vertical; }
           </div>
 
           <!-- PRECIFICAÇÃO -->
+          <!-- PONTOS DE REFERÊNCIA -->
+          <div class="section" id="s-estabelecimentos">
+            <div class="section-header"><div class="section-title">📍 Pontos de Referência</div></div>
+            <p style="color:var(--t2);font-size:12px;margin-bottom:16px;">Lugares conhecidos (supermercados, postos, pontos turísticos) que aparecem na busca de endereço do app — útil porque o mapa público nem sempre tem esses nomes certos pra cidades pequenas.</p>
+
+            <div class="card" style="margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">+ Adicionar ponto</div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">NOME</div><input class="inp" id="estab-nome" placeholder="Ex: Supermercado Extra"/></div>
+                <div class="fl"><div class="lbl">ENDEREÇO (opcional, ajuda a identificar)</div><input class="inp" id="estab-endereco" placeholder="Ex: Av. Principal, 123"/></div>
+              </div>
+              <div class="lbl" style="margin-bottom:6px;">CLIQUE NO MAPA PRA MARCAR O LOCAL</div>
+              <div id="estab-map" style="width:100%;height:240px;border-radius:10px;margin-bottom:8px;background:var(--s1);"></div>
+              <div style="font-size:11px;color:var(--t2);margin-bottom:12px;" id="estab-ponto-status">Nenhum ponto marcado ainda</div>
+              <button class="pbtn" onclick="adicionarEstabelecimento()">+ Adicionar ponto</button>
+            </div>
+
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Pontos cadastrados</div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>NOME</th><th>ENDEREÇO</th><th>CIDADE</th><th>AÇÃO</th></tr></thead>
+                  <tbody id="estab-tbody"><tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           <div class="section" id="s-precificacao">
             <div class="section-header"><div class="section-title">💲 Precificação</div><button class="pbtn" onclick="salvarPrecos()">💾 Salvar tudo</button></div>
 
@@ -1088,6 +1117,7 @@ const sectionTitles={
   relatorios:['Relatórios','Relatórios detalhados'],
   franqueados:['Franqueados','Painel de franqueados'],
   precificacao:['Precificação','Tarifas e categorias'],
+  estabelecimentos:['Pontos de Referência','Lugares conhecidos que aparecem na busca de endereço'],
   chat:['Chat & Ligações','Suporte aos usuários'],
 };
 
@@ -1117,6 +1147,7 @@ function showSection(id,navEl){
     monitor: carregarMonitoramento,
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
+    estabelecimentos: carregarEstabelecimentosAdmin,
     precificacao: () => { updateCidade(); carregarZonasRisco(); },
   };
   if (carregadores[id]) carregadores[id]();
@@ -2106,6 +2137,97 @@ async function rejeitarMotorista(id){
     showToast('🚫 Motorista rejeitado');
     carregarVerificacoesPendentes();
   } catch (e) { console.error(e); showToast('⚠️ Erro ao rejeitar'); }
+}
+
+// ═══════════════════════════════════════
+// PONTOS DE REFERÊNCIA — lugares conhecidos que aparecem na busca de endereço do app
+// ═══════════════════════════════════════
+let estabMapInstance = null;
+let estabMapMarker = null;
+let estabPontoSelecionado = null;
+
+function inicializarMapaEstab(){
+  if (estabMapInstance || typeof L === 'undefined') return;
+  const el = document.getElementById('estab-map');
+  if (!el) return;
+  const centro = meuPapelAdmin === 'franqueado' ? (CIDADES_INTERLIGA_ADMIN[minhaCidadeFranqueado] || [-12.74, -38.78]) : [-12.74, -38.78];
+  estabMapInstance = L.map('estab-map').setView(centro, 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(estabMapInstance);
+  estabMapInstance.on('click', (e) => {
+    estabPontoSelecionado = { lat: e.latlng.lat, lon: e.latlng.lng };
+    if (estabMapMarker) estabMapInstance.removeLayer(estabMapMarker);
+    estabMapMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(estabMapInstance);
+    const status = document.getElementById('estab-ponto-status');
+    if (status) status.textContent = `📍 Ponto marcado: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+  });
+  setTimeout(() => estabMapInstance.invalidateSize(), 100);
+}
+
+async function carregarEstabelecimentosAdmin(){
+  inicializarMapaEstab();
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'estabelecimentos'));
+    let lista = [];
+    snap.forEach(d => lista.push({ id: d.id, ...d.data() }));
+    if (meuPapelAdmin === 'franqueado') lista = lista.filter(e => e.cidade === minhaCidadeFranqueado);
+
+    const tbody = document.getElementById('estab-tbody');
+    if (lista.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:20px;">Nenhum ponto cadastrado ainda</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(e => `
+      <tr><td><b>${e.nome}</b></td><td style="color:var(--t2);">${e.endereco || '—'}</td><td>${NOMES_CIDADES[e.cidade] || e.cidade || '—'}</td>
+      <td><span class="icon-btn" onclick="removerEstabelecimento('${e.id}')">🗑️</span></td></tr>
+    `).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar pontos de referência:', e);
+    document.getElementById('estab-tbody').innerHTML = `<tr><td colspan="4" style="color:var(--red);padding:20px;">⚠️ ${e.code || e.message}</td></tr>`;
+  }
+}
+
+async function adicionarEstabelecimento(){
+  const nome = document.getElementById('estab-nome').value.trim();
+  const endereco = document.getElementById('estab-endereco').value.trim();
+  if (!nome) { showToast('⚠️ Informe o nome do ponto'); return; }
+  if (!estabPontoSelecionado) { showToast('⚠️ Clique no mapa pra marcar o local'); return; }
+
+  // A cidade é detectada pelo ponto mais próximo, igual ao resto do sistema
+  let cidade = 'madre', menorDist = Infinity;
+  for (const [cod, [lat, lon]] of Object.entries(CIDADES_INTERLIGA_ADMIN)) {
+    const d = Math.hypot(lat - estabPontoSelecionado.lat, lon - estabPontoSelecionado.lon);
+    if (d < menorDist) { menorDist = d; cidade = cod; }
+  }
+  if (meuPapelAdmin === 'franqueado') cidade = minhaCidadeFranqueado;
+
+  try {
+    await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'estabelecimentos'), {
+      nome, endereco, cidade,
+      lat: estabPontoSelecionado.lat, lon: estabPontoSelecionado.lon,
+      criadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('✅ Ponto adicionado!');
+    document.getElementById('estab-nome').value = '';
+    document.getElementById('estab-endereco').value = '';
+    estabPontoSelecionado = null;
+    if (estabMapMarker && estabMapInstance) { estabMapInstance.removeLayer(estabMapMarker); estabMapMarker = null; }
+    document.getElementById('estab-ponto-status').textContent = 'Nenhum ponto marcado ainda';
+    carregarEstabelecimentosAdmin();
+  } catch (e) {
+    console.error('[admin] erro ao adicionar ponto:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+async function removerEstabelecimento(id){
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'estabelecimentos', id));
+    showToast('🗑️ Ponto removido');
+    carregarEstabelecimentosAdmin();
+  } catch (e) {
+    showToast('⚠️ Erro ao remover — ' + (e.code || e.message));
+  }
 }
 </script>
 </body>
