@@ -269,6 +269,32 @@ export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam
   const suggestionsBox = suggestionsBoxParam || inputEl.closest('.form-card')?.querySelector('.address-suggestions');
   if (!suggestionsBox) return;
 
+  // Botão "✕" pra limpar o campo de uma vez, em vez de precisar selecionar o texto manualmente
+  // (não duplica em campos que já têm um botão de remover ao lado, como parada extra)
+  const jaTemBotaoProprio = inputEl.parentElement?.querySelector('.stop-remove');
+  let btnLimpar = null;
+  if (!jaTemBotaoProprio) {
+    btnLimpar = document.createElement('span');
+    btnLimpar.className = 'address-clear-btn';
+    btnLimpar.textContent = '✕';
+    inputEl.insertAdjacentElement('afterend', btnLimpar);
+  }
+
+  function atualizarVisibilidadeLimpar() {
+    if (btnLimpar) btnLimpar.style.display = inputEl.value.trim() ? 'flex' : 'none';
+  }
+  atualizarVisibilidadeLimpar();
+
+  if (btnLimpar) {
+    btnLimpar.addEventListener('click', () => {
+      inputEl.value = '';
+      atualizarVisibilidadeLimpar();
+      suggestionsBox.classList.remove('is-open');
+      onSelect(null); // avisa quem está ouvindo que o campo foi limpo, pra resetar o ponto selecionado
+      inputEl.focus();
+    });
+  }
+
   const search = debounce(async () => {
     const termo = inputEl.value;
     const results = await buscarEnderecos(termo);
@@ -286,7 +312,7 @@ export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam
   }, 400);
 
   inputEl.addEventListener('focus', () => { suggestionsBox._activeInput = inputEl; });
-  inputEl.addEventListener('input', search);
+  inputEl.addEventListener('input', () => { search(); atualizarVisibilidadeLimpar(); });
 
   suggestionsBox.addEventListener('click', (e) => {
     const item = e.target.closest('.suggestion-item');
@@ -297,6 +323,7 @@ export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam
     const result = suggestionsBox._results[idx];
     inputEl.value = result.texto;
     suggestionsBox.classList.remove('is-open');
+    atualizarVisibilidadeLimpar();
     onSelect(result);
   });
 
@@ -531,6 +558,8 @@ async function criarCorrida(origem, destino, preco, categoria) {
     origemLat: origem.lat, origemLon: origem.lon,
     destinoLat: destino.lat, destinoLon: destino.lon,
     preco, categoria, cidade,
+    passageiroId: meuPassageiroId || null,
+    passageiroNome: localStorage.getItem('interliga_pax_nome') || 'Passageiro',
     status: 'aguardando',
     criadoEm: new Date().toISOString(),
   };
@@ -706,11 +735,84 @@ function ouvirAceiteCorrida(corridaId) {
       atualizarStatusHistoricoLocal('finalizada');
 
       showToast('✅ Corrida finalizada! Obrigado por viajar com a Interliga.');
-      go('screen-home');
+      abrirTelaAvaliarMotorista(data.motoristaId, data.motoristaNome);
     }
   }, (erro) => {
     console.error('[passageiro] erro no listener de aceite:', erro);
   });
+}
+
+// ─────────────────────────────────────
+// AVALIAÇÃO MÚTUA — passageiro avalia motorista depois da corrida
+// ─────────────────────────────────────
+let notaSelecionadaMotorista = 0;
+let avaliarMotoristaId = null;
+let avaliarCorridaIdAtual = null;
+
+function abrirTelaAvaliarMotorista(motoristaId, motoristaNome) {
+  avaliarMotoristaId = motoristaId || null;
+  avaliarCorridaIdAtual = state.corridaId || null;
+  notaSelecionadaMotorista = 0;
+  renderEstrelasMotorista();
+  document.getElementById('avaliar-mot-nome').textContent = motoristaNome || 'o motorista';
+  document.getElementById('avaliar-mot-comentario').value = '';
+  if (!avaliarMotoristaId) { go('screen-home'); return; } // corrida antiga sem motoristaId — não tem quem avaliar
+  go('screen-avaliar-motorista');
+}
+
+function renderEstrelasMotorista() {
+  document.querySelectorAll('#avaliar-mot-estrelas span').forEach(el => {
+    const n = Number(el.dataset.nota);
+    el.textContent = n <= notaSelecionadaMotorista ? '★' : '☆';
+    el.style.color = n <= notaSelecionadaMotorista ? 'var(--orange)' : 'var(--text-soft)';
+  });
+}
+
+document.querySelectorAll('#avaliar-mot-estrelas span').forEach(el => {
+  el.style.cursor = 'pointer';
+  el.addEventListener('click', () => {
+    notaSelecionadaMotorista = Number(el.dataset.nota);
+    renderEstrelasMotorista();
+  });
+});
+
+document.getElementById('btn-enviar-avaliacao-motorista')?.addEventListener('click', async () => {
+  if (notaSelecionadaMotorista === 0) { showToast('⚠️ Toca numa estrela pra dar a nota'); return; }
+  const comentario = document.getElementById('avaliar-mot-comentario').value.trim();
+  await enviarAvaliacao('motorista', avaliarMotoristaId, notaSelecionadaMotorista, comentario, avaliarCorridaIdAtual);
+  showToast('✅ Avaliação enviada, obrigado!');
+  go('screen-home');
+});
+
+document.getElementById('link-pular-avaliacao-motorista')?.addEventListener('click', () => go('screen-home'));
+
+// Atualiza a média de avaliação de um motorista ou passageiro, de forma segura mesmo
+// com várias avaliações chegando ao mesmo tempo (usa transação do Firebase).
+async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
+  if (!firebaseReady || !db || !paraId) return;
+  const colecao = tipo === 'motorista' ? 'motoristas' : 'passageiros';
+  try {
+    await fb.addDoc(fb.collection(db, 'avaliacoes'), {
+      tipo, paraId, nota, comentario, corridaId,
+      criadoEm: fb.serverTimestamp(),
+    });
+    await fb.runTransaction(db, async (tx) => {
+      const ref = fb.doc(db, colecao, paraId);
+      const snap = await tx.get(ref);
+      const dados = snap.data() || {};
+      const totalAtual = Number(dados.totalAvaliacoes || 0);
+      const somaAtual = Number(dados.somaAvaliacoes || 0);
+      const novoTotal = totalAtual + 1;
+      const novaSoma = somaAtual + nota;
+      tx.update(ref, {
+        totalAvaliacoes: novoTotal,
+        somaAvaliacoes: novaSoma,
+        avaliacao: (novaSoma / novoTotal).toFixed(1),
+      });
+    });
+  } catch (e) {
+    console.warn('[passageiro] erro ao enviar avaliação:', e);
+  }
 }
 
 function exibirMotoristaEncontrado({ nome, veiculo, placa, avaliacao }) {
@@ -1338,9 +1440,9 @@ function renderParadas() {
     const idx = parseInt(input.dataset.stopIdx, 10);
     const suggestionsBox = container.querySelector(`.stop-suggestions[data-suggestions-idx="${idx}"]`);
     attachAddressAutocomplete(input, (r) => {
-      paradasExtras[idx].texto = r.texto;
-      paradasExtras[idx].lat = r.lat;
-      paradasExtras[idx].lon = r.lon;
+      paradasExtras[idx].texto = r ? r.texto : '';
+      paradasExtras[idx].lat = r ? r.lat : null;
+      paradasExtras[idx].lon = r ? r.lon : null;
     }, suggestionsBox);
     input._wired = true;
   });

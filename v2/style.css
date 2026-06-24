@@ -292,6 +292,19 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .address-dot--orange { background: var(--orange); }
 .address-field input { flex: 1; font-size: 15px; color: var(--text); }
 .address-field input::placeholder { color: var(--text-soft); }
+.address-clear-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
 .address-divider { height: 1px; background: var(--border); margin-left: 21px; }
 
 .address-suggestions {
