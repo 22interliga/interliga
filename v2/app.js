@@ -556,26 +556,6 @@ function calcularPrecos() {
     if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
     if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
   }
-
-  const notaRisco = document.getElementById('risk-note');
-  if (notaRisco) {
-    if (risco.zonasAtingidas.length > 0) {
-      notaRisco.hidden = false;
-      notaRisco.textContent = '📍 Inclui acréscimo de área de risco: ' + risco.zonasAtingidas.join(', ');
-    } else {
-      notaRisco.hidden = true;
-    }
-  }
-
-  const notaHorario = document.getElementById('horario-note');
-  if (notaHorario) {
-    if (percentualHorario > 0) {
-      notaHorario.hidden = false;
-      notaHorario.textContent = `⏰ Acréscimo de horário aplicado: +${percentualHorario}%`;
-    } else {
-      notaHorario.hidden = true;
-    }
-  }
 }
 
 document.getElementById('category-list')?.addEventListener('click', (e) => {
