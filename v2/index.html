@@ -110,6 +110,22 @@
     </div>
   </section>
 
+  <!-- ══════════════════ AVALIAR MOTORISTA ══════════════════ -->
+  <section class="screen" id="screen-avaliar-motorista">
+    <div class="splash" style="background:var(--bg);justify-content:flex-start;padding-top:60px;">
+      <div style="font-size:48px;">✅</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:12px;">Corrida finalizada!</div>
+      <div style="font-size:14px;color:var(--text-soft);margin:6px 0 24px;text-align:center;padding:0 30px;">Como foi sua viagem com <b id="avaliar-mot-nome">o motorista</b>?</div>
+      <div id="avaliar-mot-estrelas" style="display:flex;gap:10px;font-size:40px;margin-bottom:20px;">
+        <span data-nota="1">☆</span><span data-nota="2">☆</span><span data-nota="3">☆</span><span data-nota="4">☆</span><span data-nota="5">☆</span>
+      </div>
+      <textarea id="avaliar-mot-comentario" placeholder="Comentário (opcional)" style="width:calc(100% - 60px);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:14px;min-height:70px;margin-bottom:16px;"></textarea>
+      <button class="btn-primary" style="width:calc(100% - 60px);margin:0 0 10px;" id="btn-enviar-avaliacao-motorista">Enviar avaliação</button>
+      <div class="link-secundario" id="link-pular-avaliacao-motorista">Pular</div>
+    </div>
+  </section>
+
+
   <!-- ══════════════════ CONTA BLOQUEADA ══════════════════ -->
   <section class="screen" id="screen-bloqueado">
     <div class="splash" style="background:var(--bg);">
@@ -261,6 +277,7 @@
     </div>
 
     <div class="risk-note" id="risk-note" hidden></div>
+    <div class="risk-note" id="horario-note" hidden></div>
 
     <div class="section-label">PAGAMENTO</div>
     <button class="payment-select" id="payment-select">

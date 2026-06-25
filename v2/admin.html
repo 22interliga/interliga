@@ -789,13 +789,15 @@ textarea.inp { resize: vertical; }
               <div class="ct" style="margin-bottom:14px;">🚗 Categorias de Veículo</div>
               <div class="tbl-wrap">
                 <table>
-                  <thead><tr><th>CATEGORIA</th><th>BANDEIRADA (R$)</th><th>TARIFA KM (R$)</th><th>PREÇO MÍNIMO (R$)</th><th>MULTIPLICADOR DINÂMICO</th><th>ATIVO</th></tr></thead>
+                  <thead><tr><th>CATEGORIA</th><th>BANDEIRADA (R$)</th><th>TARIFA KM (R$)</th><th>PREÇO MÍNIMO (R$)</th><th>FIXO ATÉ (KM)</th><th>VALOR FIXO (R$)</th><th>MULTIPLICADOR DINÂMICO</th><th>ATIVO</th></tr></thead>
                   <tbody id="precos-categorias-tbody">
                     <tr>
                       <td><b>🚗 Interliga X</b><br><small style="color:var(--t2)">Até 4 passageiros</small></td>
                       <td><input class="inp" type="number" id="prec-x-bandeirada" value="5.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-x-tarifakm" value="2.40" step="0.10" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-x-minimo" value="8.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-x-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-x-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-x-mult" value="1.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
                       <td><div id="prec-x-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
@@ -804,6 +806,8 @@ textarea.inp { resize: vertical; }
                       <td><input class="inp" type="number" id="prec-plus-bandeirada" value="7.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-plus-tarifakm" value="3.36" step="0.10" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-plus-minimo" value="12.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-plus-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-plus-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-plus-mult" value="1.4" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
                       <td><div id="prec-plus-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
@@ -812,6 +816,8 @@ textarea.inp { resize: vertical; }
                       <td><input class="inp" type="number" id="prec-van-bandeirada" value="10.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-van-tarifakm" value="4.80" step="0.10" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-van-minimo" value="18.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-van-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
+                      <td><input class="inp" type="number" id="prec-van-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
                       <td><input class="inp" type="number" id="prec-van-mult" value="2.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
                       <td><div id="prec-van-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
                     </tr>
@@ -882,6 +888,38 @@ textarea.inp { resize: vertical; }
                 </div>
                 <button class="pbtn" onclick="adicionarZonaRisco()">+ Adicionar área</button>
               </div>
+            </div>
+
+            <!-- Faixas de horário -->
+            <div class="card" style="margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">⏰ Faixas de Horário / Dia da Semana</div>
+              <p style="color:var(--t2);font-size:12px;margin-bottom:14px;">Acréscimo automático aplicado quando o passageiro pedir a corrida dentro do horário configurado. Se marcar nenhum dia, vale todos os dias.</p>
+
+              <div class="tbl-wrap" style="margin-bottom:16px;">
+                <table>
+                  <thead><tr><th>NOME</th><th>DIAS</th><th>HORÁRIO</th><th>ACRÉSCIMO</th><th>AÇÃO</th></tr></thead>
+                  <tbody id="horarios-tbody"><tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Carregando...</td></tr></tbody>
+                </table>
+              </div>
+
+              <div class="ct" style="margin-bottom:10px;font-size:13px;">+ Adicionar faixa</div>
+              <div class="fl" style="margin-bottom:10px;"><div class="lbl">NOME</div><input class="inp" id="hora-nome" placeholder="Ex: Madrugada"/></div>
+              <div class="lbl" style="margin-bottom:6px;">DIAS DA SEMANA (nenhum marcado = todos os dias)</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="0"> Dom</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="1"> Seg</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="2"> Ter</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="3"> Qua</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="4"> Qui</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="5"> Sex</label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);"><input type="checkbox" class="hora-dia" value="6"> Sáb</label>
+              </div>
+              <div class="g2" style="margin-bottom:14px;">
+                <div class="fl"><div class="lbl">DAS (hora)</div><input class="inp" type="number" id="hora-inicio" placeholder="Ex: 0 (meia-noite)" min="0" max="23" step="1"/></div>
+                <div class="fl"><div class="lbl">ÀS (hora)</div><input class="inp" type="number" id="hora-fim" placeholder="Ex: 5" min="0" max="24" step="1"/></div>
+              </div>
+              <div class="fl" style="margin-bottom:14px;max-width:200px;"><div class="lbl">ACRÉSCIMO (%)</div><input class="inp" id="hora-percentual" type="number" value="0" step="5"/></div>
+              <button class="pbtn" onclick="adicionarFaixaHorario()">+ Adicionar faixa</button>
             </div>
 
             <!-- Dinâmico manual -->
@@ -1148,7 +1186,7 @@ function showSection(id,navEl){
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
     estabelecimentos: carregarEstabelecimentosAdmin,
-    precificacao: () => { updateCidade(); carregarZonasRisco(); },
+    precificacao: () => { updateCidade(); carregarZonasRisco(); carregarFaixasHorario(); },
   };
   if (carregadores[id]) carregadores[id]();
 }
@@ -1267,6 +1305,8 @@ async function salvarPrecos(){
       bandeirada: Number(document.getElementById(`prec-${cat}-bandeirada`).value) || 0,
       tarifaKm: Number(document.getElementById(`prec-${cat}-tarifakm`).value) || 0,
       minimo: Number(document.getElementById(`prec-${cat}-minimo`).value) || 0,
+      kmFixo: Number(document.getElementById(`prec-${cat}-kmfixo`).value) || 0,
+      valorFixo: Number(document.getElementById(`prec-${cat}-valorfixo`).value) || 0,
       multiplicador: Number(document.getElementById(`prec-${cat}-mult`).value) || 1,
       ativo: document.getElementById(`prec-${cat}-ativo`).dataset.on !== '0',
     };
@@ -1289,11 +1329,13 @@ async function updateCidade(){
     const dados = snap.exists() ? snap.data() : null;
     for (const cat of ['x', 'plus', 'van']) {
       const c = dados?.[cat];
-      const padrao = { x:{bandeirada:5,tarifaKm:2.40,minimo:8,multiplicador:1.0}, plus:{bandeirada:7,tarifaKm:3.36,minimo:12,multiplicador:1.4}, van:{bandeirada:10,tarifaKm:4.80,minimo:18,multiplicador:2.0} }[cat];
+      const padrao = { x:{bandeirada:5,tarifaKm:2.40,minimo:8,kmFixo:0,valorFixo:0,multiplicador:1.0}, plus:{bandeirada:7,tarifaKm:3.36,minimo:12,kmFixo:0,valorFixo:0,multiplicador:1.4}, van:{bandeirada:10,tarifaKm:4.80,minimo:18,kmFixo:0,valorFixo:0,multiplicador:2.0} }[cat];
       const v = c || padrao;
       document.getElementById(`prec-${cat}-bandeirada`).value = v.bandeirada;
       document.getElementById(`prec-${cat}-tarifakm`).value = v.tarifaKm;
       document.getElementById(`prec-${cat}-minimo`).value = v.minimo;
+      document.getElementById(`prec-${cat}-kmfixo`).value = v.kmFixo || 0;
+      document.getElementById(`prec-${cat}-valorfixo`).value = v.valorFixo || 0;
       document.getElementById(`prec-${cat}-mult`).value = v.multiplicador;
       const ativoEl = document.getElementById(`prec-${cat}-ativo`);
       const ativo = c ? c.ativo !== false : true;
@@ -2035,6 +2077,77 @@ async function removerZonaRisco(id){
   } catch (e) {
     console.error('[admin] erro ao remover área de risco:', e);
     showToast('⚠️ Erro ao remover');
+  }
+}
+
+// ═══════════════════════════════════════
+// FAIXAS DE HORÁRIO / DIA DA SEMANA
+// ═══════════════════════════════════════
+const NOMES_DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+async function carregarFaixasHorario(){
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'regras_horario'));
+    let faixas = [];
+    snap.forEach(d => faixas.push({ id: d.id, ...d.data() }));
+    if (meuPapelAdmin === 'franqueado') faixas = faixas.filter(f => !f.cidade || f.cidade === minhaCidadeFranqueado);
+
+    const tbody = document.getElementById('horarios-tbody');
+    if (faixas.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:20px;">Nenhuma faixa cadastrada ainda</td></tr>';
+      return;
+    }
+    tbody.innerHTML = faixas.map(f => {
+      const dias = Array.isArray(f.dias) && f.dias.length > 0
+        ? f.dias.map(d => NOMES_DIAS_SEMANA[d]).join(', ')
+        : 'Todos os dias';
+      return `<tr><td><b>${f.nome}</b></td><td style="color:var(--t2);font-size:12px;">${dias}</td><td>${f.horaInicio}h–${f.horaFim}h</td><td>+${f.percentual}%</td>
+        <td><span class="icon-btn" onclick="removerFaixaHorario('${f.id}')">🗑️</span></td></tr>`;
+    }).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar faixas de horário:', e);
+    document.getElementById('horarios-tbody').innerHTML = `<tr><td colspan="5" style="color:var(--red);padding:20px;">⚠️ ${e.code || e.message}</td></tr>`;
+  }
+}
+
+async function adicionarFaixaHorario(){
+  const nome = document.getElementById('hora-nome').value.trim();
+  const inicio = Number(document.getElementById('hora-inicio').value);
+  const fim = Number(document.getElementById('hora-fim').value);
+  const percentual = Number(document.getElementById('hora-percentual').value);
+  const dias = Array.from(document.querySelectorAll('.hora-dia:checked')).map(c => Number(c.value));
+
+  if (!nome) { showToast('⚠️ Informe um nome pra faixa'); return; }
+  if (isNaN(inicio) || isNaN(fim)) { showToast('⚠️ Informe o horário de início e fim'); return; }
+  if (!percentual || percentual <= 0) { showToast('⚠️ Informe um percentual de acréscimo maior que 0'); return; }
+
+  try {
+    await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'regras_horario'), {
+      nome, dias, horaInicio: inicio, horaFim: fim, percentual,
+      cidade: meuPapelAdmin === 'franqueado' ? minhaCidadeFranqueado : null,
+      criadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('✅ Faixa de horário adicionada!');
+    document.getElementById('hora-nome').value = '';
+    document.getElementById('hora-inicio').value = '';
+    document.getElementById('hora-fim').value = '';
+    document.getElementById('hora-percentual').value = '0';
+    document.querySelectorAll('.hora-dia').forEach(c => c.checked = false);
+    carregarFaixasHorario();
+  } catch (e) {
+    console.error('[admin] erro ao adicionar faixa de horário:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+async function removerFaixaHorario(id){
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'regras_horario', id));
+    showToast('🗑️ Faixa removida');
+    carregarFaixasHorario();
+  } catch (e) {
+    showToast('⚠️ Erro ao remover — ' + (e.code || e.message));
   }
 }
 

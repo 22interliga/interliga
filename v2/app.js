@@ -344,6 +344,7 @@ function onEnterRide() {
   if (!zonasRiscoCarregadas) carregarZonasRisco();
   if (!tabelaPrecosCarregada) carregarTabelaPrecos();
   if (!estabelecimentosCarregados) carregarEstabelecimentos();
+  if (!regrasHorarioCarregadas) carregarRegrasHorario();
 
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
@@ -401,12 +402,53 @@ function detectarCidade(lat, lon) {
   return maisProxima.codigo;
 }
 
+let regrasHorarioCache = [];
+let regrasHorarioCarregadas = false;
+
+async function carregarRegrasHorario() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDocs(fb.collection(db, 'regras_horario'));
+    regrasHorarioCache = [];
+    snap.forEach(d => regrasHorarioCache.push({ id: d.id, ...d.data() }));
+    regrasHorarioCarregadas = true;
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar faixas de horário:', e);
+  }
+}
+
+// Soma o percentual de todas as faixas de horário que batem com o momento atual
+// (dia da semana + horário), considerando faixas que cruzam a meia-noite (ex: 22h-05h).
+function calcularPercentualHorario() {
+  const agora = new Date();
+  const diaSemana = agora.getDay(); // 0=domingo ... 6=sábado
+  const horaAtual = agora.getHours() + agora.getMinutes() / 60;
+  let percentual = 0;
+
+  for (const regra of regrasHorarioCache) {
+    if (Array.isArray(regra.dias) && regra.dias.length > 0 && !regra.dias.includes(diaSemana)) continue;
+    const inicio = Number(regra.horaInicio);
+    const fim = Number(regra.horaFim);
+    if (isNaN(inicio) || isNaN(fim)) continue;
+
+    let bate;
+    if (inicio <= fim) {
+      bate = horaAtual >= inicio && horaAtual < fim;
+    } else {
+      // Faixa cruza a meia-noite (ex: 22h às 5h)
+      bate = horaAtual >= inicio || horaAtual < fim;
+    }
+    if (bate) percentual += Number(regra.percentual || 0);
+  }
+  return percentual;
+}
+
 let tabelaPrecosCachePorCidade = {};
 let tabelaPrecosCarregada = false;
 const TABELA_PRECOS_PADRAO = {
-  x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  multiplicador: 1.0, ativo: true },
-  plus: { bandeirada: 7,  tarifaKm: 3.36, minimo: 12, multiplicador: 1.4, ativo: true },
-  van:  { bandeirada: 10, tarifaKm: 4.80, minimo: 18, multiplicador: 2.0, ativo: true },
+  x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  kmFixo: 0, valorFixo: 0, multiplicador: 1.0, ativo: true },
+  plus: { bandeirada: 7,  tarifaKm: 3.36, minimo: 12, kmFixo: 0, valorFixo: 0, multiplicador: 1.4, ativo: true },
+  van:  { bandeirada: 10, tarifaKm: 4.80, minimo: 18, kmFixo: 0, valorFixo: 0, multiplicador: 2.0, ativo: true },
 };
 
 async function carregarTabelaPrecos() {
@@ -475,10 +517,21 @@ function calcularAcrescimoRisco(origem, destino) {
   return { acrescimo, percentual, zonasAtingidas };
 }
 
+// Calcula o valor base da corrida — se a categoria tiver "tarifa fixa até X km" configurada,
+// usa esse valor fixo dentro da faixa e só volta a cobrar por km depois que passar dela.
+function calcularPrecoBase(km, t) {
+  if (t.kmFixo > 0 && t.valorFixo > 0) {
+    if (km <= t.kmFixo) return t.valorFixo;
+    return t.valorFixo + (km - t.kmFixo) * t.tarifaKm;
+  }
+  return t.bandeirada + km * t.tarifaKm;
+}
+
 function calcularPrecos() {
   if (!state.origem || !state.destino) return;
   const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
   const risco = calcularAcrescimoRisco(state.origem, state.destino);
+  const percentualHorario = calcularPercentualHorario();
   const cidade = detectarCidade(state.origem.lat, state.origem.lon);
   const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
 
@@ -495,9 +548,10 @@ function calcularPrecos() {
     }
     if (itemEl) itemEl.style.display = '';
 
-    let preco = Math.max(t.minimo, t.bandeirada + km * t.tarifaKm) * Number(t.multiplicador || 1);
+    let preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1);
     preco = preco + risco.acrescimo;
     preco = preco * (1 + risco.percentual / 100);
+    preco = preco * (1 + percentualHorario / 100);
     state.precos[cat] = preco;
     if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
     if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
@@ -510,6 +564,16 @@ function calcularPrecos() {
       notaRisco.textContent = '📍 Inclui acréscimo de área de risco: ' + risco.zonasAtingidas.join(', ');
     } else {
       notaRisco.hidden = true;
+    }
+  }
+
+  const notaHorario = document.getElementById('horario-note');
+  if (notaHorario) {
+    if (percentualHorario > 0) {
+      notaHorario.hidden = false;
+      notaHorario.textContent = `⏰ Acréscimo de horário aplicado: +${percentualHorario}%`;
+    } else {
+      notaHorario.hidden = true;
     }
   }
 }
