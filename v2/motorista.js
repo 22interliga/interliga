@@ -8,6 +8,7 @@ let firebaseReady = false;
 let fb = {};
 let authMotorista = null;
 let authModRef = null;
+let fbAppInstancia = null;
 
 // Espera o Firebase terminar de conectar (até ~8s), em vez de desistir na hora.
 function esperarFirebasePronto(timeoutMs = 8000) {
@@ -42,6 +43,7 @@ async function initFirebase() {
       appId: "1:913895237568:web:faad95e8af089150e54a25",
     };
     const fbApp = initializeApp(firebaseConfig);
+    fbAppInstancia = fbApp;
     db = fb.getFirestore(fbApp);
     authMotorista = authMod.getAuth(fbApp);
 
@@ -134,7 +136,15 @@ function go(screenId) {
 
 document.addEventListener('click', (e) => {
   const target = e.target.closest('[data-go]');
-  if (target) go(target.dataset.go);
+  if (!target) return;
+  const destino = target.dataset.go;
+  // Enquanto a corrida estiver ativa, não deixa sair pra Home/Perfil/etc — sempre volta pro andamento
+  if (state.emCorridaAtiva && destino !== 'screen-ongoing' && !destino.startsWith('screen-avaliar')) {
+    showToast('🚗 Você está numa corrida em andamento');
+    go('screen-ongoing');
+    return;
+  }
+  go(destino);
 });
 
 // ─────────────────────────────────────
@@ -327,8 +337,9 @@ function iniciarEscutaCorridas() {
             const souAlvo = !corrida.motoristaAlvoAtual || corrida.motoristaAlvoAtual === meuMotoristaId;
             if (!souAlvo) return;
 
-            // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila voltou pra mim)
-            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.filaIndiceAtual ?? 0);
+            // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila avançou,
+            // mesmo que tenha voltado pro mesmo motorista — por isso usa ofertaExpiraEm, que sempre muda)
+            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.ofertaExpiraEm ?? 0);
             if (state._ultimaOfertaProcessada === chaveOferta) return;
             state._ultimaOfertaProcessada = chaveOferta;
 
@@ -398,6 +409,7 @@ function escutarCancelamentoOferta(corridaId) {
       document.getElementById('new-ride-banner').hidden = true;
       state.corridaAtual = null;
       state.corridaAtualId = null;
+      state.emCorridaAtiva = false;
       showToast('❌ O passageiro cancelou essa corrida');
       go('screen-home');
     }
@@ -530,6 +542,7 @@ function recusarCorrida() {
   document.getElementById('new-ride-banner').hidden = true;
   state.corridaAtual = null;
   state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
   go('screen-home');
 }
 
@@ -574,6 +587,7 @@ async function aceitarCorrida() {
         document.getElementById('new-ride-banner').hidden = true;
         state.corridaAtual = null;
         state.corridaAtualId = null;
+        state.emCorridaAtiva = false;
         go('screen-home');
         return;
       }
@@ -611,6 +625,7 @@ let chegouAoCliente = false;
 function onEnterOngoing() {
   const corrida = state.corridaAtual;
   if (!corrida) { console.warn('[onEnterOngoing] sem corrida atual'); return; }
+  state.emCorridaAtiva = true;
 
   const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
   setText('ongoing-origem', corrida.origem);
@@ -730,6 +745,7 @@ function escutarCancelamentoCorrida() {
       indiceRotaAtualMotorista = 0;
       state.corridaAtual = null;
       state.corridaAtualId = null;
+      state.emCorridaAtiva = false;
       falarEmVoz('Atenção! O passageiro cancelou a corrida.');
       showToast('❌ Passageiro cancelou a corrida');
       if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
@@ -889,6 +905,7 @@ function finalizarCorrida() {
 
   state.corridaAtual = null;
   state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
   pararEscutaChat();
   pararEscutaCancelamento();
   pararEscutaRota();
@@ -1435,6 +1452,7 @@ function aplicarStatusCadastroMotorista(dados) {
   }
   if (dados.verificacao === 'aprovado') {
     go('screen-home');
+    configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
     document.getElementById('rejeicao-mot-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados ou documentos. Tente cadastrar de novo, com calma.';
     go('screen-rejeitado-motorista');
@@ -1481,6 +1499,51 @@ document.getElementById('btn-sair-motorista')?.addEventListener('click', async (
     showToast('⚠️ Erro ao sair, tenta de novo');
   }
 });
+
+// ─────────────────────────────────────
+// NOTIFICAÇÕES PUSH — recebe aviso de corrida nova mesmo com o app fechado/
+// em segundo plano (precisa da chave VAPID do Firebase Console, ver abaixo)
+// ─────────────────────────────────────
+const VAPID_KEY = 'COLOQUE_AQUI_SUA_VAPID_KEY'; // Firebase Console → Configurações do projeto → Cloud Messaging → Web Push certificates
+
+let pushConfigurado = false;
+
+async function configurarNotificacoesPush() {
+  if (pushConfigurado) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('[motorista] notificações push não suportadas neste navegador');
+    return;
+  }
+  if (!fbAppInstancia || !meuMotoristaId || !db) return;
+  if (VAPID_KEY === 'COLOQUE_AQUI_SUA_VAPID_KEY') {
+    console.warn('[motorista] VAPID_KEY ainda não configurada — pulando notificações push');
+    return;
+  }
+
+  try {
+    const permissao = await Notification.requestPermission();
+    if (permissao !== 'granted') {
+      console.warn('[motorista] permissão de notificação negada pelo usuário');
+      return;
+    }
+
+    const messagingMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
+    const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const messaging = messagingMod.getMessaging(fbAppInstancia);
+    const token = await messagingMod.getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (token) {
+      await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { fcmToken: token }, { merge: true });
+      pushConfigurado = true;
+      console.log('[motorista] notificações push configuradas');
+    }
+  } catch (e) {
+    console.warn('[motorista] erro ao configurar notificações push:', e);
+  }
+}
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroMotorista() que decide a tela certa

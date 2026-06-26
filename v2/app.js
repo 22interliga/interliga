@@ -8,6 +8,7 @@
 // ─────────────────────────────────────
 let db = null;
 let firebaseReady = false;
+let fbAppInstancia = null;
 
 // ─────────────────────────────────────
 // LOCALSTORAGE SEGURO — nunca deixa um dado corrompido quebrar a tela
@@ -73,6 +74,7 @@ async function initFirebase() {
     };
 
     const fbApp = initializeApp(firebaseConfig);
+    fbAppInstancia = fbApp;
     db = fb.getFirestore(fbApp);
     authPassageiro = authMod.getAuth(fbApp);
 
@@ -1366,6 +1368,7 @@ function aplicarStatusCadastro(dados) {
       if (elTelefone) elTelefone.textContent = dados.celular;
     }
     go('screen-home');
+    configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
     document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
     go('screen-rejeitado');
@@ -1942,6 +1945,51 @@ document.getElementById('btn-sair-passageiro')?.addEventListener('click', async 
     showToast('⚠️ Erro ao sair, tenta de novo');
   }
 });
+
+// ─────────────────────────────────────
+// NOTIFICAÇÕES PUSH — recebe aviso (ex: "motorista aceitou") mesmo com o
+// app fechado/em segundo plano (precisa da chave VAPID do Firebase Console)
+// ─────────────────────────────────────
+const VAPID_KEY = 'COLOQUE_AQUI_SUA_VAPID_KEY'; // Firebase Console → Configurações do projeto → Cloud Messaging → Web Push certificates
+
+let pushConfigurado = false;
+
+async function configurarNotificacoesPush() {
+  if (pushConfigurado) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('[passageiro] notificações push não suportadas neste navegador');
+    return;
+  }
+  if (!fbAppInstancia || !meuPassageiroId || !db) return;
+  if (VAPID_KEY === 'COLOQUE_AQUI_SUA_VAPID_KEY') {
+    console.warn('[passageiro] VAPID_KEY ainda não configurada — pulando notificações push');
+    return;
+  }
+
+  try {
+    const permissao = await Notification.requestPermission();
+    if (permissao !== 'granted') {
+      console.warn('[passageiro] permissão de notificação negada pelo usuário');
+      return;
+    }
+
+    const messagingMod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js');
+    const registration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    const messaging = messagingMod.getMessaging(fbAppInstancia);
+    const token = await messagingMod.getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (token) {
+      await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { fcmToken: token }, { merge: true });
+      pushConfigurado = true;
+      console.log('[passageiro] notificações push configuradas');
+    }
+  } catch (e) {
+    console.warn('[passageiro] erro ao configurar notificações push:', e);
+  }
+}
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro
