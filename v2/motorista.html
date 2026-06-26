@@ -356,7 +356,40 @@
       <div class="profile-phone" id="profile-driver-phone">—</div>
       <div class="profile-vehicle" id="profile-driver-vehicle">—</div>
     </div>
+
+    <div class="section-label">MEUS DADOS</div>
+    <div class="form-card" style="margin:0 20px 16px;background:var(--surface);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;">
+      <div class="dado-row"><span>CPF</span><b id="perfil-mot-cpf">—</b></div>
+      <div class="dado-row"><span>E-mail</span><b id="perfil-mot-email">—</b></div>
+      <div class="dado-row"><span>Cidade</span><b id="perfil-mot-cidade">—</b></div>
+      <div class="dado-row"><span>Código de indicação</span><b id="perfil-mot-codigo">—</b></div>
+    </div>
+
+    <button class="btn-secundario-perfil" id="btn-editar-perfil-motorista">✏️ Editar perfil</button>
+    <button class="btn-secundario-perfil" id="btn-suporte-motorista">💬 Contato com o suporte</button>
     <button class="btn-sair" id="btn-sair-motorista">🚪 Sair da conta</button>
+  </section>
+
+  <!-- ══════════════════ EDITAR PERFIL MOTORISTA ══════════════════ -->
+  <section class="screen" id="screen-editar-perfil-motorista">
+    <header class="page-header">
+      <button class="back-btn" data-go="screen-profile">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="page-title">Editar perfil</div>
+    </header>
+    <div class="section-label">DADOS PESSOAIS</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="cadastro-field"><label>Nome completo</label><input type="text" class="cadastro-input" id="ed-mot-nome"></div>
+      <div class="cadastro-field"><label>Celular / WhatsApp</label><input type="tel" class="cadastro-input" id="ed-mot-celular"></div>
+    </div>
+    <div class="section-label">VEÍCULO</div>
+    <div class="form-card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="cadastro-field"><label>Modelo do veículo</label><input type="text" class="cadastro-input" id="ed-mot-veiculo"></div>
+      <div class="cadastro-field"><label>Placa</label><input type="text" class="cadastro-input" id="ed-mot-placa"></div>
+    </div>
+    <div id="ed-mot-erro" class="cadastro-erro" hidden></div>
+    <button class="btn-primary" id="btn-salvar-perfil-motorista">Salvar alterações</button>
   </section>
 
   <!-- Toast -->

@@ -1419,8 +1419,11 @@ async function verificarCadastroMotorista() {
     if (dados.placa) state.motorista.placa = dados.placa;
     if (dados.celular) state.motorista.celular = dados.celular;
     if (dados.cidade) state.motorista.cidade = dados.cidade;
+    if (dados.cpf) state.motorista.cpf = dados.cpf;
+    if (dados.email) state.motorista.email = dados.email;
     state.motorista.categoria = dados.categoria || 'x';
     const nomesCategoria = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
+    const nomesCidade = { madre: 'Madre de Deus', sfc: 'São Francisco do Conde', candeias: 'Candeias', simoes: 'Simões Filho' };
     const elVeiculo = document.getElementById('profile-driver-vehicle');
     if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoria[state.motorista.categoria]}`;
     const elNome = document.getElementById('profile-driver-name');
@@ -1429,6 +1432,14 @@ async function verificarCadastroMotorista() {
     if (elTelefone) elTelefone.textContent = state.motorista.celular || '—';
     const elAvatar = document.querySelector('.profile-avatar');
     if (elAvatar) elAvatar.textContent = (state.motorista.nome || 'M').trim().charAt(0).toUpperCase();
+    const elCpf = document.getElementById('perfil-mot-cpf');
+    if (elCpf && state.motorista.cpf) elCpf.textContent = state.motorista.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    const elEmail = document.getElementById('perfil-mot-email');
+    if (elEmail) elEmail.textContent = state.motorista.email || '—';
+    const elCidade = document.getElementById('perfil-mot-cidade');
+    if (elCidade) elCidade.textContent = nomesCidade[state.motorista.cidade] || '—';
+    const elCodigo = document.getElementById('perfil-mot-codigo');
+    if (elCodigo && meuMotoristaId) elCodigo.textContent = meuMotoristaId.slice(-7).toUpperCase();
     aplicarStatusCadastroMotorista(dados);
   } catch (e) {
     console.warn('[motorista] erro ao verificar cadastro, liberando Home pra não travar:', e);
@@ -1482,6 +1493,54 @@ function mostrarTelaAguardandoAprovacaoMotorista() {
 
 document.getElementById('btn-tentar-cadastro-mot-novamente')?.addEventListener('click', () => {
   go('screen-cadastro-motorista');
+});
+
+document.getElementById('btn-editar-perfil-motorista')?.addEventListener('click', () => {
+  document.getElementById('ed-mot-nome').value = state.motorista.nome || '';
+  document.getElementById('ed-mot-celular').value = state.motorista.celular || '';
+  document.getElementById('ed-mot-veiculo').value = state.motorista.veiculo || '';
+  document.getElementById('ed-mot-placa').value = state.motorista.placa || '';
+  go('screen-editar-perfil-motorista');
+});
+
+document.getElementById('btn-salvar-perfil-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('ed-mot-erro');
+  erroEl.hidden = true;
+  const nome = document.getElementById('ed-mot-nome').value.trim();
+  const celular = document.getElementById('ed-mot-celular').value.trim();
+  const veiculo = document.getElementById('ed-mot-veiculo').value.trim();
+  const placa = document.getElementById('ed-mot-placa').value.trim().toUpperCase();
+
+  if (!nome || nome.split(' ').length < 2) { erroEl.textContent = '⚠️ Informe seu nome completo'; erroEl.hidden = false; return; }
+  if (celular.replace(/\D/g, '').length < 10) { erroEl.textContent = '⚠️ Informe um celular válido com DDD'; erroEl.hidden = false; return; }
+  if (!veiculo || !placa) { erroEl.textContent = '⚠️ Informe o veículo e a placa'; erroEl.hidden = false; return; }
+  if (!firebaseReady || !db || !meuMotoristaId) { erroEl.textContent = '⚠️ Sem conexão com o servidor'; erroEl.hidden = false; return; }
+
+  const btn = document.getElementById('btn-salvar-perfil-motorista');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { nome, celular, veiculo, placa }, { merge: true });
+    state.motorista.nome = nome;
+    state.motorista.celular = celular;
+    state.motorista.veiculo = veiculo;
+    state.motorista.placa = placa;
+    showToast('✅ Perfil atualizado!');
+    go('screen-profile');
+    verificarCadastroMotorista(); // recarrega os dados exibidos
+  } catch (e) {
+    console.error('[motorista] erro ao salvar perfil:', e);
+    erroEl.textContent = '⚠️ Erro ao salvar — tenta de novo';
+    erroEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar alterações';
+  }
+});
+
+document.getElementById('btn-suporte-motorista')?.addEventListener('click', () => {
+  const msg = encodeURIComponent('Olá! Preciso de ajuda com o app do motorista Interliga.');
+  window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
 });
 
 document.getElementById('btn-sair-motorista')?.addEventListener('click', async () => {
