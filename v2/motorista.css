@@ -229,3 +229,4 @@
 
 /* ── PERFIL MOTORISTA extra ── */
 .profile-vehicle { font-size: 13px; color: var(--text-soft); margin-top: 4px; }
+.btn-sair { display: block; width: calc(100% - 40px); margin: 24px 20px 0; padding: 14px; border-radius: 12px; background: rgba(232,0,45,0.1); color: var(--red); font-weight: 700; font-size: 14px; border: none; }

@@ -1365,12 +1365,19 @@ async function verificarCadastroMotorista() {
     const dados = snap.data();
     if (dados.nome) state.motorista.nome = dados.nome;
     if (dados.veiculo) state.motorista.veiculo = dados.veiculo;
+    if (dados.placa) state.motorista.placa = dados.placa;
+    if (dados.celular) state.motorista.celular = dados.celular;
     if (dados.cidade) state.motorista.cidade = dados.cidade;
     state.motorista.categoria = dados.categoria || 'x';
     const nomesCategoria = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
     const elVeiculo = document.getElementById('profile-driver-vehicle');
     if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoria[state.motorista.categoria]}`;
-    if (dados.placa) state.motorista.placa = dados.placa;
+    const elNome = document.getElementById('profile-driver-name');
+    if (elNome) elNome.textContent = state.motorista.nome || 'Motorista';
+    const elTelefone = document.getElementById('profile-driver-phone');
+    if (elTelefone) elTelefone.textContent = state.motorista.celular || '—';
+    const elAvatar = document.querySelector('.profile-avatar');
+    if (elAvatar) elAvatar.textContent = (state.motorista.nome || 'M').trim().charAt(0).toUpperCase();
     aplicarStatusCadastroMotorista(dados);
   } catch (e) {
     console.warn('[motorista] erro ao verificar cadastro, liberando Home pra não travar:', e);
@@ -1423,6 +1430,22 @@ function mostrarTelaAguardandoAprovacaoMotorista() {
 
 document.getElementById('btn-tentar-cadastro-mot-novamente')?.addEventListener('click', () => {
   go('screen-cadastro-motorista');
+});
+
+document.getElementById('btn-sair-motorista')?.addEventListener('click', async () => {
+  if (!confirm('Sair da sua conta? Você vai precisar fazer login de novo pra voltar a usar o app.')) return;
+  try {
+    if (state.online) {
+      pararEscutaCorridas();
+      pararDisponibilidade();
+    }
+    if (authMotorista) await authModRef.signOut(authMotorista);
+    meuMotoristaId = null;
+    go('screen-login-motorista');
+  } catch (e) {
+    console.error('[motorista] erro ao sair:', e);
+    showToast('⚠️ Erro ao sair, tenta de novo');
+  }
 });
 
 function boot() {

@@ -565,6 +565,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: var(--ink); color: white; font-size: 28px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .profile-name { font-size: 18px; font-weight: 700; color: var(--text); }
 .profile-phone { font-size: 13px; color: var(--text-soft); }
+.btn-sair { display: block; width: calc(100% - 40px); margin: 24px 20px 0; padding: 14px; border-radius: 12px; background: rgba(232,0,45,0.1); color: var(--red); font-weight: 700; font-size: 14px; border: none; }
 
 /* ═══════════════════════════════════════
    MODAIS (pagamento, cancelamento)

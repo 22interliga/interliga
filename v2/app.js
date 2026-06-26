@@ -1318,6 +1318,18 @@ function aplicarStatusCadastro(dados) {
     return;
   }
   if (dados.verificacao === 'aprovado') {
+    if (dados.nome) {
+      const elNome = document.getElementById('profile-name');
+      if (elNome) elNome.textContent = dados.nome;
+      const elAvatar = document.querySelector('.profile-avatar');
+      if (elAvatar) elAvatar.textContent = dados.nome.trim().charAt(0).toUpperCase();
+      const elHomeAvatar = document.getElementById('home-avatar');
+      if (elHomeAvatar) elHomeAvatar.textContent = dados.nome.trim().charAt(0).toUpperCase();
+    }
+    if (dados.celular) {
+      const elTelefone = document.getElementById('profile-phone');
+      if (elTelefone) elTelefone.textContent = dados.celular;
+    }
     go('screen-home');
   } else if (dados.verificacao === 'rejeitado') {
     document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
@@ -1882,6 +1894,19 @@ function disparaCorridaAgendada(ag) {
 
   criarCorrida(state.origem, state.destino, preco, 'x');
 }
+
+document.getElementById('btn-sair-passageiro')?.addEventListener('click', async () => {
+  if (!confirm('Sair da sua conta? Você vai precisar fazer login de novo pra voltar a usar o app.')) return;
+  try {
+    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
+    if (authPassageiro) await authModRef.signOut(authPassageiro);
+    meuPassageiroId = null;
+    go('screen-login-passageiro');
+  } catch (e) {
+    console.error('[passageiro] erro ao sair:', e);
+    showToast('⚠️ Erro ao sair, tenta de novo');
+  }
+});
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro
