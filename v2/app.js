@@ -98,6 +98,7 @@ async function initFirebase() {
   } catch (e) {
     console.warn('Firebase não disponível — app funciona em modo local:', e);
     firebaseReady = false;
+    alert('⚠️ Erro ao conectar no Firebase:\n\n' + (e.message || e) + '\n\nManda esse texto pro suporte.');
   }
 }
 

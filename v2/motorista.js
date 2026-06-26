@@ -64,6 +64,7 @@ async function initFirebase() {
   } catch (e) {
     console.warn('Firebase nao disponivel:', e);
     firebaseReady = false;
+    alert('⚠️ Erro ao conectar no Firebase:\n\n' + (e.message || e) + '\n\nManda esse texto pro suporte.');
     meuMotoristaId = obterMotoristaIdReserva();
     go('screen-home'); // modo totalmente offline — libera a Home sem cadastro, já que não tem como verificar nada
   }
