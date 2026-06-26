@@ -209,6 +209,7 @@ function publicarDisponibilidade() {
         nome: state.motorista.nome,
         avaliacao: state.motorista.avaliacao,
         cidade: state.motorista.cidade || 'madre',
+        categoria: state.motorista.categoria || 'x',
         lat: pos.coords.latitude,
         lon: pos.coords.longitude,
         atualizadoEm: fb.serverTimestamp(),
@@ -596,9 +597,14 @@ function onEnterOngoing() {
   const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
   setText('ongoing-origem', corrida.origem);
   setText('ongoing-destino', corrida.destino);
-  setText('passenger-name', 'Passageiro');
-  setText('passenger-avatar', 'PS');
-  setText('passenger-rating', '⭐ 4.9');
+  setText('passenger-name', corrida.passageiroNome || 'Passageiro');
+  setText('passenger-avatar', (corrida.passageiroNome || 'PS').slice(0, 2).toUpperCase());
+  setText('passenger-rating', '⭐ —');
+  if (corrida.passageiroId && firebaseReady && db) {
+    fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)).then(snap => {
+      if (snap.exists() && snap.data().avaliacao) setText('passenger-rating', '⭐ ' + snap.data().avaliacao);
+    }).catch(() => {});
+  }
 
   chegouAoCliente = false;
   sequenciaRotaMotorista = [];
@@ -875,8 +881,81 @@ function finalizarCorrida() {
 
   showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.preco || 18).toFixed(2).replace('.', ','));
   if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
-  go('screen-home');
+  abrirTelaAvaliarPassageiro(corrida.passageiroId, corrida.passageiroNome, corrida.id);
   atualizarStatsHome();
+}
+
+// ─────────────────────────────────────
+// AVALIAÇÃO MÚTUA — motorista avalia passageiro depois da corrida
+// ─────────────────────────────────────
+let notaSelecionadaPassageiro = 0;
+let avaliarPassageiroId = null;
+let avaliarCorridaIdMotorista = null;
+
+function abrirTelaAvaliarPassageiro(passageiroId, passageiroNome, corridaId) {
+  avaliarPassageiroId = passageiroId || null;
+  avaliarCorridaIdMotorista = corridaId || null;
+  notaSelecionadaPassageiro = 0;
+  renderEstrelasPassageiro();
+  document.getElementById('avaliar-pax-nome').textContent = passageiroNome || 'o passageiro';
+  document.getElementById('avaliar-pax-comentario').value = '';
+  if (!avaliarPassageiroId) { go('screen-home'); return; } // corrida antiga sem passageiroId — não tem quem avaliar
+  go('screen-avaliar-passageiro');
+}
+
+function renderEstrelasPassageiro() {
+  document.querySelectorAll('#avaliar-pax-estrelas span').forEach(el => {
+    const n = Number(el.dataset.nota);
+    el.textContent = n <= notaSelecionadaPassageiro ? '★' : '☆';
+    el.style.color = n <= notaSelecionadaPassageiro ? 'var(--orange)' : 'var(--text-soft)';
+  });
+}
+
+document.querySelectorAll('#avaliar-pax-estrelas span').forEach(el => {
+  el.style.cursor = 'pointer';
+  el.addEventListener('click', () => {
+    notaSelecionadaPassageiro = Number(el.dataset.nota);
+    renderEstrelasPassageiro();
+  });
+});
+
+document.getElementById('btn-enviar-avaliacao-passageiro')?.addEventListener('click', async () => {
+  if (notaSelecionadaPassageiro === 0) { showToast('⚠️ Toca numa estrela pra dar a nota'); return; }
+  const comentario = document.getElementById('avaliar-pax-comentario').value.trim();
+  await enviarAvaliacao('passageiro', avaliarPassageiroId, notaSelecionadaPassageiro, comentario, avaliarCorridaIdMotorista);
+  showToast('✅ Avaliação enviada!');
+  go('screen-home');
+});
+
+document.getElementById('link-pular-avaliacao-passageiro')?.addEventListener('click', () => go('screen-home'));
+
+// Atualiza a média de avaliação de forma segura mesmo com várias avaliações
+// chegando ao mesmo tempo (usa transação do Firebase).
+async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
+  if (!firebaseReady || !db || !paraId) return;
+  const colecao = tipo === 'motorista' ? 'motoristas' : 'passageiros';
+  try {
+    await fb.addDoc(fb.collection(db, 'avaliacoes'), {
+      tipo, paraId, nota, comentario, corridaId,
+      criadoEm: fb.serverTimestamp(),
+    });
+    await fb.runTransaction(db, async (tx) => {
+      const ref = fb.doc(db, colecao, paraId);
+      const snap = await tx.get(ref);
+      const dados = snap.data() || {};
+      const totalAtual = Number(dados.totalAvaliacoes || 0);
+      const somaAtual = Number(dados.somaAvaliacoes || 0);
+      const novoTotal = totalAtual + 1;
+      const novaSoma = somaAtual + nota;
+      tx.update(ref, {
+        totalAvaliacoes: novoTotal,
+        somaAvaliacoes: novaSoma,
+        avaliacao: (novaSoma / novoTotal).toFixed(1),
+      });
+    });
+  } catch (e) {
+    console.warn('[motorista] erro ao enviar avaliação:', e);
+  }
 }
 
 // ─────────────────────────────────────
@@ -1287,6 +1366,10 @@ async function verificarCadastroMotorista() {
     if (dados.nome) state.motorista.nome = dados.nome;
     if (dados.veiculo) state.motorista.veiculo = dados.veiculo;
     if (dados.cidade) state.motorista.cidade = dados.cidade;
+    state.motorista.categoria = dados.categoria || 'x';
+    const nomesCategoria = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
+    const elVeiculo = document.getElementById('profile-driver-vehicle');
+    if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoria[state.motorista.categoria]}`;
     if (dados.placa) state.motorista.placa = dados.placa;
     aplicarStatusCadastroMotorista(dados);
   } catch (e) {

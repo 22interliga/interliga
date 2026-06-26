@@ -122,6 +122,22 @@
     </div>
   </section>
 
+  <!-- ══════════════════ AVALIAR PASSAGEIRO ══════════════════ -->
+  <section class="screen" id="screen-avaliar-passageiro">
+    <div class="splash" style="background:var(--bg);justify-content:flex-start;padding-top:60px;">
+      <div style="font-size:48px;">✅</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text);margin-top:12px;">Corrida finalizada!</div>
+      <div style="font-size:14px;color:var(--text-soft);margin:6px 0 24px;text-align:center;padding:0 30px;">Como foi a viagem com <b id="avaliar-pax-nome">o passageiro</b>?</div>
+      <div id="avaliar-pax-estrelas" style="display:flex;gap:10px;font-size:40px;margin-bottom:20px;">
+        <span data-nota="1">☆</span><span data-nota="2">☆</span><span data-nota="3">☆</span><span data-nota="4">☆</span><span data-nota="5">☆</span>
+      </div>
+      <textarea id="avaliar-pax-comentario" placeholder="Comentário (opcional)" style="width:calc(100% - 60px);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:14px;min-height:70px;margin-bottom:16px;"></textarea>
+      <button class="btn-primary" style="width:calc(100% - 60px);margin:0 0 10px;" id="btn-enviar-avaliacao-passageiro">Enviar avaliação</button>
+      <div class="link-secundario" id="link-pular-avaliacao-passageiro">Pular</div>
+    </div>
+  </section>
+
+
   <!-- ══════════════════ CONTA BLOQUEADA ══════════════════ -->
   <section class="screen" id="screen-bloqueado-motorista">
     <div class="splash" style="background:var(--bg);">
