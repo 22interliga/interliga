@@ -37,6 +37,24 @@ let meuPassageiroId = null;
 let authPassageiro = null;
 let authModRef = null;
 
+// Espera o Firebase terminar de conectar (até ~8s), em vez de desistir na hora.
+// Cobre o caso de alguém preencher o cadastro rápido demais, antes da conexão terminar.
+function esperarFirebasePronto(timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    if (firebaseReady && db && authPassageiro) return resolve(true);
+    const inicio = Date.now();
+    const intervalo = setInterval(() => {
+      if (firebaseReady && db && authPassageiro) {
+        clearInterval(intervalo);
+        resolve(true);
+      } else if (Date.now() - inicio > timeoutMs) {
+        clearInterval(intervalo);
+        resolve(false);
+      }
+    }, 300);
+  });
+}
+
 async function initFirebase() {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
@@ -1215,10 +1233,18 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
   if (senha.length < 6) return mostrarErro('A senha precisa ter pelo menos 6 caracteres');
   if (senha !== senhaConfirma) return mostrarErro('As senhas não são iguais');
   if (!selfiePassageiroBase64) return mostrarErro('Tire uma selfie pra concluir o cadastro');
-  if (!firebaseReady || !db || !authPassageiro) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
 
   const btn = document.getElementById('btn-enviar-cadastro-passageiro');
   btn.disabled = true;
+  btn.textContent = 'Conectando...';
+
+  const pronto = await esperarFirebasePronto();
+  if (!pronto) {
+    btn.disabled = false;
+    btn.textContent = 'Enviar cadastro';
+    return mostrarErro('Sem conexão com o servidor — confira sua internet e tenta de novo');
+  }
+
   btn.textContent = 'Enviando...';
 
   try {
@@ -1254,10 +1280,18 @@ document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click',
   const email = document.getElementById('login-pax-email').value.trim();
   const senha = document.getElementById('login-pax-senha').value;
   if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.hidden = false; return; }
-  if (!authPassageiro) { erroEl.textContent = '⚠️ Ainda conectando ao servidor, tenta de novo em um instante'; erroEl.hidden = false; return; }
 
   const btn = document.getElementById('btn-fazer-login-passageiro');
   btn.disabled = true;
+  btn.textContent = 'Conectando...';
+  const pronto = await esperarFirebasePronto();
+  if (!pronto) {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    erroEl.textContent = '⚠️ Sem conexão com o servidor — confira sua internet e tenta de novo';
+    erroEl.hidden = false;
+    return;
+  }
   btn.textContent = 'Entrando...';
   try {
     await authModRef.signInWithEmailAndPassword(authPassageiro, email, senha);

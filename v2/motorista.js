@@ -9,6 +9,23 @@ let fb = {};
 let authMotorista = null;
 let authModRef = null;
 
+// Espera o Firebase terminar de conectar (até ~8s), em vez de desistir na hora.
+function esperarFirebasePronto(timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    if (firebaseReady && db && authMotorista) return resolve(true);
+    const inicio = Date.now();
+    const intervalo = setInterval(() => {
+      if (firebaseReady && db && authMotorista) {
+        clearInterval(intervalo);
+        resolve(true);
+      } else if (Date.now() - inicio > timeoutMs) {
+        clearInterval(intervalo);
+        resolve(false);
+      }
+    }, 300);
+  });
+}
+
 async function initFirebase() {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
@@ -1271,10 +1288,18 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
   if (!fotosCadastroMotorista.cnh) return mostrarErro('Envie a foto da CNH');
   if (!fotosCadastroMotorista.crlv) return mostrarErro('Envie a foto do CRLV (documento do veículo)');
   if (!fotosCadastroMotorista.comprovante) return mostrarErro('Envie a foto do comprovante de residência');
-  if (!firebaseReady || !db || !authMotorista) return mostrarErro('Sem conexão com o servidor, tenta de novo em alguns segundos');
 
   const btn = document.getElementById('btn-enviar-cadastro-motorista');
   btn.disabled = true;
+  btn.textContent = 'Conectando...';
+
+  const pronto = await esperarFirebasePronto();
+  if (!pronto) {
+    btn.disabled = false;
+    btn.textContent = 'Enviar cadastro';
+    return mostrarErro('Sem conexão com o servidor — confira sua internet e tenta de novo');
+  }
+
   btn.textContent = 'Enviando...';
 
   try {
@@ -1317,10 +1342,18 @@ document.getElementById('btn-fazer-login-motorista')?.addEventListener('click', 
   const email = document.getElementById('login-mot-email').value.trim();
   const senha = document.getElementById('login-mot-senha').value;
   if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.hidden = false; return; }
-  if (!authMotorista) { erroEl.textContent = '⚠️ Ainda conectando ao servidor, tenta de novo em um instante'; erroEl.hidden = false; return; }
 
   const btn = document.getElementById('btn-fazer-login-motorista');
   btn.disabled = true;
+  btn.textContent = 'Conectando...';
+  const pronto = await esperarFirebasePronto();
+  if (!pronto) {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    erroEl.textContent = '⚠️ Sem conexão com o servidor — confira sua internet e tenta de novo';
+    erroEl.hidden = false;
+    return;
+  }
   btn.textContent = 'Entrando...';
   try {
     await authModRef.signInWithEmailAndPassword(authMotorista, email, senha);
