@@ -1504,7 +1504,7 @@ document.getElementById('btn-sair-motorista')?.addEventListener('click', async (
 // NOTIFICAÇÕES PUSH — recebe aviso de corrida nova mesmo com o app fechado/
 // em segundo plano (precisa da chave VAPID do Firebase Console, ver abaixo)
 // ─────────────────────────────────────
-const VAPID_KEY = 'COLOQUE_AQUI_SUA_VAPID_KEY'; // Firebase Console → Configurações do projeto → Cloud Messaging → Web Push certificates
+const VAPID_KEY = 'BNlkkjvYwHosBBv6UWCzKWCB58rNoEP1YrlGFsXetoPFLDMWUNdA2r4VqtD4sHwgdb_yyKbOBydT2dxKDXWrrY4'; // Firebase Console → Configurações do projeto → Cloud Messaging → Web Push certificates
 
 let pushConfigurado = false;
 
@@ -1515,7 +1515,7 @@ async function configurarNotificacoesPush() {
     return;
   }
   if (!fbAppInstancia || !meuMotoristaId || !db) return;
-  if (VAPID_KEY === 'COLOQUE_AQUI_SUA_VAPID_KEY') {
+  if (VAPID_KEY === 'BNlkkjvYwHosBBv6UWCzKWCB58rNoEP1YrlGFsXetoPFLDMWUNdA2r4VqtD4sHwgdb_yyKbOBydT2dxKDXWrrY4') {
     console.warn('[motorista] VAPID_KEY ainda não configurada — pulando notificações push');
     return;
   }
