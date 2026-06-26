@@ -91,6 +91,7 @@ const state = {
   origem: null,        // { texto, lat, lon }
   destino: null,        // { texto, lat, lon }
   categoriaEscolhida: 'x',
+  formaPagamento: 'pix',
   precos: { x: null, plus: null, van: null },
   corridaId: null,
   corridaLocalId: null, // ID fixo do registro no localStorage — nunca muda, mesmo após corridaId virar o ID do Firebase
@@ -602,6 +603,7 @@ async function criarCorrida(origem, destino, preco, categoria) {
     origemLat: origem.lat, origemLon: origem.lon,
     destinoLat: destino.lat, destinoLon: destino.lon,
     preco, categoria, cidade,
+    formaPagamento: state.formaPagamento || 'pix',
     passageiroId: meuPassageiroId || null,
     passageiroNome: localStorage.getItem('interliga_pax_nome') || 'Passageiro',
     status: 'aguardando',
@@ -627,7 +629,7 @@ async function criarCorrida(origem, destino, preco, categoria) {
       // Monta a fila de prioridade: motorista mais próximo primeiro (empate decide pela melhor avaliação).
       // Se ainda não houver motoristas disponíveis cadastrados, fica em modo aberto (oferece pra todo mundo).
       try {
-        const fila = await montarFilaPrioridade(origem, cidade);
+        const fila = await montarFilaPrioridade(origem, cidade, categoria);
         if (fila.length > 0) {
           await fb.updateDoc(docRef, {
             filaMotoristas: fila,
@@ -655,7 +657,7 @@ async function criarCorrida(origem, destino, preco, categoria) {
 // ─────────────────────────────────────
 // FILA DE PRIORIDADE — monta a ordem de oferta por proximidade (e avaliação em caso de empate)
 // ─────────────────────────────────────
-async function montarFilaPrioridade(origem, cidade) {
+async function montarFilaPrioridade(origem, cidade, categoria) {
   if (!firebaseReady || !db) return [];
   try {
     const snap = await fb.getDocs(fb.collection(db, 'motoristas_disponiveis'));
@@ -669,6 +671,8 @@ async function montarFilaPrioridade(origem, cidade) {
       if (typeof d.lat !== 'number' || typeof d.lon !== 'number') return;
       // Motorista é fixo na cidade dele — não entra na fila de corrida de outra cidade
       if (cidade && d.cidade && d.cidade !== cidade) return;
+      // Só entra na fila se o veículo dele for da categoria pedida (X / Plus / Van)
+      if (categoria && d.categoria && d.categoria !== categoria) return;
       const distanciaKm = (origem?.lat && origem?.lon)
         ? haversineKm(origem.lat, origem.lon, d.lat, d.lon)
         : 999;
@@ -1451,6 +1455,7 @@ document.querySelectorAll('.payment-option').forEach(btn => {
     document.querySelectorAll('.payment-option').forEach(b => b.classList.remove('is-selected'));
     btn.classList.add('is-selected');
     document.getElementById('payment-select-label').textContent = btn.dataset.label;
+    state.formaPagamento = btn.dataset.payment;
     document.getElementById('payment-modal').hidden = true;
   });
 });

@@ -321,7 +321,7 @@ textarea.inp { resize: vertical; }
             <div class="card">
               <div class="tbl-wrap">
                 <table>
-                  <thead><tr><th>MOTORISTA</th><th>VEÍCULO</th><th>GANHOS (TOTAL)</th><th>AVALIAÇÃO</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
+                  <thead><tr><th>MOTORISTA</th><th>VEÍCULO</th><th>CATEGORIA</th><th>GANHOS (TOTAL)</th><th>AVALIAÇÃO</th><th>STATUS</th><th>AÇÃO</th></tr></thead>
                   <tbody id="motoristas-tbody"><tr><td colspan="5" style="text-align:center;color:var(--t2);padding:24px;">Carregando...</td></tr></tbody>
                 </table>
               </div>
@@ -383,11 +383,12 @@ textarea.inp { resize: vertical; }
           <!-- REPASSES -->
           <div class="section" id="s-repasses">
             <div class="section-header"><div class="section-title">💸 Repasses</div></div>
+            <p style="color:var(--t2);font-size:12px;margin-bottom:16px;">Dinheiro e Pix: o motorista já recebeu direto do passageiro — ele deve a comissão pra plataforma. Cartão e Carteira: o valor fica com a plataforma — ela deve repassar a parte do motorista. ⚠️ Cartão/Carteira ainda não processam pagamento online de verdade — esse número é só contábil, pra organizar quando a integração de pagamento for ativada.</p>
             <div class="stat-grid">
-              <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" id="rep-total-bruto">—</div><div class="stat-lbl">Faturado pelos motoristas (bruto)</div></div>
+              <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" id="rep-total-bruto">—</div><div class="stat-lbl">Faturamento total (todas as formas)</div></div>
               <div class="stat-card"><div class="stat-icon">🏢</div><div class="stat-val" id="rep-comissao-total">—</div><div class="stat-lbl">Comissão da plataforma</div></div>
-              <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-val" id="rep-pendente">—</div><div class="stat-lbl">Aguardando repasse</div></div>
-              <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val" id="rep-pago">—</div><div class="stat-lbl">Já repassado</div></div>
+              <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-val" id="rep-pendente">—</div><div class="stat-lbl">Saldo em aberto (a pagar + a cobrar)</div></div>
+              <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val" id="rep-pago">—</div><div class="stat-lbl">Já acertado (histórico)</div></div>
             </div>
 
             <div class="card" style="margin-bottom:14px;">
@@ -404,8 +405,8 @@ textarea.inp { resize: vertical; }
               <div class="ct" style="margin-bottom:14px;">Repasses por Motorista</div>
               <div class="tbl-wrap">
                 <table>
-                  <thead><tr><th>MOTORISTA</th><th>GANHO BRUTO</th><th>COMISSÃO</th><th>A REPASSAR</th><th>JÁ PAGO</th><th>PENDENTE</th><th>AÇÃO</th></tr></thead>
-                  <tbody id="repasses-tbody"><tr><td colspan="7" style="text-align:center;color:var(--t2);padding:24px;">Carregando...</td></tr></tbody>
+                  <thead><tr><th>MOTORISTA</th><th>RECEBEU EM MÃOS (dinheiro/pix)</th><th>RECEBIDO PELA PLATAFORMA (cartão/carteira)</th><th>COMISSÃO TOTAL</th><th>SALDO</th><th>AÇÃO</th></tr></thead>
+                  <tbody id="repasses-tbody"><tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Carregando...</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -1602,7 +1603,7 @@ async function carregarMotoristas(filtro = 'todos'){
 
     const tbody = document.getElementById('motoristas-tbody');
     if (filtrados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista cadastrado ainda</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista cadastrado ainda</td></tr>';
       return;
     }
     tbody.innerHTML = filtrados.map(m => {
@@ -1614,7 +1615,13 @@ async function carregarMotoristas(filtro = 'todos'){
       const btnHtml = bloqueado
         ? `<button class="pbtn" style="background:var(--green);" onclick="alternarBloqueioMotorista('${m.id}', false)">✓ Ativar</button>`
         : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioMotorista('${m.id}', true)">🚫 Bloquear</button>`;
-      return `<tr><td><b>${m.nome || 'Sem nome'}</b></td><td>${m.veiculo || '—'} · ${m.placa || '—'}</td><td>${formatMoeda(ganhoTotal)}</td><td>⭐ ${m.avaliacao || '—'}</td><td>${statusHtml}</td><td>${btnHtml}</td></tr>`;
+      const categoriaAtual = m.categoria || 'x';
+      const seletorCategoria = `<select class="inp" style="padding:6px 8px;font-size:13px;" onchange="alterarCategoriaMotorista('${m.id}', this.value)">
+        <option value="x" ${categoriaAtual==='x'?'selected':''}>🚗 Interliga X</option>
+        <option value="plus" ${categoriaAtual==='plus'?'selected':''}>🚙 Interliga Plus</option>
+        <option value="van" ${categoriaAtual==='van'?'selected':''}>🚐 Interliga Van</option>
+      </select>`;
+      return `<tr><td><b>${m.nome || 'Sem nome'}</b></td><td>${m.veiculo || '—'} · ${m.placa || '—'}</td><td>${seletorCategoria}</td><td>${formatMoeda(ganhoTotal)}</td><td>⭐ ${m.avaliacao || '—'}</td><td>${statusHtml}</td><td>${btnHtml}</td></tr>`;
     }).join('');
   } catch (e) {
     console.error('[admin] erro ao carregar motoristas:', e);
@@ -1647,6 +1654,18 @@ async function carregarPassageiros(){
   } catch (e) {
     console.error('[admin] erro ao carregar passageiros:', e);
     showToast('⚠️ Erro ao carregar passageiros');
+  }
+}
+
+async function alterarCategoriaMotorista(id, categoria){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', id), { categoria });
+    showToast('✅ Categoria atualizada!');
+    const m = _todosMotoristasCache.find(x => x.id === id);
+    if (m) m.categoria = categoria;
+  } catch (e) {
+    console.error('[admin] erro ao alterar categoria do motorista:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
   }
 }
 
@@ -1792,53 +1811,79 @@ async function carregarRepasses(){
     _todosMotoristasCache = motoristas;
     _todasCorridasCache = corridas;
 
-    let totalBrutoGeral = 0, totalPagoGeral = 0, totalComissaoGeral = 0;
+    let totalRecebidoDiretoGeral = 0, totalRecebidoPlataformaGeral = 0, totalComissaoGeral = 0, totalAjusteGeral = 0;
     const linhas = motoristas.map(m => {
-      const ganhoBruto = corridas.filter(c => c.motoristaId === m.id && c.status === 'finalizada').reduce((acc, c) => acc + Number(c.preco || 0), 0);
-      const comissao = ganhoBruto * (comissaoPct / 100);
-      const aRepassar = ganhoBruto - comissao;
-      const jaPago = Math.min(pagos[m.id] || 0, aRepassar);
-      const pendente = aRepassar - jaPago;
-      totalBrutoGeral += ganhoBruto;
-      totalComissaoGeral += comissao;
-      totalPagoGeral += jaPago;
-      return { id: m.id, nome: m.nome || 'Sem nome', ganhoBruto, comissao, aRepassar, jaPago, pendente };
-    }).filter(l => l.ganhoBruto > 0);
+      const corridasMotorista = corridas.filter(c => c.motoristaId === m.id && c.status === 'finalizada');
+      // Dinheiro/Pix: o motorista já recebeu direto do passageiro, na hora
+      const recebidoDireto = corridasMotorista
+        .filter(c => !c.formaPagamento || c.formaPagamento === 'dinheiro' || c.formaPagamento === 'pix')
+        .reduce((acc, c) => acc + Number(c.preco || 0), 0);
+      // Cartão/Carteira: fica retido com a plataforma (quando o pagamento online estiver de fato integrado)
+      const recebidoPlataforma = corridasMotorista
+        .filter(c => c.formaPagamento === 'cartao' || c.formaPagamento === 'carteira')
+        .reduce((acc, c) => acc + Number(c.preco || 0), 0);
 
-    document.getElementById('rep-total-bruto').textContent = formatMoeda(totalBrutoGeral);
+      const ganhoBruto = recebidoDireto + recebidoPlataforma;
+      const comissao = ganhoBruto * (comissaoPct / 100);
+      // Saldo: positivo = plataforma deve ao motorista (ganhou em cartão, ainda não recebeu);
+      // negativo = motorista deve à plataforma (recebeu em dinheiro/pix, e a comissão sai desse valor)
+      const saldoBruto = recebidoPlataforma - comissao;
+      const ajuste = pagos[m.id] || 0; // valor já acertado (pago ou cobrado), registrado pelo admin
+      const saldo = saldoBruto - ajuste;
+
+      totalRecebidoDiretoGeral += recebidoDireto;
+      totalRecebidoPlataformaGeral += recebidoPlataforma;
+      totalComissaoGeral += comissao;
+      totalAjusteGeral += ajuste;
+
+      return { id: m.id, nome: m.nome || 'Sem nome', recebidoDireto, recebidoPlataforma, comissao, saldo };
+    }).filter(l => (l.recebidoDireto + l.recebidoPlataforma) > 0);
+
+    document.getElementById('rep-total-bruto').textContent = formatMoeda(totalRecebidoDiretoGeral + totalRecebidoPlataformaGeral);
     document.getElementById('rep-comissao-total').textContent = formatMoeda(totalComissaoGeral);
-    document.getElementById('rep-pago').textContent = formatMoeda(totalPagoGeral);
-    document.getElementById('rep-pendente').textContent = formatMoeda(totalBrutoGeral - totalComissaoGeral - totalPagoGeral);
+    document.getElementById('rep-pago').textContent = formatMoeda(totalAjusteGeral);
+    document.getElementById('rep-pendente').textContent = formatMoeda(linhas.reduce((acc, l) => acc + Math.abs(l.saldo), 0));
 
     const tbody = document.getElementById('repasses-tbody');
     if (linhas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista com corridas concluídas ainda</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista com corridas concluídas ainda</td></tr>';
       return;
     }
-    tbody.innerHTML = linhas.map(l => `
-      <tr><td><b>${l.nome}</b></td><td>${formatMoeda(l.ganhoBruto)}</td><td style="color:var(--t2);">- ${formatMoeda(l.comissao)}</td><td><b>${formatMoeda(l.aRepassar)}</b></td><td>${formatMoeda(l.jaPago)}</td><td>${formatMoeda(l.pendente)}</td>
-      <td>${l.pendente > 0.01 ? `<button class="pbtn" onclick="marcarRepasseComoPago('${l.id}', ${l.aRepassar})">Pagar</button>` : '✅ Em dia'}</td></tr>
-    `).join('');
+    tbody.innerHTML = linhas.map(l => {
+      const saldoTexto = Math.abs(l.saldo) < 0.01
+        ? '✅ Em dia'
+        : l.saldo > 0
+          ? `<b style="color:var(--green)">A pagar: ${formatMoeda(l.saldo)}</b>`
+          : `<b style="color:var(--red)">A cobrar: ${formatMoeda(Math.abs(l.saldo))}</b>`;
+      const botao = Math.abs(l.saldo) < 0.01
+        ? '—'
+        : `<button class="pbtn" onclick="registrarAcertoRepasse('${l.id}', ${l.saldo})">${l.saldo > 0 ? 'Marcar pago' : 'Marcar cobrado'}</button>`;
+      return `<tr><td><b>${l.nome}</b></td><td>${formatMoeda(l.recebidoDireto)}</td><td>${formatMoeda(l.recebidoPlataforma)}</td><td style="color:var(--t2);">${formatMoeda(l.comissao)}</td><td>${saldoTexto}</td><td>${botao}</td></tr>`;
+    }).join('');
   } catch (e) {
     console.error('[admin] erro ao carregar repasses:', e);
     showToast('⚠️ Erro ao carregar repasses');
   }
 }
 
-async function marcarRepasseComoPago(motoristaId, totalGanho){
+async function registrarAcertoRepasse(motoristaId, saldoAtual){
   if (!dbAdmin) return;
   try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'repasses_pagos', motoristaId));
+    const ajusteAnterior = snap.exists() ? Number(snap.data().totalPago || 0) : 0;
     await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'repasses_pagos', motoristaId), {
-      totalPago: totalGanho,
+      totalPago: ajusteAnterior + saldoAtual,
       atualizadoEm: fbAdmin.serverTimestamp(),
     });
-    showToast('💸 Repasse marcado como pago!');
+    showToast(saldoAtual > 0 ? '✅ Pagamento registrado!' : '✅ Cobrança registrada!');
     carregarRepasses();
   } catch (e) {
-    console.error('[admin] erro ao marcar repasse como pago:', e);
-    showToast('⚠️ Erro ao registrar o pagamento');
+    console.error('[admin] erro ao registrar acerto:', e);
+    showToast('⚠️ Erro ao salvar — confirme as regras do Firestore');
   }
 }
+
+
 
 let adminMapInstance = null;
 let adminMapMarkers = [];
