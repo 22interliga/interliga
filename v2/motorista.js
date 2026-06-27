@@ -102,6 +102,81 @@ function obterMotoristaIdReserva() {
 let meuMotoristaId = null; // definido de verdade pelo login (UID do Firebase Auth)
 
 // ─────────────────────────────────────
+// CARTEIRA — saldo calculado por extrato (mesmo padrão do app.js)
+// ─────────────────────────────────────
+async function obterSaldoCarteira(uid) {
+  if (!firebaseReady || !db || !uid) return 0;
+  try {
+    const snap = await fb.getDocs(fb.query(fb.collection(db, 'carteira_transacoes'), fb.where('uid', '==', uid)));
+    let saldo = 0;
+    snap.forEach(d => { saldo += Number(d.data().valor || 0); });
+    return saldo;
+  } catch (e) {
+    console.warn('[motorista] erro ao calcular saldo da carteira:', e);
+    return 0;
+  }
+}
+
+async function lancarCarteira(uid, valor, motivo, corridaId = null) {
+  if (!firebaseReady || !db || !uid || !valor) return;
+  try {
+    await fb.addDoc(fb.collection(db, 'carteira_transacoes'), {
+      uid, valor, motivo, corridaId,
+      criadoEm: fb.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('[motorista] erro ao lançar na carteira:', e);
+  }
+}
+
+async function resolverCodigoIndicacao(codigo) {
+  if (!firebaseReady || !db || !codigo) return null;
+  try {
+    const [snapPax, snapMot] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'passageiros'), fb.where('codigoIndicacao', '==', codigo))),
+      fb.getDocs(fb.query(fb.collection(db, 'motoristas'), fb.where('codigoIndicacao', '==', codigo))),
+    ]);
+    if (!snapPax.empty) return { uid: snapPax.docs[0].id, tipo: 'passageiro' };
+    if (!snapMot.empty) return { uid: snapMot.docs[0].id, tipo: 'motorista' };
+    return null;
+  } catch (e) {
+    console.warn('[motorista] erro ao resolver código de indicação:', e);
+    return null;
+  }
+}
+
+// Credita a recompensa de indicação de quem indicou o PASSAGEIRO dessa corrida:
+// R$ fixo (configurável) na primeira corrida do indicado, e % (configurável) nas seguintes, pra sempre.
+async function processarRecompensaIndicacao(corrida) {
+  if (!firebaseReady || !db || !corrida?.passageiroId) return;
+  try {
+    const snapPax = await fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId));
+    if (!snapPax.exists()) return;
+    const pax = snapPax.data();
+    if (!pax.indicadoPor?.uid) return; // esse passageiro não foi indicado por ninguém
+
+    const snapConfig = await fb.getDoc(fb.doc(db, 'config', 'indicacao'));
+    const config = snapConfig.exists() ? snapConfig.data() : { valorPrimeiraCorrida: 0, percentualContinuo: 0 };
+
+    if (!pax.bonusIndicacaoPago) {
+      // Primeira corrida do indicado — credita o valor fixo
+      if (config.valorPrimeiraCorrida > 0) {
+        await lancarCarteira(pax.indicadoPor.uid, config.valorPrimeiraCorrida, 'Bônus: primeira corrida de indicado', corrida.id);
+      }
+      await fb.setDoc(fb.doc(db, 'passageiros', corrida.passageiroId), { bonusIndicacaoPago: true }, { merge: true });
+    } else if (config.percentualContinuo > 0) {
+      // Corridas seguintes — credita o percentual sobre o valor da corrida
+      const valorCredito = Number(corrida.preco || 0) * (config.percentualContinuo / 100);
+      if (valorCredito > 0) {
+        await lancarCarteira(pax.indicadoPor.uid, valorCredito, `Indicação: ${config.percentualContinuo}% de corrida`, corrida.id);
+      }
+    }
+  } catch (e) {
+    console.warn('[motorista] erro ao processar recompensa de indicação:', e);
+  }
+}
+
+// ─────────────────────────────────────
 // ESTADO
 // ─────────────────────────────────────
 const state = {
@@ -238,6 +313,7 @@ function publicarDisponibilidade() {
         avaliacao: state.motorista.avaliacao,
         cidade: state.motorista.cidade || 'madre',
         categoria: state.motorista.categoria || 'x',
+        categorias: state.motorista.categorias || [state.motorista.categoria || 'x'],
         lat: pos.coords.latitude,
         lon: pos.coords.longitude,
         atualizadoEm: fb.serverTimestamp(),
@@ -903,6 +979,13 @@ function finalizarCorrida() {
     fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), { status: 'finalizada' }).catch(() => {});
   }
 
+  // Débito automático se o passageiro escolheu pagar pela Carteira do app
+  if (corrida.formaPagamento === 'carteira' && corrida.passageiroId) {
+    lancarCarteira(corrida.passageiroId, -Number(corrida.preco || 0), 'Pagamento de corrida', corrida.id);
+  }
+  // Recompensa de indicação (bônus de quem indicou esse passageiro)
+  processarRecompensaIndicacao(corrida);
+
   state.corridaAtual = null;
   state.corridaAtualId = null;
   state.emCorridaAtiva = false;
@@ -1325,6 +1408,10 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
       const cred = await authModRef.createUserWithEmailAndPassword(authMotorista, email, senha);
       meuMotoristaId = cred.user.uid;
     }
+
+    const codigoDigitado = document.getElementById('cad-mot-codigo-indicacao').value.trim().toUpperCase();
+    const indicadoPor = codigoDigitado ? await resolverCodigoIndicacao(codigoDigitado) : null;
+
     await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
       nome, celular, email, cpf, veiculo, placa, cidade,
       avaliacao: state.motorista.avaliacao || '5.0',
@@ -1333,6 +1420,9 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
       docCrlv: fotosCadastroMotorista.crlv,
       docComprovante: fotosCadastroMotorista.comprovante,
       verificacao: 'pendente',
+      codigoIndicacao: meuMotoristaId.slice(-7).toUpperCase(),
+      indicadoPor: indicadoPor || null,
+      bonusIndicacaoPago: false,
       atualizadoEm: fb.serverTimestamp(),
     }, { merge: true });
 
@@ -1422,10 +1512,12 @@ async function verificarCadastroMotorista() {
     if (dados.cpf) state.motorista.cpf = dados.cpf;
     if (dados.email) state.motorista.email = dados.email;
     state.motorista.categoria = dados.categoria || 'x';
+    state.motorista.categorias = Array.isArray(dados.categorias) ? dados.categorias : [state.motorista.categoria];
     const nomesCategoria = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
     const nomesCidade = { madre: 'Madre de Deus', sfc: 'São Francisco do Conde', candeias: 'Candeias', simoes: 'Simões Filho' };
     const elVeiculo = document.getElementById('profile-driver-vehicle');
-    if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoria[state.motorista.categoria]}`;
+    const nomesCategoriasTexto = (state.motorista.categorias || [state.motorista.categoria]).map(c => nomesCategoria[c] || c).join(' + ');
+    if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoriasTexto}`;
     const elNome = document.getElementById('profile-driver-name');
     if (elNome) elNome.textContent = state.motorista.nome || 'Motorista';
     const elTelefone = document.getElementById('profile-driver-phone');
@@ -1440,6 +1532,10 @@ async function verificarCadastroMotorista() {
     if (elCidade) elCidade.textContent = nomesCidade[state.motorista.cidade] || '—';
     const elCodigo = document.getElementById('perfil-mot-codigo');
     if (elCodigo && meuMotoristaId) elCodigo.textContent = meuMotoristaId.slice(-7).toUpperCase();
+    obterSaldoCarteira(meuMotoristaId).then((saldo) => {
+      const elSaldo = document.getElementById('saldo-carteira-motorista');
+      if (elSaldo) elSaldo.textContent = 'R$ ' + saldo.toFixed(2).replace('.', ',');
+    });
     aplicarStatusCadastroMotorista(dados);
   } catch (e) {
     console.warn('[motorista] erro ao verificar cadastro, liberando Home pra não travar:', e);

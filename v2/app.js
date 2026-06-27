@@ -465,7 +465,51 @@ function calcularPercentualHorario() {
   return percentual;
 }
 
-let tabelaPrecosCachePorCidade = {};
+// ─────────────────────────────────────
+// CARTEIRA — saldo calculado por extrato (cada crédito/débito é um registro
+// separado, nunca um número editado direto — mais seguro e fácil de auditar)
+// ─────────────────────────────────────
+async function obterSaldoCarteira(uid) {
+  if (!firebaseReady || !db || !uid) return 0;
+  try {
+    const snap = await fb.getDocs(fb.query(fb.collection(db, 'carteira_transacoes'), fb.where('uid', '==', uid)));
+    let saldo = 0;
+    snap.forEach(d => { saldo += Number(d.data().valor || 0); });
+    return saldo;
+  } catch (e) {
+    console.warn('[passageiro] erro ao calcular saldo da carteira:', e);
+    return 0;
+  }
+}
+
+async function lancarCarteira(uid, valor, motivo, corridaId = null) {
+  if (!firebaseReady || !db || !uid || !valor) return;
+  try {
+    await fb.addDoc(fb.collection(db, 'carteira_transacoes'), {
+      uid, valor, motivo, corridaId,
+      criadoEm: fb.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('[passageiro] erro ao lançar na carteira:', e);
+  }
+}
+
+// Procura quem é o dono de um código de indicação (passageiro ou motorista)
+async function resolverCodigoIndicacao(codigo) {
+  if (!firebaseReady || !db || !codigo) return null;
+  try {
+    const [snapPax, snapMot] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'passageiros'), fb.where('codigoIndicacao', '==', codigo))),
+      fb.getDocs(fb.query(fb.collection(db, 'motoristas'), fb.where('codigoIndicacao', '==', codigo))),
+    ]);
+    if (!snapPax.empty) return { uid: snapPax.docs[0].id, tipo: 'passageiro' };
+    if (!snapMot.empty) return { uid: snapMot.docs[0].id, tipo: 'motorista' };
+    return null;
+  } catch (e) {
+    console.warn('[passageiro] erro ao resolver código de indicação:', e);
+    return null;
+  }
+}
 let tabelaPrecosCarregada = false;
 const TABELA_PRECOS_PADRAO = {
   x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  kmFixo: 0, valorFixo: 0, multiplicador: 1.0, ativo: true },
@@ -693,7 +737,9 @@ async function montarFilaPrioridade(origem, cidade, categoria) {
       // Motorista é fixo na cidade dele — não entra na fila de corrida de outra cidade
       if (cidade && d.cidade && d.cidade !== cidade) return;
       // Só entra na fila se o veículo dele for da categoria pedida (X / Plus / Van)
-      if (categoria && d.categoria && d.categoria !== categoria) return;
+      // Só entra na fila se o veículo dele atender a categoria pedida (suporta motorista com mais de uma categoria)
+      const categoriasMotorista = Array.isArray(d.categorias) ? d.categorias : (d.categoria ? [d.categoria] : null);
+      if (categoria && categoriasMotorista && !categoriasMotorista.includes(categoria)) return;
       const distanciaKm = (origem?.lat && origem?.lon)
         ? haversineKm(origem.lat, origem.lon, d.lat, d.lon)
         : 999;
@@ -1255,11 +1301,18 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
       const cred = await authModRef.createUserWithEmailAndPassword(authPassageiro, email, senha);
       meuPassageiroId = cred.user.uid;
     }
+
+    const codigoDigitado = document.getElementById('cad-pax-codigo-indicacao').value.trim().toUpperCase();
+    const indicadoPor = codigoDigitado ? await resolverCodigoIndicacao(codigoDigitado) : null;
+
     await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), {
       nome, celular, email, cpf,
       cidade: document.getElementById('cad-pax-cidade').value,
       selfie: selfiePassageiroBase64,
       verificacao: 'aprovado', // passageiro não passa por aprovação manual — só fica sujeito a bloqueio se necessário
+      codigoIndicacao: meuPassageiroId.slice(-7).toUpperCase(),
+      indicadoPor: indicadoPor || null,
+      bonusIndicacaoPago: false,
       criadoEm: fb.serverTimestamp(),
     });
     localStorage.setItem('interliga_pax_nome', nome);
@@ -1367,6 +1420,17 @@ function aplicarStatusCadastro(dados) {
       const elTelefone = document.getElementById('profile-phone');
       if (elTelefone) elTelefone.textContent = dados.celular;
     }
+    state.passageiro = dados;
+    const elCpf = document.getElementById('perfil-pax-cpf');
+    if (elCpf && dados.cpf) elCpf.textContent = dados.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    const elEmail = document.getElementById('perfil-pax-email');
+    if (elEmail) elEmail.textContent = dados.email || '—';
+    const elCodigo = document.getElementById('perfil-pax-codigo');
+    if (elCodigo) elCodigo.textContent = dados.codigoIndicacao || (meuPassageiroId ? meuPassageiroId.slice(-7).toUpperCase() : '—');
+    obterSaldoCarteira(meuPassageiroId).then((saldo) => {
+      const elSaldo = document.getElementById('saldo-carteira-passageiro');
+      if (elSaldo) elSaldo.textContent = 'R$ ' + saldo.toFixed(2).replace('.', ',');
+    });
     go('screen-home');
     configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
@@ -1501,11 +1565,20 @@ document.getElementById('payment-modal-close')?.addEventListener('click', () => 
   document.getElementById('payment-modal').hidden = true;
 });
 document.querySelectorAll('.payment-option').forEach(btn => {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
+    const metodo = btn.dataset.payment;
+    if (metodo === 'carteira') {
+      const saldo = await obterSaldoCarteira(meuPassageiroId);
+      const precoEstimado = Math.max(...Object.values(state.precos || {}).filter(v => typeof v === 'number'), 0);
+      if (saldo < precoEstimado) {
+        showToast('⚠️ Saldo insuficiente na carteira (R$ ' + saldo.toFixed(2).replace('.', ',') + ')');
+        return;
+      }
+    }
     document.querySelectorAll('.payment-option').forEach(b => b.classList.remove('is-selected'));
     btn.classList.add('is-selected');
     document.getElementById('payment-select-label').textContent = btn.dataset.label;
-    state.formaPagamento = btn.dataset.payment;
+    state.formaPagamento = metodo;
     document.getElementById('payment-modal').hidden = true;
   });
 });
@@ -1932,6 +2005,51 @@ function disparaCorridaAgendada(ag) {
 
   criarCorrida(state.origem, state.destino, preco, 'x');
 }
+
+document.getElementById('btn-editar-perfil-passageiro')?.addEventListener('click', () => {
+  document.getElementById('ed-pax-nome').value = state.passageiro?.nome || '';
+  document.getElementById('ed-pax-celular').value = state.passageiro?.celular || '';
+  go('screen-editar-perfil-passageiro');
+});
+
+document.getElementById('btn-salvar-perfil-passageiro')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('ed-pax-erro');
+  erroEl.hidden = true;
+  const nome = document.getElementById('ed-pax-nome').value.trim();
+  const celular = document.getElementById('ed-pax-celular').value.trim();
+
+  if (!nome || nome.split(' ').length < 2) { erroEl.textContent = '⚠️ Informe seu nome completo'; erroEl.hidden = false; return; }
+  if (celular.replace(/\D/g, '').length < 10) { erroEl.textContent = '⚠️ Informe um celular válido com DDD'; erroEl.hidden = false; return; }
+  if (!firebaseReady || !db || !meuPassageiroId) { erroEl.textContent = '⚠️ Sem conexão com o servidor'; erroEl.hidden = false; return; }
+
+  const btn = document.getElementById('btn-salvar-perfil-passageiro');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  try {
+    await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { nome, celular }, { merge: true });
+    if (state.passageiro) { state.passageiro.nome = nome; state.passageiro.celular = celular; }
+    document.getElementById('profile-name').textContent = nome;
+    document.getElementById('profile-phone').textContent = celular;
+    const elAvatar = document.querySelector('.profile-avatar');
+    if (elAvatar) elAvatar.textContent = nome.trim().charAt(0).toUpperCase();
+    const elHomeAvatar = document.getElementById('home-avatar');
+    if (elHomeAvatar) elHomeAvatar.textContent = nome.trim().charAt(0).toUpperCase();
+    showToast('✅ Perfil atualizado!');
+    go('screen-profile');
+  } catch (e) {
+    console.error('[passageiro] erro ao salvar perfil:', e);
+    erroEl.textContent = '⚠️ Erro ao salvar — tenta de novo';
+    erroEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar alterações';
+  }
+});
+
+document.getElementById('btn-suporte-passageiro')?.addEventListener('click', () => {
+  const msg = encodeURIComponent('Olá! Preciso de ajuda com o app Interliga.');
+  window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
+});
 
 document.getElementById('btn-sair-passageiro')?.addEventListener('click', async () => {
   if (!confirm('Sair da sua conta? Você vai precisar fazer login de novo pra voltar a usar o app.')) return;

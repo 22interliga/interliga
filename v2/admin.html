@@ -312,7 +312,44 @@ textarea.inp { resize: vertical; }
           <div class="section" id="s-motoristas">
             <div class="section-header">
               <div class="section-title">🚗 Motoristas</div>
+              <button class="pbtn" onclick="toggleFormCadastroMotorista()">+ Cadastrar Motorista</button>
             </div>
+
+            <div class="card" id="form-cadastro-motorista" style="display:none;margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">Cadastro manual (motorista já entra aprovado, sem precisar de aprovação)</div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">NOME COMPLETO</div><input class="inp" id="cm-nome" placeholder="Nome completo"/></div>
+                <div class="fl"><div class="lbl">CELULAR</div><input class="inp" id="cm-celular" placeholder="(71) 99999-9999"/></div>
+              </div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">E-MAIL</div><input class="inp" id="cm-email" type="email" placeholder="email@exemplo.com"/></div>
+                <div class="fl"><div class="lbl">SENHA</div><input class="inp" id="cm-senha" type="password" placeholder="Mínimo 6 caracteres"/></div>
+              </div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">CPF</div><input class="inp" id="cm-cpf" placeholder="000.000.000-00"/></div>
+                <div class="fl"><div class="lbl">CIDADE</div>
+                  <select class="inp" id="cm-cidade">
+                    <option value="madre">Madre de Deus — BA</option>
+                    <option value="sfc">São Francisco do Conde — BA</option>
+                    <option value="candeias">Candeias — BA</option>
+                    <option value="simoes">Simões Filho — BA</option>
+                  </select>
+                </div>
+              </div>
+              <div class="g2" style="margin-bottom:14px;">
+                <div class="fl"><div class="lbl">VEÍCULO (MODELO)</div><input class="inp" id="cm-veiculo" placeholder="Ex: Honda Civic"/></div>
+                <div class="fl"><div class="lbl">PLACA</div><input class="inp" id="cm-placa" placeholder="ABC-1234"/></div>
+              </div>
+              <div class="fl" style="margin-bottom:14px;"><div class="lbl">CATEGORIAS (pode marcar mais de uma)</div>
+                <div style="display:flex;gap:14px;margin-top:6px;">
+                  <label style="display:flex;align-items:center;gap:5px;"><input type="checkbox" id="cm-cat-x" checked> 🚗 Interliga X</label>
+                  <label style="display:flex;align-items:center;gap:5px;"><input type="checkbox" id="cm-cat-plus"> 🚙 Interliga Plus</label>
+                  <label style="display:flex;align-items:center;gap:5px;"><input type="checkbox" id="cm-cat-van"> 🚐 Interliga Van</label>
+                </div>
+              </div>
+              <button class="pbtn" onclick="cadastrarMotoristaManual()">Cadastrar e aprovar</button>
+            </div>
+
             <div class="filter-tabs">
               <button class="filter-btn active" data-mot-filtro="todos">Todos</button>
               <button class="filter-btn" data-mot-filtro="online">🟢 Online</button>
@@ -399,6 +436,16 @@ textarea.inp { resize: vertical; }
                 <span style="font-weight:700;">%</span>
                 <button class="pbtn" onclick="salvarComissaoPlataforma()">Salvar</button>
               </div>
+            </div>
+
+            <div class="card" style="margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">🎁 Programa de Indicação</div>
+              <p style="color:var(--t2);font-size:12px;margin-bottom:12px;">Quem indica ganha um valor fixo na primeira corrida do indicado, e um percentual sobre toda corrida seguinte dele, pra sempre. O crédito vai direto pra Carteira de quem indicou.</p>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">BÔNUS NA 1ª CORRIDA (R$)</div><input class="inp" type="number" id="indic-valor-primeira" value="0" min="0" step="0.5"/></div>
+                <div class="fl"><div class="lbl">% NAS CORRIDAS SEGUINTES</div><input class="inp" type="number" id="indic-percentual-continuo" value="0" min="0" max="100" step="0.5"/></div>
+              </div>
+              <button class="pbtn" onclick="salvarConfigIndicacao()">Salvar</button>
             </div>
 
             <div class="card">
@@ -827,30 +874,12 @@ textarea.inp { resize: vertical; }
               </div>
             </div>
 
-            <!-- Zonas especiais -->
-            <div class="card" style="margin-bottom:14px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                <div class="ct">📍 Classificação por Zona</div>
-                <button class="pbtn" onclick="addZona()">+ Zona</button>
-              </div>
-              <div class="tbl-wrap">
-                <table>
-                  <thead><tr><th>ZONA</th><th>DESCRIÇÃO</th><th>ACRÉSCIMO (R$)</th><th>MULTIPLICA (%)</th><th>APLICA EM</th><th>AÇÕES</th></tr></thead>
-                  <tbody id="zonas-tbody">
-                    <tr><td><b>🛫 Aeroporto</b></td><td>Embarque/desembarque SSA</td><td><input class="inp" value="8.00" style="width:70px;padding:4px 8px;"/></td><td><input class="inp" value="0" style="width:60px;padding:4px 8px;"/>%</td><td><select class="inp" style="padding:4px 8px;"><option>Ida e volta</option><option>Só ida</option><option>Só volta</option></select></td><td><span class="icon-btn" onclick="this.closest('tr').remove();showToast('🗑️ Zona removida')">🗑️</span></td></tr>
-                    <tr><td><b>🚢 Porto</b></td><td>Terminal marítimo</td><td><input class="inp" value="5.00" style="width:70px;padding:4px 8px;"/></td><td><input class="inp" value="0" style="width:60px;padding:4px 8px;"/>%</td><td><select class="inp" style="padding:4px 8px;"><option>Ida e volta</option><option>Só ida</option><option>Só volta</option></select></td><td><span class="icon-btn" onclick="this.closest('tr').remove()">🗑️</span></td></tr>
-                    <tr><td><b>🌙 Madrugada</b></td><td>00h–05h</td><td><input class="inp" value="0" style="width:70px;padding:4px 8px;"/></td><td><input class="inp" value="30" style="width:60px;padding:4px 8px;"/>%</td><td><select class="inp" style="padding:4px 8px;"><option>Ida e volta</option></select></td><td><span class="icon-btn" onclick="this.closest('tr').remove()">🗑️</span></td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
             <!-- Áreas de risco -->
             <div class="card" style="margin-bottom:14px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
                 <div class="ct">🚨 Áreas de Risco</div>
               </div>
-              <p style="color:var(--t2);font-size:12px;margin-bottom:14px;">Acréscimo aplicado quando a ORIGEM OU O DESTINO da corrida cai numa dessas áreas. Pode ser por raio no mapa ou por nome de rua/bairro (compara com o texto do endereço digitado).</p>
+              <p style="color:var(--t2);font-size:12px;margin-bottom:14px;">Acréscimo aplicado quando a ORIGEM OU O DESTINO da corrida cai numa dessas áreas. Pode ser por raio no mapa ou por nome de rua/bairro (compara com o texto do endereço digitado). Use isso também pra zonas fixas como "Aeroporto" ou "Porto" — cadastra pelo nome.</p>
 
               <div class="tbl-wrap" style="margin-bottom:16px;">
                 <table>
@@ -1182,7 +1211,7 @@ function showSection(id,navEl){
     motoristas: carregarMotoristas,
     corridas: carregarCorridas,
     financeiro: carregarFinanceiro,
-    repasses: carregarRepasses,
+    repasses: () => { carregarRepasses(); carregarConfigIndicacao(); },
     monitor: carregarMonitoramento,
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
@@ -1278,16 +1307,29 @@ function simular(){
   const dist = parseFloat(document.getElementById('sim-dist')?.value || 8);
   const mult = parseFloat(document.getElementById('sim-mult')?.value || 1.0);
   const zona = parseFloat(document.getElementById('sim-zona')?.value || 0);
-  const cats = {x:{band:5.00,km:2.40,min:8.00,nome:'Interliga X'},plus:{band:7.00,km:3.36,min:12.00,nome:'Interliga Plus'},van:{band:10.00,km:4.80,min:18.00,nome:'Interliga Van'}};
-  const c = cats[cat];
-  const base = c.band + (dist * c.km);
-  const total = Math.max(c.min, (base * mult) + zona);
+
+  // Lê os valores reais que estão nos campos da tabela de Categorias de Veículo (mesmo sem ter salvo ainda)
+  const nomes = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
+  const band = Number(document.getElementById(`prec-${cat}-bandeirada`)?.value) || 0;
+  const km = Number(document.getElementById(`prec-${cat}-tarifakm`)?.value) || 0;
+  const min = Number(document.getElementById(`prec-${cat}-minimo`)?.value) || 0;
+  const kmFixo = Number(document.getElementById(`prec-${cat}-kmfixo`)?.value) || 0;
+  const valorFixo = Number(document.getElementById(`prec-${cat}-valorfixo`)?.value) || 0;
+
+  let base;
+  if (kmFixo > 0 && valorFixo > 0) {
+    base = dist <= kmFixo ? valorFixo : valorFixo + (dist - kmFixo) * km;
+  } else {
+    base = band + (dist * km);
+  }
+  const total = Math.max(min, base * mult) + zona;
+
   const res = document.getElementById('sim-resultado');
   const det = document.getElementById('sim-detalhes');
   const form = document.getElementById('sim-formula');
   if(res) res.textContent = 'R$ '+total.toFixed(2);
-  if(form) form.textContent = c.nome+' · '+dist+'km × R$'+c.km+'/km × '+mult+'×';
-  if(det) det.innerHTML = `Bandeirada: R$ ${c.band.toFixed(2)}<br>Distância: ${dist}km × R$ ${c.km} = R$ ${(dist*c.km).toFixed(2)}<br>Dinâmico: ${mult}×${zona>0?'<br>Zona: +R$ '+zona:''}<br><b>Total: R$ ${total.toFixed(2)}</b>`;
+  if(form) form.textContent = nomes[cat]+' · '+dist+'km × R$'+km+'/km × '+mult+'×';
+  if(det) det.innerHTML = `Bandeirada: R$ ${band.toFixed(2)}<br>Distância: ${dist}km × R$ ${km} = R$ ${(dist*km).toFixed(2)}<br>${kmFixo>0?'Tarifa fixa até '+kmFixo+'km: R$ '+valorFixo.toFixed(2)+'<br>':''}Dinâmico: ${mult}×${zona>0?'<br>Zona: +R$ '+zona:''}<br>Preço mínimo: R$ ${min.toFixed(2)}<br><b>Total: R$ ${total.toFixed(2)}</b>`;
 }
 
 function addZona(){
@@ -1308,7 +1350,7 @@ async function salvarPrecos(){
       minimo: Number(document.getElementById(`prec-${cat}-minimo`).value) || 0,
       kmFixo: Number(document.getElementById(`prec-${cat}-kmfixo`).value) || 0,
       valorFixo: Number(document.getElementById(`prec-${cat}-valorfixo`).value) || 0,
-      multiplicador: Number(document.getElementById(`prec-${cat}-mult`).value) || 1,
+      multiplicador: (() => { const v = Number(document.getElementById(`prec-${cat}-mult`).value); return isNaN(v) ? 1 : v; })(),
       ativo: document.getElementById(`prec-${cat}-ativo`).dataset.on !== '0',
     };
   }
@@ -1453,6 +1495,79 @@ async function alternarBloqueioFranqueado(id, estaAtivo){
     carregarFranqueados();
   } catch (e) {
     showToast('⚠️ Erro ao atualizar — ' + (e.code || e.message));
+  }
+}
+
+// ═══════════════════════════════════════
+// CADASTRO MANUAL DE MOTORISTA (pelo admin)
+// ═══════════════════════════════════════
+function toggleFormCadastroMotorista(){
+  const f = document.getElementById('form-cadastro-motorista');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function cadastrarMotoristaManual(){
+  const nome = document.getElementById('cm-nome').value.trim();
+  const celular = document.getElementById('cm-celular').value.trim();
+  const email = document.getElementById('cm-email').value.trim().toLowerCase();
+  const senha = document.getElementById('cm-senha').value;
+  const cpf = document.getElementById('cm-cpf').value.replace(/\D/g, '');
+  const cidade = document.getElementById('cm-cidade').value;
+  const veiculo = document.getElementById('cm-veiculo').value.trim();
+  const placa = document.getElementById('cm-placa').value.trim().toUpperCase();
+  const categorias = [];
+  if (document.getElementById('cm-cat-x').checked) categorias.push('x');
+  if (document.getElementById('cm-cat-plus').checked) categorias.push('plus');
+  if (document.getElementById('cm-cat-van').checked) categorias.push('van');
+
+  if (!nome || !celular || !email || !veiculo || !placa) { showToast('⚠️ Preencha todos os campos'); return; }
+  if (categorias.length === 0) { showToast('⚠️ Marque pelo menos 1 categoria'); return; }
+  if (senha.length < 6) { showToast('⚠️ Senha precisa ter pelo menos 6 caracteres'); return; }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  try {
+    const { initializeApp, deleteApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const firebaseConfig = {
+      apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+      authDomain: "interliga-app.firebaseapp.com",
+      projectId: "interliga-app",
+      storageBucket: "interliga-app.firebasestorage.app",
+      messagingSenderId: "913895237568",
+      appId: "1:913895237568:web:faad95e8af089150e54a25",
+    };
+    const appSecundario = initializeApp(firebaseConfig, 'criar-motorista-' + Date.now());
+    const authSecundario = fbAdmin.getAuth(appSecundario);
+    const cred = await fbAdmin.createUserWithEmailAndPassword(authSecundario, email, senha);
+
+    await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'motoristas', cred.user.uid), {
+      nome, celular, email, cpf, cidade, veiculo, placa, categorias, categoria: categorias[0],
+      avaliacao: '5.0',
+      verificacao: 'aprovado', // cadastro manual já entra aprovado
+      cadastradoPeloAdmin: true,
+      criadoEm: fbAdmin.serverTimestamp(),
+    });
+
+    await fbAdmin.signOut(authSecundario);
+    await deleteApp(appSecundario);
+
+    alert('Motorista cadastrado e aprovado!\n\nLogin pra ele entrar no app:\n\nE-mail: ' + email + '\nSenha: ' + senha + '\n\n(Anote agora — depois de fechar essa janela não tem mais como ver essa senha de novo.)');
+
+    document.getElementById('cm-nome').value = '';
+    document.getElementById('cm-celular').value = '';
+    document.getElementById('cm-email').value = '';
+    document.getElementById('cm-senha').value = '';
+    document.getElementById('cm-cpf').value = '';
+    document.getElementById('cm-veiculo').value = '';
+    document.getElementById('cm-placa').value = '';
+    document.getElementById('cm-cat-x').checked = true;
+    document.getElementById('cm-cat-plus').checked = false;
+    document.getElementById('cm-cat-van').checked = false;
+    toggleFormCadastroMotorista();
+    carregarMotoristas();
+  } catch (e) {
+    console.error('[admin] erro ao cadastrar motorista:', e);
+    if (e.code === 'auth/email-already-in-use') showToast('⚠️ Esse e-mail já tem uma conta');
+    else showToast('⚠️ Erro ao cadastrar — ' + (e.code || e.message));
   }
 }
 
@@ -1615,40 +1730,44 @@ async function carregarMotoristas(filtro = 'todos'){
       const btnHtml = bloqueado
         ? `<button class="pbtn" style="background:var(--green);" onclick="alternarBloqueioMotorista('${m.id}', false)">✓ Ativar</button>`
         : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioMotorista('${m.id}', true)">🚫 Bloquear</button>`;
-      const categoriaAtual = m.categoria || 'x';
-      const seletorCategoria = `<select class="inp" style="padding:6px 8px;font-size:13px;" onchange="alterarCategoriaMotorista('${m.id}', this.value)">
-        <option value="x" ${categoriaAtual==='x'?'selected':''}>🚗 Interliga X</option>
-        <option value="plus" ${categoriaAtual==='plus'?'selected':''}>🚙 Interliga Plus</option>
-        <option value="van" ${categoriaAtual==='van'?'selected':''}>🚐 Interliga Van</option>
-      </select>`;
-      return `<tr><td><b>${m.nome || 'Sem nome'}</b></td><td>${m.veiculo || '—'} · ${m.placa || '—'}</td><td>${seletorCategoria}</td><td>${formatMoeda(ganhoTotal)}</td><td>⭐ ${m.avaliacao || '—'}</td><td>${statusHtml}</td><td>${btnHtml}</td></tr>`;
+      const categoriasAtuais = Array.isArray(m.categorias) ? m.categorias : (m.categoria ? [m.categoria] : ['x']);
+      const seletorCategoria = `<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px;">
+        <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" onchange="alterarCategoriaMotorista('${m.id}','x',this.checked)" ${categoriasAtuais.includes('x')?'checked':''}> 🚗 X</label>
+        <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" onchange="alterarCategoriaMotorista('${m.id}','plus',this.checked)" ${categoriasAtuais.includes('plus')?'checked':''}> 🚙 Plus</label>
+        <label style="display:flex;align-items:center;gap:3px;"><input type="checkbox" onchange="alterarCategoriaMotorista('${m.id}','van',this.checked)" ${categoriasAtuais.includes('van')?'checked':''}> 🚐 Van</label>
+      </div>`;
+      return `<tr><td><b>${m.nome || 'Sem nome'}</b></td><td>${m.veiculo || '—'} · ${m.placa || '—'}</td><td>${seletorCategoria}</td><td>${formatMoeda(ganhoTotal)}</td><td>⭐ ${m.avaliacao || '—'}</td><td>${statusHtml}</td><td><span class="icon-btn" onclick="abrirDetalhesUsuario('motorista','${m.id}')">👁️</span> ${btnHtml}</td></tr>`;
     }).join('');
   } catch (e) {
     console.error('[admin] erro ao carregar motoristas:', e);
     showToast('⚠️ Erro ao carregar motoristas');
   }
 }
+let _todosPassageirosCache = [];
+
 async function carregarPassageiros(){
   if (!dbAdmin) return;
   try {
     const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'passageiros'));
     const tbody = document.getElementById('passageiros-tbody');
+    _todosPassageirosCache = [];
     if (snap.empty) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:24px;">Nenhum passageiro cadastrado ainda</td></tr>';
       return;
     }
     const linhas = [];
     snap.forEach(d => {
-      const p = d.data();
+      const p = { id: d.id, ...d.data() };
       if (meuPapelAdmin === 'franqueado' && p.cidade !== minhaCidadeFranqueado) return;
+      _todosPassageirosCache.push(p);
       const bloqueado = p.bloqueado === true;
       const statusHtml = bloqueado
         ? '<span class="badge red">🚫 Bloqueado</span>'
         : '<span class="badge green">✅ Ativo</span>';
       const btnHtml = bloqueado
-        ? `<button class="pbtn" style="background:var(--green);" onclick="alternarBloqueioPassageiro('${d.id}', false)">✓ Reativar</button>`
-        : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioPassageiro('${d.id}', true)">🚫 Bloquear</button>`;
-      linhas.push(`<tr><td><b>${p.nome || 'Sem nome'}</b></td><td>${p.celular || '—'}</td><td>${formatCpfExibicao(p.cpf)}</td><td>${statusHtml}</td><td>${btnHtml}</td></tr>`);
+        ? `<button class="pbtn" style="background:var(--green);" onclick="alternarBloqueioPassageiro('${p.id}', false)">✓ Reativar</button>`
+        : `<button class="pbtn" style="background:var(--red);" onclick="alternarBloqueioPassageiro('${p.id}', true)">🚫 Bloquear</button>`;
+      linhas.push(`<tr><td><b>${p.nome || 'Sem nome'}</b></td><td>${p.celular || '—'}</td><td>${formatCpfExibicao(p.cpf)}</td><td>${statusHtml}</td><td><span class="icon-btn" onclick="abrirDetalhesUsuario('passageiro','${p.id}')">👁️</span> ${btnHtml}</td></tr>`);
     });
     tbody.innerHTML = linhas.length ? linhas.join('') : '<tr><td colspan="5" style="text-align:center;color:var(--t2);padding:24px;">Nenhum passageiro nessa cidade ainda</td></tr>';
   } catch (e) {
@@ -1657,12 +1776,23 @@ async function carregarPassageiros(){
   }
 }
 
-async function alterarCategoriaMotorista(id, categoria){
+async function alterarCategoriaMotorista(id, categoria, marcado){
   try {
-    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', id), { categoria });
-    showToast('✅ Categoria atualizada!');
     const m = _todosMotoristasCache.find(x => x.id === id);
-    if (m) m.categoria = categoria;
+    let categoriasAtuais = Array.isArray(m?.categorias) ? [...m.categorias] : (m?.categoria ? [m.categoria] : []);
+
+    if (marcado && !categoriasAtuais.includes(categoria)) categoriasAtuais.push(categoria);
+    if (!marcado) categoriasAtuais = categoriasAtuais.filter(c => c !== categoria);
+
+    if (categoriasAtuais.length === 0) {
+      showToast('⚠️ O motorista precisa de pelo menos 1 categoria');
+      carregarMotoristas(); // redesenha a tabela, voltando o checkbox pro estado anterior
+      return;
+    }
+
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', id), { categorias: categoriasAtuais, categoria: categoriasAtuais[0] });
+    showToast('✅ Categorias atualizadas!');
+    if (m) { m.categorias = categoriasAtuais; m.categoria = categoriasAtuais[0]; }
   } catch (e) {
     console.error('[admin] erro ao alterar categoria do motorista:', e);
     showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
@@ -1784,6 +1914,32 @@ async function carregarComissaoPlataforma(){
   } catch (e) {
     console.warn('[admin] erro ao carregar comissão, usando 10% padrão:', e);
     return 10;
+  }
+}
+
+async function carregarConfigIndicacao(){
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'config', 'indicacao'));
+    const dados = snap.exists() ? snap.data() : { valorPrimeiraCorrida: 0, percentualContinuo: 0 };
+    document.getElementById('indic-valor-primeira').value = dados.valorPrimeiraCorrida || 0;
+    document.getElementById('indic-percentual-continuo').value = dados.percentualContinuo || 0;
+  } catch (e) {
+    console.warn('[admin] erro ao carregar config de indicação:', e);
+  }
+}
+
+async function salvarConfigIndicacao(){
+  const valorPrimeiraCorrida = Number(document.getElementById('indic-valor-primeira').value) || 0;
+  const percentualContinuo = Number(document.getElementById('indic-percentual-continuo').value) || 0;
+  try {
+    await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'config', 'indicacao'), {
+      valorPrimeiraCorrida, percentualContinuo, atualizadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('✅ Programa de indicação salvo!');
+  } catch (e) {
+    console.error('[admin] erro ao salvar config de indicação:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
   }
 }
 
@@ -2385,6 +2541,86 @@ async function removerEstabelecimento(id){
     carregarEstabelecimentosAdmin();
   } catch (e) {
     showToast('⚠️ Erro ao remover — ' + (e.code || e.message));
+  }
+}
+</script>
+
+<div id="modal-detalhes-usuario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--s0);border:1px solid var(--bd);border-radius:16px;max-width:520px;width:100%;max-height:88vh;overflow-y:auto;padding:22px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div class="ct" id="modal-detalhes-titulo">Detalhes</div>
+      <span style="cursor:pointer;font-size:20px;color:var(--t2);" onclick="document.getElementById('modal-detalhes-usuario').style.display='none'">✕</span>
+    </div>
+    <div id="modal-detalhes-fotos" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;"></div>
+    <div id="modal-detalhes-campos" style="display:flex;flex-direction:column;gap:12px;"></div>
+    <button class="pbtn" style="width:100%;margin-top:16px;" onclick="salvarDetalhesUsuario()">💾 Salvar alterações</button>
+  </div>
+</div>
+
+<script>
+let modalDetalhesTipo = null;
+let modalDetalhesId = null;
+
+function abrirDetalhesUsuario(tipo, id){
+  const lista = tipo === 'motorista' ? _todosMotoristasCache : _todosPassageirosCache;
+  const u = (lista || []).find(x => x.id === id);
+  if (!u) { showToast('⚠️ Dados não encontrados — tenta recarregar a lista'); return; }
+
+  modalDetalhesTipo = tipo;
+  modalDetalhesId = id;
+
+  document.getElementById('modal-detalhes-titulo').textContent = (tipo === 'motorista' ? '🚗 ' : '🧍 ') + (u.nome || 'Sem nome');
+
+  const fotos = tipo === 'motorista'
+    ? [['Selfie', u.selfie], ['CNH', u.docCnh], ['CRLV', u.docCrlv], ['Comprovante', u.docComprovante]]
+    : [['Selfie', u.selfie]];
+  document.getElementById('modal-detalhes-fotos').innerHTML = fotos.map(([label, src]) => src
+    ? `<div style="text-align:center;"><img src="${src}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--bd);"><div style="font-size:10px;color:var(--t2);margin-top:4px;">${label}</div></div>`
+    : ''
+  ).join('');
+
+  const camposComuns = `
+    <div class="fl"><div class="lbl">NOME</div><input class="inp" id="dmu-nome" value="${u.nome || ''}"></div>
+    <div class="fl"><div class="lbl">CELULAR</div><input class="inp" id="dmu-celular" value="${u.celular || ''}"></div>
+    <div class="fl"><div class="lbl">E-MAIL</div><input class="inp" id="dmu-email" value="${u.email || ''}"></div>
+    <div class="fl"><div class="lbl">CPF</div><input class="inp" id="dmu-cpf" value="${u.cpf || ''}"></div>
+    <div class="fl"><div class="lbl">CIDADE</div>
+      <select class="inp" id="dmu-cidade">
+        ${Object.entries(NOMES_CIDADES).map(([cod, nome]) => `<option value="${cod}" ${u.cidade===cod?'selected':''}>${nome}</option>`).join('')}
+      </select>
+    </div>`;
+
+  const camposMotorista = tipo === 'motorista' ? `
+    <div class="fl"><div class="lbl">VEÍCULO</div><input class="inp" id="dmu-veiculo" value="${u.veiculo || ''}"></div>
+    <div class="fl"><div class="lbl">PLACA</div><input class="inp" id="dmu-placa" value="${u.placa || ''}"></div>
+  ` : '';
+
+  document.getElementById('modal-detalhes-campos').innerHTML = camposComuns + camposMotorista;
+  document.getElementById('modal-detalhes-usuario').style.display = 'flex';
+}
+
+async function salvarDetalhesUsuario(){
+  if (!modalDetalhesTipo || !modalDetalhesId) return;
+  const dados = {
+    nome: document.getElementById('dmu-nome').value.trim(),
+    celular: document.getElementById('dmu-celular').value.trim(),
+    email: document.getElementById('dmu-email').value.trim(),
+    cpf: document.getElementById('dmu-cpf').value.replace(/\D/g, ''),
+    cidade: document.getElementById('dmu-cidade').value,
+  };
+  if (modalDetalhesTipo === 'motorista') {
+    dados.veiculo = document.getElementById('dmu-veiculo').value.trim();
+    dados.placa = document.getElementById('dmu-placa').value.trim().toUpperCase();
+  }
+  try {
+    const colecao = modalDetalhesTipo === 'motorista' ? 'motoristas' : 'passageiros';
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, colecao, modalDetalhesId), dados);
+    showToast('✅ Dados atualizados!');
+    document.getElementById('modal-detalhes-usuario').style.display = 'none';
+    if (modalDetalhesTipo === 'motorista') carregarMotoristas(); else carregarPassageiros();
+  } catch (e) {
+    console.error('[admin] erro ao salvar detalhes:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
   }
 }
 </script>
