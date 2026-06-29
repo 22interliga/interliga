@@ -367,6 +367,9 @@ function onEnterRide() {
   if (!tabelaPrecosCarregada) carregarTabelaPrecos();
   if (!estabelecimentosCarregados) carregarEstabelecimentos();
   if (!regrasHorarioCarregadas) carregarRegrasHorario();
+  carregarZonaDemanda(); // sempre recarrega — a demanda muda rápido, diferente dos outros (preço, risco, etc)
+  clearInterval(intervalZonaDemanda);
+  intervalZonaDemanda = setInterval(carregarZonaDemanda, 20000);
 
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
@@ -593,6 +596,85 @@ function calcularPrecoBase(km, t) {
   return t.bandeirada + km * t.tarifaKm;
 }
 
+// ─────────────────────────────────────
+// GRID DE DEMANDA (hexágonos) — mesmo grid que o motorista vê no mapa dele,
+// usado aqui só pra saber o multiplicador da zona de origem da corrida.
+// ─────────────────────────────────────
+const HEX_TAMANHO_METROS = 400;
+const HEX_METROS_POR_GRAU_LAT = 111320;
+function hexMetrosPorGrauLon(latRef) { return 111320 * Math.cos(latRef * Math.PI / 180); }
+function hexLatLonParaXY(lat, lon, latRef, lonRef) {
+  return { x: (lon - lonRef) * hexMetrosPorGrauLon(latRef), y: (lat - latRef) * HEX_METROS_POR_GRAU_LAT };
+}
+function hexArredondar(q, r) {
+  let x = q, z = r, y = -x - z;
+  let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+  const dx = Math.abs(rx - x), dy = Math.abs(ry - y), dz = Math.abs(rz - z);
+  if (dx > dy && dx > dz) rx = -ry - rz; else if (dy > dz) ry = -rx - rz; else rz = -rx - ry;
+  return { q: rx, r: rz };
+}
+function hexObterCelula(lat, lon, latRef, lonRef) {
+  const { x, y } = hexLatLonParaXY(lat, lon, latRef, lonRef);
+  const q = (Math.sqrt(3) / 3 * x - 1 / 3 * y) / HEX_TAMANHO_METROS;
+  const r = (2 / 3 * y) / HEX_TAMANHO_METROS;
+  return hexArredondar(q, r);
+}
+function calcularMultiplicadorZona(demanda, oferta) {
+  if (demanda <= 0) return 1.0;
+  if (oferta <= 0) return Math.min(2.0, 1.0 + demanda * 0.25);
+  const proporcao = demanda / oferta;
+  if (proporcao <= 1) return 1.0;
+  return Math.min(2.0, 1.0 + (proporcao - 1) * 0.4);
+}
+
+let zonaDemandaCache = new Map(); // chave "cidade_q_r" -> { demanda, oferta }
+let zonaDemandaCarregada = false;
+let intervalZonaDemanda = null;
+
+async function carregarZonaDemanda() {
+  if (!firebaseReady || !db) return;
+  try {
+    const novoCache = new Map();
+    const [snapCorridas, snapMotoristas] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'corridas'), fb.where('status', '==', 'aguardando'))),
+      fb.getDocs(fb.collection(db, 'motoristas_disponiveis')),
+    ]);
+    function celula(cidade, q, r) {
+      const chave = cidade + '_' + q + '_' + r;
+      if (!novoCache.has(chave)) novoCache.set(chave, { demanda: 0, oferta: 0 });
+      return novoCache.get(chave);
+    }
+    snapCorridas.forEach(d => {
+      const c = d.data();
+      if (typeof c.origemLat !== 'number') return;
+      const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === (c.cidade || 'madre')) || CIDADES_INTERLIGA[0];
+      const { q, r } = hexObterCelula(c.origemLat, c.origemLon, centro.lat, centro.lon);
+      celula(centro.codigo, q, r).demanda++;
+    });
+    snapMotoristas.forEach(d => {
+      const m = d.data();
+      if (typeof m.lat !== 'number') return;
+      const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === (m.cidade || 'madre')) || CIDADES_INTERLIGA[0];
+      const { q, r } = hexObterCelula(m.lat, m.lon, centro.lat, centro.lon);
+      celula(centro.codigo, q, r).oferta++;
+    });
+    zonaDemandaCache = novoCache;
+    zonaDemandaCarregada = true;
+    calcularPrecos(); // recalcula com a demanda atualizada, se já tinha origem/destino escolhidos
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar demanda por zona:', e);
+  }
+}
+
+function obterMultiplicadorZona(lat, lon, cidade) {
+  const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === cidade) || CIDADES_INTERLIGA[0];
+  const { q, r } = hexObterCelula(lat, lon, centro.lat, centro.lon);
+  const chave = cidade + '_' + q + '_' + r;
+  const dados = zonaDemandaCache.get(chave);
+  if (!dados) return 1.0;
+  return calcularMultiplicadorZona(dados.demanda, dados.oferta);
+}
+
 function calcularPrecos() {
   if (!state.origem || !state.destino) return;
   const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
@@ -600,6 +682,7 @@ function calcularPrecos() {
   const percentualHorario = calcularPercentualHorario();
   const cidade = detectarCidade(state.origem.lat, state.origem.lon);
   const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
+  const multiplicadorZona = obterMultiplicadorZona(state.origem.lat, state.origem.lon, cidade);
 
   for (const cat of ['x', 'plus', 'van']) {
     const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
@@ -614,7 +697,7 @@ function calcularPrecos() {
     }
     if (itemEl) itemEl.style.display = '';
 
-    let preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1);
+    let preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
     preco = preco + risco.acrescimo;
     preco = preco * (1 + risco.percentual / 100);
     preco = preco * (1 + percentualHorario / 100);

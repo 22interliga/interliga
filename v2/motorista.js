@@ -276,6 +276,7 @@ document.getElementById('online-toggle')?.addEventListener('click', () => {
     showToast('🟢 Você está online — buscando corridas...');
     iniciarEscutaCorridas();
     iniciarDisponibilidade();
+    atualizarGridDemanda();
   } else {
     showToast('🔴 Você está offline');
     pararEscutaCorridas();
@@ -343,6 +344,12 @@ function pararDisponibilidade() {
 // ─────────────────────────────────────
 let homeMapDriver = null;
 let homeMapDriverTentativas = 0;
+const CIDADES_INTERLIGA_MOT = {
+  madre: [-12.7440, -38.6170],
+  sfc: [-12.6275, -38.6800],
+  candeias: [-12.6678, -38.5506],
+  simoes: [-12.7870, -38.3990],
+};
 
 function initHomeMapDriver() {
   console.log('[mapa-motorista] initHomeMapDriver chamada. homeMapDriver atual:', homeMapDriver);
@@ -377,8 +384,138 @@ function initHomeMapDriver() {
       homeMapDriver.setView([latitude, longitude], 15);
       L.circleMarker([latitude, longitude], { radius: 8, color: '#1251B5', fillColor: '#1251B5', fillOpacity: 0.8 }).addTo(homeMapDriver);
     }, () => {}, { timeout: 5000 });
+
+    // Grid de demanda (hexágonos com multiplicador) — atualiza ao abrir e depois de tempos em tempos
+    atualizarGridDemanda();
+    clearInterval(intervalGridDemanda);
+    intervalGridDemanda = setInterval(atualizarGridDemanda, 30000);
   };
   tryInit();
+}
+
+// ─────────────────────────────────────
+// GRID DE DEMANDA (hexágonos) — mostra visualmente onde tem mais corrida pedida
+// do que motorista disponível, com o multiplicador de preço daquela área.
+// ─────────────────────────────────────
+const HEX_TAMANHO_METROS = 400; // raio de cada hexágono
+const HEX_METROS_POR_GRAU_LAT = 111320;
+function hexMetrosPorGrauLon(latRef) { return 111320 * Math.cos(latRef * Math.PI / 180); }
+
+function hexLatLonParaXY(lat, lon, latRef, lonRef) {
+  return {
+    x: (lon - lonRef) * hexMetrosPorGrauLon(latRef),
+    y: (lat - latRef) * HEX_METROS_POR_GRAU_LAT,
+  };
+}
+function hexXYParaLatLon(x, y, latRef, lonRef) {
+  return {
+    lat: latRef + y / HEX_METROS_POR_GRAU_LAT,
+    lon: lonRef + x / hexMetrosPorGrauLon(latRef),
+  };
+}
+function hexArredondar(q, r) {
+  let x = q, z = r, y = -x - z;
+  let rx = Math.round(x), ry = Math.round(y), rz = Math.round(z);
+  const dx = Math.abs(rx - x), dy = Math.abs(ry - y), dz = Math.abs(rz - z);
+  if (dx > dy && dx > dz) rx = -ry - rz; else if (dy > dz) ry = -rx - rz; else rz = -rx - ry;
+  return { q: rx, r: rz };
+}
+function hexObterCelula(lat, lon, latRef, lonRef) {
+  const { x, y } = hexLatLonParaXY(lat, lon, latRef, lonRef);
+  const q = (Math.sqrt(3) / 3 * x - 1 / 3 * y) / HEX_TAMANHO_METROS;
+  const r = (2 / 3 * y) / HEX_TAMANHO_METROS;
+  return hexArredondar(q, r);
+}
+function hexCelulaParaXY(q, r) {
+  return { x: HEX_TAMANHO_METROS * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r), y: HEX_TAMANHO_METROS * (3 / 2 * r) };
+}
+function hexCantos(centroX, centroY) {
+  const cantos = [];
+  for (let i = 0; i < 6; i++) {
+    const ang = Math.PI / 180 * (60 * i - 30);
+    cantos.push({ x: centroX + HEX_TAMANHO_METROS * Math.cos(ang), y: centroY + HEX_TAMANHO_METROS * Math.sin(ang) });
+  }
+  return cantos;
+}
+
+// Calcula o multiplicador de uma célula a partir da demanda (corridas aguardando) vs oferta (motoristas livres)
+function calcularMultiplicadorZona(demanda, oferta) {
+  if (demanda <= 0) return 1.0;
+  if (oferta <= 0) return Math.min(2.0, 1.0 + demanda * 0.25);
+  const proporcao = demanda / oferta;
+  if (proporcao <= 1) return 1.0;
+  return Math.min(2.0, 1.0 + (proporcao - 1) * 0.4);
+}
+
+function corPorMultiplicador(mult) {
+  if (mult >= 1.7) return '#E8002D';
+  if (mult >= 1.4) return '#FF6B00';
+  if (mult >= 1.1) return '#F5A623';
+  return null; // 1.0x não pinta nada (sem demanda extra)
+}
+
+let hexagonosNoMapa = [];
+let intervalGridDemanda = null;
+
+async function calcularZonasDemanda() {
+  if (!firebaseReady || !db) return new Map();
+  const latRef = state.motorista.cidade ? (CIDADES_INTERLIGA_MOT[state.motorista.cidade] || [-12.7440, -38.6170])[0] : -12.7440;
+  const lonRef = state.motorista.cidade ? (CIDADES_INTERLIGA_MOT[state.motorista.cidade] || [-12.7440, -38.6170])[1] : -38.6170;
+
+  const zonas = new Map(); // chave "q_r" -> { q, r, demanda, oferta }
+  function celula(q, r) {
+    const chave = q + '_' + r;
+    if (!zonas.has(chave)) zonas.set(chave, { q, r, demanda: 0, oferta: 0 });
+    return zonas.get(chave);
+  }
+
+  try {
+    const [snapCorridas, snapMotoristas] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'corridas'), fb.where('status', '==', 'aguardando'))),
+      fb.getDocs(fb.collection(db, 'motoristas_disponiveis')),
+    ]);
+    snapCorridas.forEach(d => {
+      const c = d.data();
+      if (typeof c.origemLat !== 'number') return;
+      if (state.motorista.cidade && c.cidade && c.cidade !== state.motorista.cidade) return;
+      const { q, r } = hexObterCelula(c.origemLat, c.origemLon, latRef, lonRef);
+      celula(q, r).demanda++;
+    });
+    snapMotoristas.forEach(d => {
+      const m = d.data();
+      if (typeof m.lat !== 'number') return;
+      if (state.motorista.cidade && m.cidade && m.cidade !== state.motorista.cidade) return;
+      const { q, r } = hexObterCelula(m.lat, m.lon, latRef, lonRef);
+      celula(q, r).oferta++;
+    });
+  } catch (e) {
+    console.warn('[motorista] erro ao calcular zonas de demanda:', e);
+  }
+  return { zonas, latRef, lonRef };
+}
+
+async function atualizarGridDemanda() {
+  if (!homeMapDriver || typeof L === 'undefined' || !state.online) return;
+  hexagonosNoMapa.forEach(h => homeMapDriver.removeLayer(h));
+  hexagonosNoMapa = [];
+
+  const { zonas, latRef, lonRef } = await calcularZonasDemanda();
+  zonas.forEach(({ q, r, demanda, oferta }) => {
+    const mult = calcularMultiplicadorZona(demanda, oferta);
+    const cor = corPorMultiplicador(mult);
+    if (!cor) return; // não desenha hexágono pra área sem demanda extra (fica "limpo" o mapa)
+
+    const centro = hexCelulaParaXY(q, r);
+    const cantosLatLon = hexCantos(centro.x, centro.y).map(c => hexXYParaLatLon(c.x, c.y, latRef, lonRef)).map(p => [p.lat, p.lon]);
+
+    const poligono = L.polygon(cantosLatLon, { color: cor, weight: 1, fillColor: cor, fillOpacity: 0.35 }).addTo(homeMapDriver);
+    const centroLatLon = hexXYParaLatLon(centro.x, centro.y, latRef, lonRef);
+    const rotulo = L.marker([centroLatLon.lat, centroLatLon.lon], {
+      icon: L.divIcon({ className: 'hex-label', html: `<div style="background:${cor};color:white;font-weight:700;font-size:11px;padding:3px 7px;border-radius:10px;white-space:nowrap;">${mult.toFixed(1)}x</div>`, iconSize: [40, 20] }),
+    }).addTo(homeMapDriver);
+
+    hexagonosNoMapa.push(poligono, rotulo);
+  });
 }
 
 // ─────────────────────────────────────
