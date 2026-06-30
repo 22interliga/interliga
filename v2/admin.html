@@ -216,6 +216,7 @@ textarea.inp { resize: vertical; }
         <div class="nav-item" onclick="showSection('passageiros',this)"><span>👤</span> Passageiros</div>
         <div class="nav-item" onclick="showSection('motoristas',this)"><span>🚗</span> Motoristas</div>
         <div class="nav-item" onclick="showSection('comerciantes',this)"><span>🍔</span> Comerciantes</div>
+        <div class="nav-item" onclick="showSection('pedidos',this)"><span>🛍️</span> Pedidos Interifood</div>
         <div class="nav-group">OPERAÇÃO</div>
         <div class="nav-item" onclick="showSection('corridas',this)"><span>🚕</span> Corridas</div>
         <div class="nav-item" onclick="showSection('pedidos',this)"><span>🛒</span> Pedidos</div>
@@ -625,7 +626,79 @@ textarea.inp { resize: vertical; }
 
           <!-- SEÇÕES PLACEHOLDER -->
           <div class="section" id="s-monitor"><div class="section-header"><div class="section-title">🗺️ Monitoramento</div></div><div class="card" style="padding:0;overflow:hidden;"><div id="admin-map" style="width:100%;height:480px;background:var(--s1);"></div></div><div class="card" style="margin-top:14px;font-size:12px;color:var(--t2);">🟢 Motoristas disponíveis · 🔵 Corridas em andamento</div></div>
-          <div class="section" id="s-comerciantes"><div class="section-header"><div class="section-title">🍔 Comerciantes</div></div><div class="card"><p style="color:var(--t2);padding:20px;">Lista de comerciantes Interifood</p></div></div>
+          <div class="section" id="s-comerciantes">
+            <div class="section-header">
+              <div class="section-title">🍔 Comerciantes — Interifood</div>
+              <button class="pbtn" onclick="toggleFormRestaurante()">+ Novo Restaurante</button>
+            </div>
+
+            <div class="card" id="form-restaurante" style="display:none;margin-bottom:14px;">
+              <input type="hidden" id="rest-id-editando" value="">
+              <div class="ct" style="margin-bottom:10px;">Dados do restaurante</div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">NOME</div><input class="inp" id="rest-nome" placeholder="Ex: Sabor da Ilha"/></div>
+                <div class="fl"><div class="lbl">CATEGORIA</div><input class="inp" id="rest-categoria" placeholder="Ex: Brasileira, Pizza, Hambúrguer"/></div>
+              </div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">EMOJI / ÍCONE</div><input class="inp" id="rest-emoji" value="🍽️" maxlength="4" style="max-width:80px;"/></div>
+                <div class="fl"><div class="lbl">TEMPO DE ENTREGA</div><input class="inp" id="rest-tempo" placeholder="Ex: 25-35 min"/></div>
+              </div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">TAXA DE ENTREGA (R$)</div><input class="inp" type="number" id="rest-taxa" value="5.00" step="0.5"/></div>
+                <div class="fl"><div class="lbl">QUEM ENTREGA</div>
+                  <select class="inp" id="rest-tipo-entrega">
+                    <option value="interliga">Entregador Interliga</option>
+                    <option value="propria">Entrega própria da loja</option>
+                  </select>
+                </div>
+              </div>
+              <div class="fl" style="margin-bottom:14px;"><div class="lbl">CIDADE</div>
+                <select class="inp" id="rest-cidade">
+                  <option value="madre">Madre de Deus — BA</option>
+                  <option value="sfc">São Francisco do Conde — BA</option>
+                  <option value="candeias">Candeias — BA</option>
+                  <option value="simoes">Simões Filho — BA</option>
+                </select>
+              </div>
+              <button class="pbtn" onclick="salvarRestaurante()">💾 Salvar restaurante</button>
+            </div>
+
+            <div class="card" id="card-cardapio" style="display:none;margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">Cardápio — <span id="cardapio-rest-nome"></span></div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">NOME DO ITEM</div><input class="inp" id="item-nome" placeholder="Ex: Moqueca de peixe"/></div>
+                <div class="fl"><div class="lbl">SEÇÃO DO CARDÁPIO</div><input class="inp" id="item-secao" placeholder="Ex: Pratos principais" value="Cardápio"/></div>
+              </div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">DESCRIÇÃO</div><input class="inp" id="item-desc" placeholder="Ex: Peixe fresco, leite de coco"/></div>
+                <div class="fl"><div class="lbl">PREÇO (R$)</div><input class="inp" type="number" id="item-preco" step="0.5"/></div>
+              </div>
+              <button class="pbtn" onclick="adicionarItemCardapio()">+ Adicionar item</button>
+              <div id="cardapio-itens-lista" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Restaurantes cadastrados</div>
+              <div id="restaurantes-lista" style="display:flex;flex-direction:column;gap:10px;">
+                <div style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PEDIDOS INTERIFOOD -->
+          <div class="section" id="s-pedidos">
+            <div class="section-header"><div class="section-title">🛍️ Pedidos Interifood</div></div>
+            <div class="filter-tabs">
+              <button class="filter-btn active" data-pedido-filtro="todos">Todos</button>
+              <button class="filter-btn" data-pedido-filtro="confirmado">🆕 Novos</button>
+              <button class="filter-btn" data-pedido-filtro="preparando">👨‍🍳 Preparando</button>
+              <button class="filter-btn" data-pedido-filtro="entrega">🛵 Em entrega</button>
+              <button class="filter-btn" data-pedido-filtro="entregue">✅ Entregue</button>
+            </div>
+            <div id="pedidos-food-lista" style="display:flex;flex-direction:column;gap:12px;">
+              <div style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
+            </div>
+          </div>
           <!-- CONFIGURAR APP -->
           <div class="section" id="s-config-operacao">
             <div class="section-header"><div class="section-title">⚙️ Configurar App</div><button class="pbtn" onclick="showToast('💾 Configurações salvas!')">💾 Salvar</button></div>
@@ -1209,6 +1282,7 @@ const sectionTitles={
   passageiros:['Passageiros','Gerenciar usuários passageiros'],
   motoristas:['Motoristas','Gerenciar motoristas cadastrados'],
   comerciantes:['Comerciantes','Estabelecimentos Interifood'],
+  pedidos:['Pedidos Interifood','Acompanhe e gerencie os pedidos em tempo real'],
   corridas:['Corridas','Histórico e corridas em andamento'],
   pedidos:['Pedidos','Pedidos Interifood'],
   financeiro:['Financeiro','Faturamento e movimentações'],
@@ -1253,6 +1327,8 @@ function showSection(id,navEl){
     'mapa-calor': carregarMapaCalor,
     anuncios: carregarAnuncios,
     estabelecimentos: carregarEstabelecimentosAdmin,
+    comerciantes: carregarRestaurantesAdmin,
+    pedidos: carregarPedidosFoodAdmin,
     precificacao: () => { updateCidade(); carregarZonasRisco(); carregarFaixasHorario(); },
   };
   if (carregadores[id]) carregadores[id]();
@@ -1482,6 +1558,253 @@ async function salvarFranqueado(){
     if (e.code === 'auth/email-already-in-use') showToast('⚠️ Esse e-mail já tem uma conta');
     else showToast('⚠️ Erro ao criar acesso — ' + (e.code || e.message));
   }
+}
+
+// ═══════════════════════════════════════
+// INTERIFOOD — Restaurantes (cadastro pelo admin)
+// ═══════════════════════════════════════
+let _todosRestaurantesCache = [];
+let restauranteEditandoCardapio = null;
+
+function toggleFormRestaurante(){
+  const f = document.getElementById('form-restaurante');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('rest-id-editando').value = '';
+}
+
+async function salvarRestaurante(){
+  const id = document.getElementById('rest-id-editando').value;
+  const nome = document.getElementById('rest-nome').value.trim();
+  const categoria = document.getElementById('rest-categoria').value.trim();
+  const emoji = document.getElementById('rest-emoji').value.trim() || '🍽️';
+  const tempoEntrega = document.getElementById('rest-tempo').value.trim();
+  const taxaEntrega = Number(document.getElementById('rest-taxa').value) || 0;
+  const tipoEntrega = document.getElementById('rest-tipo-entrega').value;
+  const cidade = document.getElementById('rest-cidade').value;
+
+  if (!nome || !categoria) { showToast('⚠️ Preencha nome e categoria'); return; }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  try {
+    const dados = { nome, categoria, emoji, tempoEntrega, taxaEntrega, tipoEntrega, cidade, ativo: true };
+    if (id) {
+      await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'restaurantes_food', id), dados);
+      showToast('✅ Restaurante atualizado!');
+    } else {
+      dados.avaliacao = 5.0;
+      dados.criadoEm = fbAdmin.serverTimestamp();
+      await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'restaurantes_food'), dados);
+      showToast('✅ Restaurante cadastrado!');
+    }
+    document.getElementById('rest-nome').value = '';
+    document.getElementById('rest-categoria').value = '';
+    document.getElementById('rest-emoji').value = '🍽️';
+    document.getElementById('rest-tempo').value = '';
+    document.getElementById('rest-taxa').value = '5.00';
+    toggleFormRestaurante();
+    carregarRestaurantesAdmin();
+  } catch (e) {
+    console.error('[admin] erro ao salvar restaurante:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+async function carregarRestaurantesAdmin(){
+  if (!dbAdmin) return;
+  const lista = document.getElementById('restaurantes-lista');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'restaurantes_food'));
+    _todosRestaurantesCache = [];
+    snap.forEach(d => _todosRestaurantesCache.push({ id: d.id, ...d.data() }));
+
+    if (_todosRestaurantesCache.length === 0) {
+      lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:20px;">Nenhum restaurante cadastrado ainda</div>';
+      return;
+    }
+    lista.innerHTML = _todosRestaurantesCache.map(r => {
+      const status = r.ativo !== false ? '<span class="badge green">✅ Ativo</span>' : '<span class="badge red">Inativo</span>';
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:24px;">${r.emoji||'🍽️'}</span>
+            <div><b>${r.nome}</b><div style="font-size:12px;color:var(--t2);">${r.categoria} · ${NOMES_CIDADES[r.cidade]||r.cidade} · Taxa: ${formatMoeda(r.taxaEntrega)}</div></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${status}
+            <button class="pbtn" onclick="editarCardapioRestaurante('${r.id}')">🍴 Cardápio</button>
+            <button class="pbtn" onclick="editarRestaurante('${r.id}')">✏️ Editar</button>
+            <button class="pbtn" onclick="toggleRestauranteAtivo('${r.id}',${r.ativo!==false})">${r.ativo!==false?'Desativar':'Ativar'}</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar restaurantes:', e);
+    lista.innerHTML = `<div style="color:var(--red);padding:20px;">⚠️ ${e.code || e.message}</div>`;
+  }
+}
+
+function editarRestaurante(id){
+  const r = _todosRestaurantesCache.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('rest-id-editando').value = id;
+  document.getElementById('rest-nome').value = r.nome || '';
+  document.getElementById('rest-categoria').value = r.categoria || '';
+  document.getElementById('rest-emoji').value = r.emoji || '🍽️';
+  document.getElementById('rest-tempo').value = r.tempoEntrega || '';
+  document.getElementById('rest-taxa').value = r.taxaEntrega || 0;
+  document.getElementById('rest-tipo-entrega').value = r.tipoEntrega || 'interliga';
+  document.getElementById('rest-cidade').value = r.cidade || 'madre';
+  document.getElementById('form-restaurante').style.display = 'block';
+}
+
+async function toggleRestauranteAtivo(id, estaAtivo){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'restaurantes_food', id), { ativo: !estaAtivo });
+    showToast(estaAtivo ? 'Restaurante desativado' : '✅ Restaurante ativado');
+    carregarRestaurantesAdmin();
+  } catch(e) { showToast('⚠️ Erro — ' + (e.code || e.message)); }
+}
+
+// ── Cardápio ──
+function editarCardapioRestaurante(id){
+  const r = _todosRestaurantesCache.find(x => x.id === id);
+  if (!r) return;
+  restauranteEditandoCardapio = id;
+  document.getElementById('cardapio-rest-nome').textContent = r.nome;
+  document.getElementById('card-cardapio').style.display = 'block';
+  carregarItensCardapio(id);
+}
+
+async function adicionarItemCardapio(){
+  if (!restauranteEditandoCardapio) return;
+  const nome = document.getElementById('item-nome').value.trim();
+  const secao = document.getElementById('item-secao').value.trim() || 'Cardápio';
+  const desc = document.getElementById('item-desc').value.trim();
+  const preco = Number(document.getElementById('item-preco').value);
+
+  if (!nome || !preco) { showToast('⚠️ Preencha nome e preço do item'); return; }
+  try {
+    await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'restaurantes_food', restauranteEditandoCardapio, 'cardapio'), {
+      nome, secao, desc, preco, criadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('✅ Item adicionado!');
+    document.getElementById('item-nome').value = '';
+    document.getElementById('item-desc').value = '';
+    document.getElementById('item-preco').value = '';
+    carregarItensCardapio(restauranteEditandoCardapio);
+  } catch (e) {
+    console.error('[admin] erro ao adicionar item:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+async function carregarItensCardapio(restauranteId){
+  const lista = document.getElementById('cardapio-itens-lista');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'restaurantes_food', restauranteId, 'cardapio'));
+    if (snap.empty) { lista.innerHTML = '<div style="color:var(--t2);font-size:13px;text-align:center;padding:10px;">Nenhum item ainda</div>'; return; }
+    lista.innerHTML = snap.docs.map(d => {
+      const it = d.data();
+      return `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--s1);padding:8px 12px;border-radius:8px;">
+        <div><b style="font-size:13px;">${it.nome}</b><div style="font-size:11px;color:var(--t2);">${it.secao} · ${formatMoeda(it.preco)}</div></div>
+        <span class="icon-btn" onclick="removerItemCardapio('${restauranteId}','${d.id}')">🗑️</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    lista.innerHTML = `<div style="color:var(--red);font-size:12px;">⚠️ ${e.code || e.message}</div>`;
+  }
+}
+
+async function removerItemCardapio(restauranteId, itemId){
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'restaurantes_food', restauranteId, 'cardapio', itemId));
+    showToast('🗑️ Item removido');
+    carregarItensCardapio(restauranteId);
+  } catch(e) { showToast('⚠️ Erro — ' + (e.code || e.message)); }
+}
+
+// ═══════════════════════════════════════
+// INTERIFOOD — Pedidos (gestão em tempo real)
+// ═══════════════════════════════════════
+const ETAPAS_PEDIDO = ['confirmado', 'preparando', 'entrega', 'entregue'];
+const LABELS_ETAPA = { confirmado: '🆕 Novo', preparando: '👨‍🍳 Preparando', entrega: '🛵 Em entrega', entregue: '✅ Entregue', cancelado: '🚫 Cancelado' };
+
+let pedidosFoodFiltroAtual = 'todos';
+let _todosPedidosFoodCache = [];
+
+async function carregarPedidosFoodAdmin(){
+  if (!dbAdmin) return;
+  const lista = document.getElementById('pedidos-food-lista');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'pedidos_food'), fbAdmin.orderBy('criadoEm', 'desc'), fbAdmin.limit(100)));
+    _todosPedidosFoodCache = [];
+    snap.forEach(d => _todosPedidosFoodCache.push({ id: d.id, ...d.data() }));
+    renderPedidosFoodAdmin();
+  } catch (e) {
+    console.error('[admin] erro ao carregar pedidos food:', e);
+    lista.innerHTML = `<div style="color:var(--red);padding:20px;">⚠️ ${e.code || e.message}</div>`;
+  }
+}
+
+function renderPedidosFoodAdmin(){
+  const lista = document.getElementById('pedidos-food-lista');
+  let pedidos = _todosPedidosFoodCache;
+  if (pedidosFoodFiltroAtual !== 'todos') pedidos = pedidos.filter(p => p.status === pedidosFoodFiltroAtual);
+
+  if (pedidos.length === 0) {
+    lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:20px;">Nenhum pedido aqui</div>';
+    return;
+  }
+
+  lista.innerHTML = pedidos.map(p => {
+    const itensTexto = (p.itens || []).map(i => `${i.qtd}x ${i.nome}`).join(', ');
+    const proximaEtapa = ETAPAS_PEDIDO[ETAPAS_PEDIDO.indexOf(p.status) + 1];
+    const botaoAvancar = proximaEtapa
+      ? `<button class="pbtn" onclick="avancarStatusPedidoFood('${p.id}','${proximaEtapa}')">Avançar → ${LABELS_ETAPA[proximaEtapa]}</button>`
+      : '';
+    const botaoCancelar = (p.status !== 'entregue' && p.status !== 'cancelado')
+      ? `<button class="pbtn" style="background:var(--red);" onclick="cancelarPedidoFood('${p.id}')">Cancelar</button>`
+      : '';
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div>
+          <b>${p.restauranteNome || '—'}</b>
+          <div style="font-size:12px;color:var(--t2);">Cliente: ${p.passageiroNome || '—'} · ${formatHora(p.criadoEm)}</div>
+        </div>
+        <span class="badge ${p.status==='entregue'?'green':p.status==='cancelado'?'red':'yellow'}">${LABELS_ETAPA[p.status]||p.status}</span>
+      </div>
+      <div style="font-size:13px;color:var(--t2);margin-bottom:6px;">${itensTexto}</div>
+      <div style="font-size:13px;margin-bottom:10px;">📍 ${p.endereco || '—'} · <b>${formatMoeda(p.total)}</b></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${botaoAvancar} ${botaoCancelar}</div>
+    </div>`;
+  }).join('');
+}
+
+document.querySelectorAll('[data-pedido-filtro]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-pedido-filtro]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    pedidosFoodFiltroAtual = btn.dataset.pedidoFiltro;
+    renderPedidosFoodAdmin();
+  });
+});
+
+async function avancarStatusPedidoFood(id, novoStatus){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'pedidos_food', id), { status: novoStatus, atualizadoEm: fbAdmin.serverTimestamp() });
+    showToast('✅ Status atualizado: ' + LABELS_ETAPA[novoStatus]);
+    carregarPedidosFoodAdmin();
+  } catch (e) { showToast('⚠️ Erro — ' + (e.code || e.message)); }
+}
+
+async function cancelarPedidoFood(id){
+  if (!confirm('Cancelar esse pedido?')) return;
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'pedidos_food', id), { status: 'cancelado', atualizadoEm: fbAdmin.serverTimestamp() });
+    showToast('🚫 Pedido cancelado');
+    carregarPedidosFoodAdmin();
+  } catch (e) { showToast('⚠️ Erro — ' + (e.code || e.message)); }
 }
 
 async function carregarFranqueados(){

@@ -920,6 +920,14 @@ function renderRotaMotorista() {
   const destinoEl = document.getElementById('ongoing-destino');
   if (origemEl) origemEl.textContent = pontoAtual?.texto || '—';
   if (destinoEl) destinoEl.textContent = proximoPonto?.texto || '—';
+
+  const restantes = sequenciaRotaMotorista.slice(indiceRotaAtualMotorista + 2);
+  const elRestantes = document.getElementById('ongoing-proximas-paradas');
+  if (elRestantes) {
+    elRestantes.innerHTML = restantes.length > 0
+      ? 'Depois: ' + restantes.map(p => p.texto).join(' → ')
+      : '';
+  }
 }
 
 // ─────────────────────────────────────

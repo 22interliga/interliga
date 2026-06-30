@@ -81,14 +81,21 @@ async function initFirebase() {
     firebaseReady = true;
     console.log('✅ Firebase conectado');
 
+    // Expõe pro food.js usar — são módulos separados (sem import circular entre eles)
+    window.db = db;
+    window.fb = fb;
+    window.firebaseReady = true;
+
     // Login real (e-mail/senha) — quando já tem sessão salva, entra direto sem pedir senha de novo.
     // Quando não tem (ou deslogou), mostra a tela de login pra quem já escolheu ser passageiro.
     authMod.onAuthStateChanged(authPassageiro, (user) => {
       if (user) {
         meuPassageiroId = user.uid;
+        window.meuPassageiroId = user.uid;
         verificarCadastroPassageiro();
       } else {
         meuPassageiroId = null;
+        window.meuPassageiroId = null;
         if (localStorage.getItem('interliga_papel') === 'passageiro') {
           const telaAtual = state.currentScreen;
           if (telaAtual !== 'screen-cadastro-passageiro' && telaAtual !== 'screen-role-choice') {
@@ -992,6 +999,8 @@ function ouvirAceiteCorrida(corridaId) {
         placa: data.motoristaPlaca || '',
         avaliacao: data.motoristaAvaliacao || '4.8',
       });
+      // Guarda o nome do motorista no histórico local assim que aceita (não precisa esperar finalizar)
+      atualizarStatusHistoricoLocal('aceita', { motoristaNome: data.motoristaNome || 'Motorista', motoristaVeiculo: data.motoristaVeiculo, motoristaPlaca: data.motoristaPlaca });
     }
     if (data.status === 'finalizada') {
       console.log('[passageiro] corrida finalizada pelo motorista.');
@@ -999,8 +1008,14 @@ function ouvirAceiteCorrida(corridaId) {
       if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
       pararEscutaPosicaoMotorista();
 
-      // Atualizar status no histórico local (para aparecer corretamente em Minhas Viagens)
-      atualizarStatusHistoricoLocal('finalizada');
+      // Atualizar status no histórico local (para aparecer corretamente em Minhas Viagens),
+      // incluindo o preço final real (pode ter mudado por parada extra) e o motorista que atendeu
+      atualizarStatusHistoricoLocal('finalizada', {
+        preco: data.preco,
+        motoristaNome: data.motoristaNome || 'Motorista',
+        motoristaVeiculo: data.motoristaVeiculo,
+        motoristaPlaca: data.motoristaPlaca,
+      });
 
       showToast('✅ Corrida finalizada! Obrigado por viajar com a Interliga.');
       abrirTelaAvaliarMotorista(data.motoristaId, data.motoristaNome);
@@ -1817,6 +1832,16 @@ function renderRotaAtual() {
   origemEl.textContent = pontoAtual ? pontoAtual.texto : '—';
   destinoEl.textContent = proximoPonto ? proximoPonto.texto : '—';
 
+  // Mostra o resto da fila (pontos depois do próximo), pra deixar claro que nada foi substituído —
+  // só empurrado pra depois da nova parada
+  const restantes = sequenciaRota.slice(indiceRotaAtual + 2);
+  const elRestantes = document.getElementById('tracking-proximas-paradas');
+  if (elRestantes) {
+    elRestantes.innerHTML = restantes.length > 0
+      ? 'Depois: ' + restantes.map(p => p.texto).join(' → ')
+      : '';
+  }
+
   // Mostrar botão de avançar só se houver uma parada intermediária pendente (não o destino final)
   const btnAvancar = document.getElementById('btn-avancar-parada');
   if (btnAvancar) {
@@ -1925,7 +1950,8 @@ function renderTripsScreen() {
         <span>${new Date(c.criadoEm).toLocaleDateString('pt-BR')} · ${new Date(c.criadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
         <span class="trip-card-price">R$ ${Number(c.preco).toFixed(2).replace('.', ',')}</span>
       </div>
-      <div class="trip-card-route">${c.origem} → ${c.destino}</div>
+      <div class="trip-card-route">📍 ${c.origem} → 🏁 ${c.destino}</div>
+      ${c.motoristaNome ? `<div style="font-size:12px;color:var(--text-soft);margin-top:4px;">🚗 ${c.motoristaNome}${c.motoristaVeiculo ? ' · ' + c.motoristaVeiculo : ''}${c.motoristaPlaca ? ' · ' + c.motoristaPlaca : ''}</div>` : ''}
     </div>
   `).join('');
 }

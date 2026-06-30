@@ -6,6 +6,8 @@
 <title>Interliga — Motorista</title>
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest-motorista.json">
+<meta name="theme-color" content="#FF6B00">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -55,6 +57,7 @@
           <option value="simoes">Simões Filho — BA</option>
         </select>
       </div>
+      <div class="cadastro-field"><label>Código de indicação (opcional)</label><input type="text" class="cadastro-input" id="cad-mot-codigo-indicacao" placeholder="Se alguém te indicou, coloca aqui" style="text-transform:uppercase;"></div>
     </div>
 
     <div class="section-label">FOTO DE PERFIL (SELFIE)</div>
@@ -291,6 +294,7 @@
         <div class="route-row"><span class="address-dot address-dot--green"></span><span id="ongoing-origem">Origem</span></div>
         <div class="route-line"></div>
         <div class="route-row"><span class="address-dot address-dot--orange"></span><span id="ongoing-destino">Destino</span></div>
+        <div id="ongoing-proximas-paradas" style="padding:4px 16px 0;font-size:12px;color:var(--text-soft);"></div>
       </div>
 
       <div class="nav-externa-row">
@@ -355,6 +359,11 @@
       <div class="profile-name" id="profile-driver-name">Motorista</div>
       <div class="profile-phone" id="profile-driver-phone">—</div>
       <div class="profile-vehicle" id="profile-driver-vehicle">—</div>
+    </div>
+
+    <div class="card-carteira" id="card-carteira-motorista">
+      <div class="carteira-label">👛 Saldo na Carteira</div>
+      <div class="carteira-valor" id="saldo-carteira-motorista">R$ 0,00</div>
     </div>
 
     <div class="section-label">MEUS DADOS</div>

@@ -6,6 +6,8 @@
 <title>Interliga — Mobilidade</title>
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FF6B00">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -318,6 +320,7 @@
       <div class="route-row"><span class="address-dot address-dot--green"></span><span id="tracking-origem">Origem</span></div>
       <div class="route-line"></div>
       <div class="route-row"><span class="address-dot address-dot--orange"></span><span id="tracking-destino">Destino</span></div>
+      <div id="tracking-proximas-paradas" style="padding:4px 16px 0;font-size:12px;color:var(--text-soft);"></div>
     </div>
 
     <!-- Estado: buscando -->
