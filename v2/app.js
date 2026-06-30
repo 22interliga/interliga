@@ -124,6 +124,14 @@ let timestampAceite = null; // marcado quando motorista aceita; usado p/ calcula
 // ─────────────────────────────────────
 // NAVEGAÇÃO — função única, sem duplicação
 // ─────────────────────────────────────
+// Telas que NÃO entram no histórico (não faz sentido "voltar" pra elas)
+const TELAS_SEM_HISTORICO_PAX = new Set([
+  'screen-splash','screen-role-choice','screen-login-passageiro',
+  'screen-cadastro-passageiro','screen-aguardando-aprovacao',
+  'screen-rejeitado','screen-bloqueado',
+]);
+const historicoNavPassageiro = [];
+
 export function go(screenId) {
   const next = document.getElementById(screenId);
   if (!next) {
@@ -132,6 +140,13 @@ export function go(screenId) {
   }
   const current = document.querySelector('.screen[data-active="true"]');
   if (current === next) return;
+
+  // Guarda a tela atual no histórico antes de navegar
+  const telaAtual = state.currentScreen;
+  if (telaAtual && !TELAS_SEM_HISTORICO_PAX.has(telaAtual) && !TELAS_SEM_HISTORICO_PAX.has(screenId)) {
+    historicoNavPassageiro.push(telaAtual);
+    history.pushState({ tela: screenId }, '', '');
+  }
 
   if (current) current.removeAttribute('data-active');
   next.setAttribute('data-active', 'true');
@@ -189,6 +204,32 @@ function onEnterHome() {
   initHomeMap();
   renderLastRide();
   if (typeof window.atualizarBannerPedidoAtivo === 'function') window.atualizarBannerPedidoAtivo();
+  carregarBannersHome();
+}
+
+async function carregarBannersHome() {
+  const el = document.getElementById('home-banners');
+  if (!el || !firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDocs(fb.query(
+      fb.collection(db, 'anuncios'),
+      fb.where('ativo', '==', true)
+    ));
+    if (snap.empty) { el.innerHTML = ''; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const a = d.data();
+      if (a.imagem) {
+        return `<div style="border-radius:12px;overflow:hidden;"><img src="${a.imagem}" style="width:100%;display:block;"></div>`;
+      }
+      return `<div style="background:${a.cor||'#1270C2'};border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:28px;">${a.icone||'🎉'}</span>
+        <div><div style="font-weight:700;color:white;font-size:14px;">${a.titulo}</div>
+        ${a.descricao ? `<div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:2px;">${a.descricao}</div>` : ''}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '';
+  }
 }
 
 function initHomeMap() {
@@ -335,6 +376,23 @@ export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam
 
   inputEl.addEventListener('focus', () => { suggestionsBox._activeInput = inputEl; });
   inputEl.addEventListener('input', () => { search(); atualizarVisibilidadeLimpar(); });
+
+  // Quando o passageiro sai do campo sem ter clicado em sugestão nenhuma,
+  // aceita o texto digitado como endereço livre (sem coordenada) —
+  // o motorista vê exatamente o que foi digitado e confirma com o passageiro pelo chat.
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => { // pequeno delay pra não conflitar com o clique na sugestão
+      const textoAtual = inputEl.value.trim();
+      if (textoAtual && textoAtual.length >= 3) {
+        const resultAtual = suggestionsBox._results?.find(r => r.texto === textoAtual);
+        if (!resultAtual) {
+          // Não veio de uma sugestão — aceita como texto livre sem coordenada
+          onSelect({ texto: textoAtual, lat: null, lon: null });
+        }
+      }
+      suggestionsBox.classList.remove('is-open');
+    }, 200);
+  });
 
   suggestionsBox.addEventListener('click', (e) => {
     const item = e.target.closest('.suggestion-item');
@@ -677,12 +735,15 @@ function obterMultiplicadorZona(lat, lon, cidade) {
 
 function calcularPrecos() {
   if (!state.origem || !state.destino) return;
-  const km = haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
-  const risco = calcularAcrescimoRisco(state.origem, state.destino);
+
+  // Sem coordenada (endereço texto livre) — mostra o preço mínimo como estimativa
+  const semCoordenada = !state.origem.lat || !state.destino.lat;
+  const km = semCoordenada ? 0 : haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
+  const risco = semCoordenada ? { acrescimo: 0, percentual: 0, zonasAtingidas: [] } : calcularAcrescimoRisco(state.origem, state.destino);
   const percentualHorario = calcularPercentualHorario();
-  const cidade = detectarCidade(state.origem.lat, state.origem.lon);
+  const cidade = semCoordenada ? 'madre' : detectarCidade(state.origem.lat, state.origem.lon);
   const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
-  const multiplicadorZona = obterMultiplicadorZona(state.origem.lat, state.origem.lon, cidade);
+  const multiplicadorZona = semCoordenada ? 1.0 : obterMultiplicadorZona(state.origem.lat, state.origem.lon, cidade);
 
   for (const cat of ['x', 'plus', 'van']) {
     const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
@@ -691,19 +752,26 @@ function calcularPrecos() {
     const itemEl = document.querySelector(`.category-item[data-cat="${cat}"]`);
 
     if (t.ativo === false) {
-      // Categoria desativada pelo admin pra essa cidade — esconde da lista
       if (itemEl) itemEl.style.display = 'none';
       continue;
     }
     if (itemEl) itemEl.style.display = '';
 
-    let preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
-    preco = preco + risco.acrescimo;
-    preco = preco * (1 + risco.percentual / 100);
-    preco = preco * (1 + percentualHorario / 100);
+    let preco;
+    if (semCoordenada) {
+      // Sem coordenada — mostra "A partir de R$ X" (o mínimo da categoria)
+      preco = t.minimo;
+      if (priceEl) priceEl.textContent = 'A partir de R$ ' + preco.toFixed(2).replace('.', ',');
+      if (etaEl) etaEl.textContent = '— min';
+    } else {
+      preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
+      preco = preco + risco.acrescimo;
+      preco = preco * (1 + risco.percentual / 100);
+      preco = preco * (1 + percentualHorario / 100);
+      if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
+      if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
+    }
     state.precos[cat] = preco;
-    if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
-    if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
   }
 }
 
@@ -745,7 +813,9 @@ document.getElementById('btn-confirmar-corrida')?.addEventListener('click', asyn
 // CRIAR CORRIDA NO FIRESTORE + OUVIR ACEITE
 // ─────────────────────────────────────
 async function criarCorrida(origem, destino, preco, categoria) {
-  const cidade = detectarCidade(origem.lat, origem.lon);
+  const cidade = (origem.lat && origem.lon)
+    ? detectarCidade(origem.lat, origem.lon)
+    : (state.passageiroDados?.cidade || 'madre'); // usa cidade do cadastro do passageiro quando sem coordenada
   const corridaLocal = {
     origem: origem.texto, destino: destino.texto,
     origemLat: origem.lat, origemLon: origem.lon,
@@ -1485,6 +1555,7 @@ async function verificarCadastroPassageiro() {
 }
 
 function aplicarStatusCadastro(dados) {
+  state.passageiroDados = dados; // guarda pra usar cidade como fallback quando sem coordenada
   if (dados.bloqueado === true) {
     document.getElementById('bloqueio-motivo-texto').textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
     go('screen-bloqueado');
@@ -2191,6 +2262,27 @@ async function configurarNotificacoesPush() {
     console.warn('[passageiro] erro ao configurar notificações push:', e);
   }
 }
+
+// Intercepta o botão "voltar" do Android (e o gesto de voltar no iOS).
+// Em vez de fechar o app ou sair da página, volta pra tela anterior dentro do app.
+window.addEventListener('popstate', () => {
+  const anterior = historicoNavPassageiro.pop();
+  if (anterior) {
+    // Vai pra tela anterior SEM empurrar no histórico de novo (evita loop)
+    const next = document.getElementById(anterior);
+    if (!next) return;
+    const current = document.querySelector('.screen[data-active="true"]');
+    if (current) current.removeAttribute('data-active');
+    next.setAttribute('data-active', 'true');
+    state.currentScreen = anterior;
+  } else {
+    // Não tem mais histórico interno — empurra um estado vazio pra não fechar o app
+    history.pushState(null, '', '');
+  }
+});
+
+// Estado inicial no histórico — garante que o popstate funciona desde o primeiro "voltar"
+history.pushState(null, '', '');
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro
