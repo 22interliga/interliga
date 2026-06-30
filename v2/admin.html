@@ -449,11 +449,18 @@ textarea.inp { resize: vertical; }
             </div>
 
             <div class="card">
-              <div class="ct" style="margin-bottom:14px;">Repasses por Motorista</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                <div class="ct">Repasses por Motorista</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="pbtn" onclick="selecionarTodosRepasses()">☑️ Selecionar todos</button>
+                  <button class="pbtn" style="background:var(--green);" onclick="enviarRepassesEmMassaWhatsApp()">📲 WhatsApp selecionados</button>
+                  <button class="pbtn" style="background:var(--blue);" onclick="exportarRepassePDF()">📄 Exportar PDF</button>
+                </div>
+              </div>
               <div class="tbl-wrap">
                 <table>
-                  <thead><tr><th>MOTORISTA</th><th>RECEBEU EM MÃOS (dinheiro/pix)</th><th>RECEBIDO PELA PLATAFORMA (cartão/carteira)</th><th>COMISSÃO TOTAL</th><th>SALDO</th><th>AÇÃO</th></tr></thead>
-                  <tbody id="repasses-tbody"><tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Carregando...</td></tr></tbody>
+                  <thead><tr><th></th><th>MOTORISTA</th><th>RECEBEU EM MÃOS</th><th>RECEBIDO PELA PLATAFORMA</th><th>COMISSÃO</th><th>SALDO</th><th>AÇÃO</th></tr></thead>
+                  <tbody id="repasses-tbody"><tr><td colspan="7" style="text-align:center;color:var(--t2);padding:24px;">Carregando...</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -701,20 +708,49 @@ textarea.inp { resize: vertical; }
 
           <!-- ANÚNCIOS -->
           <div class="section" id="s-anuncios">
-            <div class="section-header"><div class="section-title">📢 Anúncios & Banners</div><button class="pbtn" onclick="showToast('➕ Novo anúncio')">+ Novo</button></div>
-            <div class="card" style="margin-bottom:14px;">
-              <div class="ct" style="margin-bottom:14px;">Banner Principal (App Passageiro)</div>
-              <div class="g2">
-                <div class="fl" style="margin-bottom:10px;"><div class="lbl">ÍCONE (emoji)</div><input class="inp" value="🎉" id="ban-icon"/></div>
-                <div class="fl" style="margin-bottom:10px;"><div class="lbl">COR DE FUNDO</div><select class="inp"><option>Azul (padrão)</option><option>Laranja</option><option>Verde</option><option>Vermelho</option></select></div>
+            <div class="section-header">
+              <div class="section-title">📢 Anúncios & Banners</div>
+              <button class="pbtn" onclick="toggleFormAnuncio()">+ Novo anúncio</button>
+            </div>
+
+            <div class="card" id="form-anuncio" style="display:none;margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">Novo anúncio</div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">TÍTULO</div><input class="inp" id="anun-titulo" placeholder="Ex: Promoção de fim de semana!"/></div>
+                <div class="fl"><div class="lbl">DESCRIÇÃO</div><input class="inp" id="anun-desc" placeholder="Ex: 30% de desconto na primeira corrida"/></div>
               </div>
-              <div class="fl" style="margin-bottom:10px;"><div class="lbl">TÍTULO</div><input class="inp" value="Primeira corrida grátis!" id="ban-titulo"/></div>
-              <div class="fl" style="margin-bottom:14px;"><div class="lbl">DESCRIÇÃO</div><input class="inp" value="Use o cupom PRIMEIRAVEZ e ganhe sua corrida" id="ban-desc"/></div>
-              <div style="background:linear-gradient(135deg,#1270C2,#1F8CE6);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div style="font-size:28px;" id="prev-icon">🎉</div>
-                <div><div style="font-weight:700;color:white;" id="prev-titulo">Primeira corrida grátis!</div><div style="font-size:13px;color:rgba(255,255,255,.75);" id="prev-desc">Use o cupom PRIMEIRAVEZ e ganhe sua corrida</div></div>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">ÍCONE (emoji)</div><input class="inp" id="anun-icone" value="🎉" maxlength="4" style="max-width:80px;"/></div>
+                <div class="fl"><div class="lbl">COR DE FUNDO</div>
+                  <select class="inp" id="anun-cor">
+                    <option value="#1270C2">Azul (padrão)</option>
+                    <option value="#FF6B00">Laranja</option>
+                    <option value="#22C55E">Verde</option>
+                    <option value="#E8002D">Vermelho</option>
+                    <option value="#7C3AED">Roxo</option>
+                  </select>
+                </div>
               </div>
-              <button class="sbtn" onclick="salvarBanner()">💾 Salvar Banner</button>
+              <div class="fl" style="margin-bottom:10px;">
+                <div class="lbl">IMAGEM DA GALERIA (opcional — substitui ícone+cor)</div>
+                <label class="btn-upload-selfie" style="display:inline-block;margin-top:4px;">
+                  📷 Escolher imagem
+                  <input type="file" accept="image/*" id="anun-imagem-input" style="display:none;" onchange="previewAnuncioImagem(this)">
+                </label>
+                <div id="anun-imagem-preview" style="margin-top:8px;"></div>
+              </div>
+              <div class="fl" style="margin-bottom:14px;">
+                <div class="lbl">DIMENSÃO RECOMENDADA</div>
+                <div style="font-size:12px;color:var(--t2);">Imagem horizontal: <b>800 × 300 px</b> (proporção ~2.6:1) — aparece como banner no topo do app do passageiro</div>
+              </div>
+              <button class="pbtn" onclick="salvarAnuncio()">💾 Salvar e publicar</button>
+            </div>
+
+            <div class="card">
+              <div class="ct" style="margin-bottom:14px;">Anúncios ativos</div>
+              <div id="anuncios-lista" style="display:flex;flex-direction:column;gap:10px;">
+                <div style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
+              </div>
             </div>
           </div>
 
@@ -1215,6 +1251,7 @@ function showSection(id,navEl){
     monitor: carregarMonitoramento,
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
+    anuncios: carregarAnuncios,
     estabelecimentos: carregarEstabelecimentosAdmin,
     precificacao: () => { updateCidade(); carregarZonasRisco(); carregarFaixasHorario(); },
   };
@@ -1610,14 +1647,79 @@ function salvarCupom(){
 }
 
 // Anúncios
-function salvarBanner(){
-  const icon=document.getElementById('ban-icon')?.value||'🎉';
-  const titulo=document.getElementById('ban-titulo')?.value||'';
-  const desc=document.getElementById('ban-desc')?.value||'';
-  document.getElementById('prev-icon').textContent=icon;
-  document.getElementById('prev-titulo').textContent=titulo;
-  document.getElementById('prev-desc').textContent=desc;
-  showToast('✅ Banner salvo e publicado!');
+let anuncioImagemBase64 = null;
+
+function toggleFormAnuncio(){
+  const f = document.getElementById('form-anuncio');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function previewAnuncioImagem(input){
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    anuncioImagemBase64 = e.target.result;
+    document.getElementById('anun-imagem-preview').innerHTML =
+      `<img src="${e.target.result}" style="max-height:80px;border-radius:8px;border:1px solid var(--bd);margin-top:4px;">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function salvarAnuncio(){
+  const titulo = document.getElementById('anun-titulo').value.trim();
+  const desc = document.getElementById('anun-desc').value.trim();
+  const icone = document.getElementById('anun-icone').value.trim() || '\u{1F389}';
+  const cor = document.getElementById('anun-cor').value;
+  if (!titulo) { showToast('\u26a0\ufe0f Informe o t\u00edtulo do an\u00fancio'); return; }
+  if (!dbAdmin) { showToast('\u26a0\ufe0f Sem conex\u00e3o com o servidor'); return; }
+  try {
+    await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'anuncios'), {
+      titulo, descricao: desc, icone, cor,
+      imagem: anuncioImagemBase64 || null,
+      ativo: true,
+      criadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('\u2705 An\u00fancio publicado!');
+    document.getElementById('anun-titulo').value = '';
+    document.getElementById('anun-desc').value = '';
+    document.getElementById('anun-icone').value = '\u{1F389}';
+    document.getElementById('anun-imagem-preview').innerHTML = '';
+    anuncioImagemBase64 = null;
+    toggleFormAnuncio();
+    carregarAnuncios();
+  } catch (e) {
+    console.error('[admin] erro ao salvar an\u00fancio:', e);
+    showToast('\u26a0\ufe0f Erro ao salvar \u2014 ' + (e.code || e.message));
+  }
+}
+
+async function carregarAnuncios(){
+  if (!dbAdmin) return;
+  const lista = document.getElementById('anuncios-lista');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'anuncios'), fbAdmin.orderBy('criadoEm', 'desc')));
+    if (snap.empty) { lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:20px;">Nenhum an\u00fancio publicado ainda</div>'; return; }
+    lista.innerHTML = snap.docs.map(d => {
+      const a = d.data();
+      const preview = a.imagem
+        ? `<img src="${a.imagem}" style="width:100%;max-height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px;">`
+        : `<div style="background:${a.cor||'#1270C2'};border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-size:22px;">${a.icone||'\u{1F389}'}</span><div><b style="color:white;">${a.titulo}</b><div style="font-size:12px;color:rgba(255,255,255,.75);">${a.descricao||''}</div></div></div>`;
+      const status = a.ativo !== false ? '<span class="badge green">\u2705 Ativo</span>' : '<span class="badge red">Inativo</span>';
+      return `<div class="card">${preview}<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div style="font-size:13px;color:var(--t2);">${a.titulo}</div><div style="display:flex;gap:8px;">${status}<button class="pbtn" onclick="toggleAnuncioAtivo('${d.id}',${a.ativo!==false})">${a.ativo!==false?'Desativar':'Ativar'}</button><button class="pbtn" style="background:var(--red);" onclick="removerAnuncio('${d.id}')">\u{1F5D1}\ufe0f</button></div></div></div>`;
+    }).join('');
+  } catch (e) { lista.innerHTML = `<div style="color:var(--red);padding:20px;">\u26a0\ufe0f ${e.code||e.message}</div>`; }
+}
+
+async function toggleAnuncioAtivo(id, estaAtivo){
+  try { await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'anuncios', id), { ativo: !estaAtivo }); showToast(estaAtivo ? 'Desativado' : '\u2705 Ativado'); carregarAnuncios(); }
+  catch(e) { showToast('\u26a0\ufe0f ' + (e.code||e.message)); }
+}
+
+async function removerAnuncio(id){
+  if (!confirm('Remover esse an\u00fancio?')) return;
+  try { await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'anuncios', id)); showToast('\u{1F5D1}\ufe0f An\u00fancio removido'); carregarAnuncios(); }
+  catch(e) { showToast('\u26a0\ufe0f ' + (e.code||e.message)); }
 }
 
 // ═══════════════════════════════════════
@@ -2002,7 +2104,7 @@ async function carregarRepasses(){
 
     const tbody = document.getElementById('repasses-tbody');
     if (linhas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista com corridas concluídas ainda</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--t2);padding:24px;">Nenhum motorista com corridas concluídas ainda</td></tr>';
       return;
     }
     tbody.innerHTML = linhas.map(l => {
@@ -2014,7 +2116,17 @@ async function carregarRepasses(){
       const botao = Math.abs(l.saldo) < 0.01
         ? '—'
         : `<button class="pbtn" onclick="registrarAcertoRepasse('${l.id}', ${l.saldo})">${l.saldo > 0 ? 'Marcar pago' : 'Marcar cobrado'}</button>`;
-      return `<tr><td><b>${l.nome}</b></td><td>${formatMoeda(l.recebidoDireto)}</td><td>${formatMoeda(l.recebidoPlataforma)}</td><td style="color:var(--t2);">${formatMoeda(l.comissao)}</td><td>${saldoTexto}</td><td>${botao}</td></tr>`;
+      const whatsapp = l.celular
+        ? `<span class="icon-btn" title="Enviar via WhatsApp" onclick="enviarRepasseWhatsApp('${l.nome}','${l.celular}',${l.saldo})">📲</span>`
+        : '';
+      return `<tr>
+        <td><input type="checkbox" class="repasse-check" data-id="${l.id}" data-nome="${l.nome}" data-celular="${l.celular||''}" data-saldo="${l.saldo}"> <b>${l.nome}</b></td>
+        <td>${formatMoeda(l.recebidoDireto)}</td>
+        <td>${formatMoeda(l.recebidoPlataforma)}</td>
+        <td style="color:var(--t2);">${formatMoeda(l.comissao)}</td>
+        <td>${saldoTexto}</td>
+        <td>${whatsapp} ${botao}</td>
+      </tr>`;
     }).join('');
   } catch (e) {
     console.error('[admin] erro ao carregar repasses:', e);
@@ -2037,6 +2149,74 @@ async function registrarAcertoRepasse(motoristaId, saldoAtual){
     console.error('[admin] erro ao registrar acerto:', e);
     showToast('⚠️ Erro ao salvar — confirme as regras do Firestore');
   }
+}
+
+function montarMensagemRepasse(nome, saldo) {
+  const data = new Date().toLocaleDateString('pt-BR');
+  if (Math.abs(saldo) < 0.01) return `Olá ${nome}! Seu repasse Interliga está em dia até ${data}. ✅`;
+  if (saldo > 0) return `Olá ${nome}! Seu repasse Interliga de ${formatMoeda(saldo)} está disponível. Entre em contato para combinar a transferência. 💰 (${data})`;
+  return `Olá ${nome}! Há um saldo pendente de ${formatMoeda(Math.abs(saldo))} a acertar com a plataforma Interliga. Entre em contato. (${data})`;
+}
+
+function enviarRepasseWhatsApp(nome, celular, saldo) {
+  const numero = celular.replace(/\D/g, '');
+  if (!numero || numero.length < 10) { showToast('⚠️ Celular do motorista não cadastrado'); return; }
+  const msg = encodeURIComponent(montarMensagemRepasse(nome, Number(saldo)));
+  window.open(`https://wa.me/55${numero}?text=${msg}`, '_blank');
+}
+
+function selecionarTodosRepasses() {
+  const checks = document.querySelectorAll('.repasse-check');
+  const todosMarcados = [...checks].every(c => c.checked);
+  checks.forEach(c => c.checked = !todosMarcados);
+}
+
+function enviarRepassesEmMassaWhatsApp() {
+  const selecionados = [...document.querySelectorAll('.repasse-check:checked')];
+  if (selecionados.length === 0) { showToast('⚠️ Marque pelo menos 1 motorista'); return; }
+  selecionados.forEach((check, i) => {
+    setTimeout(() => {
+      const { nome, celular, saldo } = check.dataset;
+      enviarRepasseWhatsApp(nome, celular, Number(saldo));
+    }, i * 800); // abre uma janela por vez, com intervalo pra não ser bloqueado como popup
+  });
+}
+
+function exportarRepassePDF() {
+  const linhas = [...document.querySelectorAll('#repasses-tbody tr')];
+  if (linhas.length === 0 || linhas[0].cells.length < 2) { showToast('⚠️ Nenhum dado pra exportar'); return; }
+
+  const data = new Date().toLocaleDateString('pt-BR');
+  let html = `<html><head><meta charset="UTF-8">
+  <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}
+  h1{font-size:18px;margin-bottom:4px}
+  .sub{color:#666;font-size:12px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{background:#111;color:white;padding:8px;text-align:left}
+  td{border-bottom:1px solid #eee;padding:7px}
+  .total{font-weight:700;background:#f5f5f5}
+  </style></head><body>
+  <h1>Relatório de Repasses — Interliga</h1>
+  <div class="sub">Gerado em ${data}</div>
+  <table><thead><tr>`;
+
+  // Cabeçalhos (pega do HTML, exceto a 1ª coluna que é checkbox)
+  const ths = [...document.querySelectorAll('#s-repasses table thead th')].slice(1);
+  ths.forEach(th => { html += `<th>${th.textContent}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  linhas.forEach(tr => {
+    html += '<tr>';
+    [...tr.cells].slice(1).forEach(td => { html += `<td>${td.innerText}</td>`; });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></body></html>';
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
+  setTimeout(() => janela.print(), 500);
 }
 
 

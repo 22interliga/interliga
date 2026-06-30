@@ -194,11 +194,24 @@ const state = {
 // ─────────────────────────────────────
 // NAVEGAÇÃO — função única, isolada deste arquivo
 // ─────────────────────────────────────
+const TELAS_SEM_HISTORICO_MOT = new Set([
+  'screen-splash','screen-login-motorista','screen-cadastro-motorista',
+  'screen-aguardando-aprovacao-motorista','screen-rejeitado-motorista','screen-bloqueado-motorista',
+]);
+const historicoNavMotorista = [];
+
 function go(screenId) {
   const next = document.getElementById(screenId);
   if (!next) { console.warn('[go-motorista] Tela nao encontrada:', screenId); return; }
   const current = document.querySelector('.screen[data-active="true"]');
   if (current === next) return;
+
+  const telaAtual = current?.id;
+  if (telaAtual && !TELAS_SEM_HISTORICO_MOT.has(telaAtual) && !TELAS_SEM_HISTORICO_MOT.has(screenId)) {
+    historicoNavMotorista.push(telaAtual);
+    history.pushState({ tela: screenId }, '', '');
+  }
+
   if (current) current.removeAttribute('data-active');
   next.setAttribute('data-active', 'true');
 
@@ -1836,6 +1849,29 @@ async function configurarNotificacoesPush() {
     console.warn('[motorista] erro ao configurar notificações push:', e);
   }
 }
+
+window.addEventListener('popstate', () => {
+  // Se tiver em corrida ativa, ignora o voltar — não deixa sair da tela de corrida
+  if (state.emCorridaAtiva) {
+    history.pushState(null, '', '');
+    showToast('🚗 Você está numa corrida em andamento');
+    return;
+  }
+  const anterior = historicoNavMotorista.pop();
+  if (anterior) {
+    const next = document.getElementById(anterior);
+    if (!next) return;
+    const current = document.querySelector('.screen[data-active="true"]');
+    if (current) current.removeAttribute('data-active');
+    next.setAttribute('data-active', 'true');
+    const handlers = { 'screen-home': onEnterHome, 'screen-ongoing': onEnterOngoing };
+    if (handlers[anterior]) handlers[anterior]();
+  } else {
+    history.pushState(null, '', '');
+  }
+});
+
+history.pushState(null, '', '');
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroMotorista() que decide a tela certa
