@@ -298,6 +298,7 @@ textarea.inp { resize: vertical; }
           <div class="section" id="s-passageiros">
             <div class="section-header">
               <div class="section-title">👤 Passageiros</div>
+              <button class="pbtn" style="background:var(--green);" onclick="enviarMensagemEmMassa('passageiros')">📲 Msg em massa</button>
             </div>
             <div class="card">
               <div class="tbl-wrap">
@@ -313,7 +314,10 @@ textarea.inp { resize: vertical; }
           <div class="section" id="s-motoristas">
             <div class="section-header">
               <div class="section-title">🚗 Motoristas</div>
-              <button class="pbtn" onclick="toggleFormCadastroMotorista()">+ Cadastrar Motorista</button>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="pbtn" style="background:var(--green);" onclick="enviarMensagemEmMassa('motoristas')">📲 Msg em massa</button>
+                <button class="pbtn" onclick="toggleFormCadastroMotorista()">+ Cadastrar Motorista</button>
+              </div>
             </div>
 
             <div class="card" id="form-cadastro-motorista" style="display:none;margin-bottom:14px;">
@@ -852,41 +856,55 @@ textarea.inp { resize: vertical; }
 
           <!-- RELATÓRIOS -->
           <div class="section" id="s-relatorios">
-            <div class="section-header"><div class="section-title">📊 Relatórios</div><button class="pbtn" onclick="showToast('📥 Exportando PDF...')">📥 Exportar PDF</button></div>
+            <div class="section-header">
+              <div class="section-title">📊 Relatórios</div>
+              <button class="pbtn" onclick="exportarRelatoriosPDF()">📥 Exportar PDF</button>
+            </div>
+
             <div class="filter-tabs">
-              <button class="filter-btn active">Hoje</button>
-              <button class="filter-btn">Esta semana</button>
-              <button class="filter-btn">Este mês</button>
-              <button class="filter-btn">Personalizado</button>
+              <button class="filter-btn active" data-rel-periodo="hoje" onclick="selecionarPeriodoRelatorio(this)">Hoje</button>
+              <button class="filter-btn" data-rel-periodo="semana" onclick="selecionarPeriodoRelatorio(this)">Esta semana</button>
+              <button class="filter-btn" data-rel-periodo="mes" onclick="selecionarPeriodoRelatorio(this)">Este mês</button>
+              <button class="filter-btn" data-rel-periodo="personalizado" onclick="selecionarPeriodoRelatorio(this)">Personalizado</button>
             </div>
-            <div class="stat-grid">
-              <div class="stat-card"><div class="stat-icon">🚕</div><div class="stat-val">1.247</div><div class="stat-lbl">Total corridas</div><div class="stat-chg up">↑ +8%</div></div>
-              <div class="stat-card"><div class="stat-icon">🍔</div><div class="stat-val">389</div><div class="stat-lbl">Pedidos delivery</div><div class="stat-chg up">↑ +12%</div></div>
-              <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val">R$ 48.320</div><div class="stat-lbl">Faturamento bruto</div><div class="stat-chg up">↑ +18%</div></div>
-              <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-val">R$ 7.248</div><div class="stat-lbl">Receita líquida</div><div class="stat-chg up">↑ +15%</div></div>
-            </div>
-            <div class="g2">
-              <div class="card">
-                <div class="ct" style="margin-bottom:14px;">Top Motoristas</div>
-                <table style="min-width:unset;">
-                  <thead><tr><th>#</th><th>MOTORISTA</th><th>CORRIDAS</th><th>GANHOS</th></tr></thead>
-                  <tbody>
-                    <tr><td>🥇</td><td>Marcos R.</td><td>312</td><td>R$ 3.240</td></tr>
-                    <tr><td>🥈</td><td>Ana L.</td><td>287</td><td>R$ 4.800</td></tr>
-                    <tr><td>🥉</td><td>Paulo S.</td><td>198</td><td>R$ 2.100</td></tr>
-                  </tbody>
-                </table>
+
+            <div id="rel-periodo-personalizado" style="display:none;padding:12px 0;display:none;">
+              <div class="g2">
+                <div class="fl"><div class="lbl">DE</div><input class="inp" type="date" id="rel-data-inicio"></div>
+                <div class="fl"><div class="lbl">ATÉ</div><input class="inp" type="date" id="rel-data-fim"></div>
               </div>
-              <div class="card">
-                <div class="ct" style="margin-bottom:14px;">Top Passageiros</div>
-                <table style="min-width:unset;">
-                  <thead><tr><th>#</th><th>PASSAGEIRO</th><th>CORRIDAS</th><th>GASTO</th></tr></thead>
-                  <tbody>
-                    <tr><td>🥇</td><td>Maria Costa</td><td>92</td><td>R$ 1.840</td></tr>
-                    <tr><td>🥈</td><td>João Silva</td><td>48</td><td>R$ 960</td></tr>
-                    <tr><td>🥉</td><td>Carlos M.</td><td>17</td><td>R$ 340</td></tr>
-                  </tbody>
-                </table>
+              <button class="pbtn" style="margin-top:8px;" onclick="carregarRelatorios()">Filtrar</button>
+            </div>
+
+            <div id="rel-loading" style="text-align:center;color:var(--t2);padding:30px;display:none;">Carregando dados...</div>
+
+            <div id="rel-conteudo">
+              <div class="stat-grid" id="rel-stat-grid">
+                <div class="stat-card"><div class="stat-icon">🚕</div><div class="stat-val" id="rel-total-corridas">—</div><div class="stat-lbl">Total corridas</div></div>
+                <div class="stat-card"><div class="stat-icon">🍔</div><div class="stat-val" id="rel-total-pedidos">—</div><div class="stat-lbl">Pedidos delivery</div></div>
+                <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" id="rel-faturamento">—</div><div class="stat-lbl">Faturamento bruto</div></div>
+                <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-val" id="rel-comissao">—</div><div class="stat-lbl">Comissão plataforma</div></div>
+              </div>
+
+              <div class="g2">
+                <div class="card">
+                  <div class="ct" style="margin-bottom:14px;">🏆 Top Motoristas</div>
+                  <div class="tbl-wrap">
+                    <table style="min-width:unset;">
+                      <thead><tr><th>#</th><th>MOTORISTA</th><th>CORRIDAS</th><th>GANHOS</th></tr></thead>
+                      <tbody id="rel-top-motoristas"><tr><td colspan="4" style="text-align:center;color:var(--t2);padding:14px;">Carregando...</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="ct" style="margin-bottom:14px;">🏆 Top Passageiros</div>
+                  <div class="tbl-wrap">
+                    <table style="min-width:unset;">
+                      <thead><tr><th>#</th><th>PASSAGEIRO</th><th>CORRIDAS</th><th>GASTO</th></tr></thead>
+                      <tbody id="rel-top-passageiros"><tr><td colspan="4" style="text-align:center;color:var(--t2);padding:14px;">Carregando...</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1325,6 +1343,7 @@ function showSection(id,navEl){
     monitor: carregarMonitoramento,
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
+    relatorios: carregarRelatorios,
     anuncios: carregarAnuncios,
     estabelecimentos: carregarEstabelecimentosAdmin,
     comerciantes: carregarRestaurantesAdmin,
@@ -1805,6 +1824,201 @@ async function cancelarPedidoFood(id){
     showToast('🚫 Pedido cancelado');
     carregarPedidosFoodAdmin();
   } catch (e) { showToast('⚠️ Erro — ' + (e.code || e.message)); }
+}
+
+// ═══════════════════════════════════════
+// RELATÓRIOS — dados reais do Firebase com filtro de período
+// ═══════════════════════════════════════
+let relPeriodoAtual = 'hoje';
+
+function selecionarPeriodoRelatorio(btn) {
+  document.querySelectorAll('[data-rel-periodo]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  relPeriodoAtual = btn.dataset.relPeriodo;
+  const personalizado = document.getElementById('rel-periodo-personalizado');
+  if (personalizado) personalizado.style.display = relPeriodoAtual === 'personalizado' ? 'block' : 'none';
+  if (relPeriodoAtual !== 'personalizado') carregarRelatorios();
+}
+
+function obterRangeData(periodo) {
+  const agora = new Date();
+  const inicio = new Date();
+  if (periodo === 'hoje') {
+    inicio.setHours(0, 0, 0, 0);
+  } else if (periodo === 'semana') {
+    inicio.setDate(agora.getDate() - agora.getDay());
+    inicio.setHours(0, 0, 0, 0);
+  } else if (periodo === 'mes') {
+    inicio.setDate(1);
+    inicio.setHours(0, 0, 0, 0);
+  } else if (periodo === 'personalizado') {
+    const dataInicio = document.getElementById('rel-data-inicio').value;
+    const dataFim = document.getElementById('rel-data-fim').value;
+    if (!dataInicio || !dataFim) return null;
+    return { inicio: new Date(dataInicio + 'T00:00:00'), fim: new Date(dataFim + 'T23:59:59') };
+  }
+  return { inicio, fim: agora };
+}
+
+async function carregarRelatorios() {
+  if (!dbAdmin) return;
+  const range = obterRangeData(relPeriodoAtual);
+  if (!range) return;
+
+  const loading = document.getElementById('rel-loading');
+  const conteudo = document.getElementById('rel-conteudo');
+  if (loading) loading.style.display = 'block';
+  if (conteudo) conteudo.style.display = 'none';
+
+  try {
+    const [snapCorridas, snapPedidos] = await Promise.all([
+      fbAdmin.getDocs(fbAdmin.query(
+        fbAdmin.collection(dbAdmin, 'corridas'),
+        fbAdmin.where('status', '==', 'finalizada'),
+        fbAdmin.where('criadoEm', '>=', range.inicio.toISOString()),
+        fbAdmin.where('criadoEm', '<=', range.fim.toISOString()),
+      )),
+      fbAdmin.getDocs(fbAdmin.query(
+        fbAdmin.collection(dbAdmin, 'pedidos_food'),
+        fbAdmin.where('status', '==', 'entregue'),
+        fbAdmin.where('criadoEm', '>=', fbAdmin.Timestamp?.fromDate?.(range.inicio) || range.inicio),
+        fbAdmin.where('criadoEm', '<=', fbAdmin.Timestamp?.fromDate?.(range.fim) || range.fim),
+      )),
+    ]);
+
+    let totalCorridas = 0, faturamento = 0, totalPedidos = 0, faturamentoPedidos = 0;
+    const rankMotoristas = {}, rankPassageiros = {};
+
+    snapCorridas.forEach(d => {
+      const c = d.data();
+      totalCorridas++;
+      const preco = Number(c.preco || 0);
+      faturamento += preco;
+      if (c.motoristaId) {
+        if (!rankMotoristas[c.motoristaId]) rankMotoristas[c.motoristaId] = { nome: c.motoristaNome || '—', corridas: 0, ganhos: 0 };
+        rankMotoristas[c.motoristaId].corridas++;
+        rankMotoristas[c.motoristaId].ganhos += preco;
+      }
+      if (c.passageiroId) {
+        if (!rankPassageiros[c.passageiroId]) rankPassageiros[c.passageiroId] = { nome: c.passageiroNome || '—', corridas: 0, gasto: 0 };
+        rankPassageiros[c.passageiroId].corridas++;
+        rankPassageiros[c.passageiroId].gasto += preco;
+      }
+    });
+
+    snapPedidos.forEach(d => {
+      totalPedidos++;
+      faturamentoPedidos += Number(d.data().total || 0);
+    });
+
+    const faturamentoTotal = faturamento + faturamentoPedidos;
+    const comissaoMedia = 0.10; // 10% padrão
+    const comissao = faturamento * comissaoMedia;
+
+    document.getElementById('rel-total-corridas').textContent = totalCorridas;
+    document.getElementById('rel-total-pedidos').textContent = totalPedidos;
+    document.getElementById('rel-faturamento').textContent = formatMoeda(faturamentoTotal);
+    document.getElementById('rel-comissao').textContent = formatMoeda(comissao);
+
+    // Top motoristas
+    const topMot = Object.values(rankMotoristas).sort((a,b) => b.corridas - a.corridas).slice(0, 5);
+    const medalhas = ['🥇','🥈','🥉','4°','5°'];
+    document.getElementById('rel-top-motoristas').innerHTML = topMot.length
+      ? topMot.map((m, i) => `<tr><td>${medalhas[i]||''}</td><td>${m.nome}</td><td>${m.corridas}</td><td>${formatMoeda(m.ganhos)}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:14px;">Nenhuma corrida no período</td></tr>';
+
+    // Top passageiros
+    const topPax = Object.values(rankPassageiros).sort((a,b) => b.corridas - a.corridas).slice(0, 5);
+    document.getElementById('rel-top-passageiros').innerHTML = topPax.length
+      ? topPax.map((p, i) => `<tr><td>${medalhas[i]||''}</td><td>${p.nome}</td><td>${p.corridas}</td><td>${formatMoeda(p.gasto)}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--t2);padding:14px;">Nenhuma corrida no período</td></tr>';
+
+  } catch (e) {
+    console.error('[admin] erro ao carregar relatórios:', e);
+    showToast('⚠️ Erro ao carregar relatórios');
+  } finally {
+    if (loading) loading.style.display = 'none';
+    if (conteudo) conteudo.style.display = 'block';
+  }
+}
+
+function exportarRelatoriosPDF() {
+  const periodo = relPeriodoAtual === 'hoje' ? 'Hoje' : relPeriodoAtual === 'semana' ? 'Esta semana' : relPeriodoAtual === 'mes' ? 'Este mês' : 'Personalizado';
+  const data = new Date().toLocaleDateString('pt-BR');
+
+  const html = `<html><head><meta charset="UTF-8">
+  <style>body{font-family:Arial,sans-serif;padding:24px;color:#111}
+  h1{font-size:18px;margin-bottom:4px}.sub{color:#666;font-size:12px;margin-bottom:20px}
+  .stats{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+  .stat{border:1px solid #eee;border-radius:8px;padding:12px 16px;min-width:120px}
+  .stat-v{font-size:20px;font-weight:700}.stat-l{font-size:11px;color:#666}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px}
+  th{background:#111;color:white;padding:7px;text-align:left}td{border-bottom:1px solid #eee;padding:6px}
+  h2{font-size:14px;margin:16px 0 8px}
+  </style></head><body>
+  <h1>Relatório Interliga — ${periodo}</h1>
+  <div class="sub">Gerado em ${data}</div>
+  <div class="stats">
+    <div class="stat"><div class="stat-v">${document.getElementById('rel-total-corridas').textContent}</div><div class="stat-l">Corridas</div></div>
+    <div class="stat"><div class="stat-v">${document.getElementById('rel-total-pedidos').textContent}</div><div class="stat-l">Pedidos delivery</div></div>
+    <div class="stat"><div class="stat-v">${document.getElementById('rel-faturamento').textContent}</div><div class="stat-l">Faturamento</div></div>
+    <div class="stat"><div class="stat-v">${document.getElementById('rel-comissao').textContent}</div><div class="stat-l">Comissão</div></div>
+  </div>
+  <h2>Top Motoristas</h2>
+  <table><thead><tr><th>#</th><th>MOTORISTA</th><th>CORRIDAS</th><th>GANHOS</th></tr></thead>
+  <tbody>${document.getElementById('rel-top-motoristas').innerHTML}</tbody></table>
+  <h2>Top Passageiros</h2>
+  <table><thead><tr><th>#</th><th>PASSAGEIRO</th><th>CORRIDAS</th><th>GASTO</th></tr></thead>
+  <tbody>${document.getElementById('rel-top-passageiros').innerHTML}</tbody></table>
+  </body></html>`;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(html);
+  janela.document.close();
+  setTimeout(() => janela.print(), 500);
+}
+
+// ═══════════════════════════════════════
+// MENSAGEM EM MASSA — envia via WhatsApp pra motoristas e/ou passageiros
+// ═══════════════════════════════════════
+async function enviarMensagemEmMassa(tipo) {
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  const texto = prompt(`Digite a mensagem pra enviar ${tipo === 'motoristas' ? 'aos motoristas' : tipo === 'passageiros' ? 'aos passageiros' : 'a todos'}:`);
+  if (!texto || !texto.trim()) return;
+
+  try {
+    const colecoes = tipo === 'todos' ? ['motoristas', 'passageiros'] : [tipo];
+    let numeros = [];
+
+    for (const colecao of colecoes) {
+      const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, colecao));
+      snap.forEach(d => {
+        const dados = d.data();
+        if (dados.celular && dados.bloqueado !== true) {
+          numeros.push({ nome: dados.nome || 'Cliente', celular: dados.celular, tipo: colecao });
+        }
+      });
+    }
+
+    if (numeros.length === 0) { showToast('⚠️ Nenhum número encontrado'); return; }
+
+    if (!confirm(`Enviar mensagem para ${numeros.length} pessoas via WhatsApp?\n\nOs links vão abrir um de cada vez (aguarde entre eles).`)) return;
+
+    numeros.forEach((pessoa, i) => {
+      setTimeout(() => {
+        const numero = pessoa.celular.replace(/\D/g, '');
+        if (numero.length < 10) return;
+        const msg = encodeURIComponent(`Olá ${pessoa.nome}! ${texto}`);
+        window.open(`https://wa.me/55${numero}?text=${msg}`, '_blank');
+      }, i * 1000);
+    });
+
+    showToast(`✅ Abrindo WhatsApp para ${numeros.length} pessoas...`);
+  } catch (e) {
+    console.error('[admin] erro ao buscar contatos:', e);
+    showToast('⚠️ Erro ao buscar contatos — ' + (e.code || e.message));
+  }
 }
 
 async function carregarFranqueados(){
