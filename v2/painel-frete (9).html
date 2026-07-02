@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Frete - Agenciamento de Carretas</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --preto:#0A0A0A;
+    --preto2:#141414;
+    --preto3:#1E1E1E;
+    --preto4:#2A2A2A;
+    --azul:#1F8CE6;
+    --azul-escuro:#1570C4;
+    --branco:#FFFFFF;
+    --texto:#E8E8E8;
+    --texto-muted:#8A9BB0;
+    --verde:#22C55E;
+    --vermelho:#EF4444;
+    --amarelo:#F59E0B;
+    --borda:#2E2E2E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Barlow',Arial,sans-serif; background:var(--preto); color:var(--texto);}
+
+  header{
+    background:var(--preto2);
+    border-bottom:1px solid var(--borda);
+    padding:14px 20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  header h1{font-size:18px; font-weight:800; letter-spacing:.5px; color:var(--branco);}
+  .conn-dot{width:8px; height:8px; border-radius:50%; background:#555; display:inline-block; margin-right:6px; vertical-align:middle;}
+  .conn-dot.ok{background:var(--verde);}
+  .conn-dot.erro{background:var(--vermelho);}
+  #connStatus{font-size:11px; color:var(--texto-muted); display:flex; align-items:center; gap:4px;}
+
+  nav{
+    display:flex;
+    background:var(--preto2);
+    border-bottom:1px solid var(--borda);
+    overflow-x:auto;
+  }
+  nav button{
+    flex:1; padding:14px 8px;
+    border:none; background:none;
+    font-size:13px; font-weight:700;
+    color:var(--texto-muted);
+    cursor:pointer; white-space:nowrap;
+    letter-spacing:.3px;
+    border-bottom:3px solid transparent;
+    transition:color .2s, border-color .2s;
+  }
+  nav button.active{color:var(--azul); border-bottom:3px solid var(--azul);}
+
+  main{padding:16px; max-width:900px; margin:0 auto;}
+  .tab{display:none;}
+  .tab.active{display:block;}
+
+  .card{
+    background:var(--preto3);
+    border:1px solid var(--borda);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:12px;
+  }
+  .card h3{font-size:15px; font-weight:700; margin-bottom:10px; color:var(--branco);}
+  .row{display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:5px;}
+  .label{color:var(--texto-muted); font-size:12px;}
+  .value{font-weight:600; font-size:13px; text-align:right; color:var(--texto);}
+
+  .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:10px; font-weight:800; color:#fff; letter-spacing:.3px;}
+  .badge.aberta{background:var(--amarelo); color:#000;}
+  .badge.aceita{background:var(--azul);}
+  .badge.concluida{background:var(--verde);}
+  .badge.cancelada{background:var(--vermelho);}
+  .badge.pago{background:var(--verde);}
+  .badge.pendente{background:var(--amarelo); color:#000;}
+  .badge.aprovado{background:var(--verde);}
+  .badge.pendente-cad{background:var(--amarelo); color:#000;}
+  .badge.disponivel{background:var(--verde);}
+  .badge.indisponivel{background:var(--preto4); border:1px solid var(--borda);}
+
+  form{display:flex; flex-direction:column; gap:10px;}
+  label{font-size:12px; font-weight:700; color:var(--texto-muted); text-transform:uppercase; letter-spacing:.4px;}
+  input, select, textarea{
+    padding:10px 12px;
+    border:1px solid var(--borda);
+    border-radius:8px;
+    font-size:14px;
+    width:100%;
+    background:var(--preto4);
+    color:var(--texto);
+    outline:none;
+    transition:border-color .2s;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--azul);}
+  select option{background:var(--preto3);}
+
+  button.primary{
+    background:var(--azul);
+    color:#fff;
+    border:none;
+    padding:12px;
+    border-radius:8px;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+    transition:background .2s;
+  }
+  button.primary:hover{background:var(--azul-escuro);}
+  button.secondary{
+    background:var(--preto4);
+    color:var(--texto);
+    border:1px solid var(--borda);
+    padding:10px;
+    border-radius:8px;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+  }
+  button.danger{
+    background:transparent;
+    color:var(--vermelho);
+    border:1px solid var(--vermelho);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+  }
+
+  .fab{
+    position:fixed; bottom:20px; right:20px;
+    background:var(--azul);
+    color:#fff; border:none;
+    width:56px; height:56px;
+    border-radius:50%; font-size:28px;
+    box-shadow:0 4px 20px rgba(31,140,230,.4);
+    cursor:pointer; z-index:50;
+    transition:transform .2s;
+  }
+  .fab:hover{transform:scale(1.08);}
+
+  .modal-bg{display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100; align-items:center; justify-content:center; padding:16px;}
+  .modal-bg.active{display:flex;}
+  .modal{
+    background:var(--preto3);
+    border:1px solid var(--borda);
+    border-radius:14px;
+    padding:20px;
+    max-width:480px; width:100%;
+    max-height:90vh; overflow-y:auto;
+  }
+  .modal h2{margin-bottom:16px; font-size:18px; font-weight:800; color:var(--branco);}
+
+  .actions{display:flex; gap:8px; margin-top:12px;}
+  .actions button{flex:1;}
+
+  .empty{text-align:center; padding:40px 10px; color:var(--texto-muted);}
+
+  .toast{
+    position:fixed; bottom:90px; left:50%;
+    transform:translateX(-50%);
+    background:var(--azul);
+    color:#fff;
+    padding:10px 20px;
+    border-radius:20px;
+    font-size:13px; font-weight:600;
+    z-index:200; opacity:0;
+    transition:opacity .3s;
+    box-shadow:0 4px 16px rgba(31,140,230,.4);
+  }
+  .toast.show{opacity:1;}
+
+  .config-warning{background:rgba(245,158,11,.1); border:1px solid var(--amarelo); padding:12px; border-radius:8px; font-size:13px; margin-bottom:12px; color:var(--amarelo);}
+  .pendencia-aviso{background:rgba(239,68,68,.1); border:1px solid var(--vermelho); color:var(--vermelho); padding:8px 10px; border-radius:6px; font-size:12px; font-weight:700; margin-top:8px;}
+  .small-btn-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+
+  .stats-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:16px;}
+  .stat-box{
+    background:var(--preto3);
+    border:1px solid var(--borda);
+    border-radius:12px;
+    padding:16px 10px;
+    text-align:center;
+  }
+  .stat-num{font-size:28px; font-weight:800; color:var(--azul);}
+  .stat-label{font-size:11px; color:var(--texto-muted); margin-top:4px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+  @media (min-width:600px){ .stats-grid{grid-template-columns:repeat(4, 1fr);} }
+
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-track{background:var(--preto2);}
+  ::-webkit-scrollbar-thumb{background:var(--borda); border-radius:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚛 Painel Frete</h1>
+  <span id="connStatus"><span class="conn-dot" id="connDot"></span><span id="connText">conectando...</span></span>
+</header>
+
+<nav>
+  <button class="active" data-tab="cargas">Cargas</button>
+  <button data-tab="motoristas">Motoristas</button>
+  <button data-tab="financeiro">Financeiro</button>
+  <button data-tab="config">Config</button>
+</nav>
+
+<main>
+
+  <!-- CARGAS -->
+  <div class="tab active" id="tab-cargas">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-box">
+        <div class="stat-num" id="statCargasAbertas">0</div>
+        <div class="stat-label">Cargas abertas</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statCargasAceitas">0</div>
+        <div class="stat-label">Cargas em andamento</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statMotoristasDisponiveis">0</div>
+        <div class="stat-label">Motoristas disponíveis</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statMotoristasTotal">0</div>
+        <div class="stat-label">Motoristas cadastrados</div>
+      </div>
+    </div>
+    <div id="cargasList" class="empty">Carregando cargas...</div>
+  </div>
+
+  <!-- MOTORISTAS -->
+  <div class="tab" id="tab-motoristas">
+    <div id="motoristasList" class="empty">Carregando motoristas...</div>
+  </div>
+
+  <!-- FINANCEIRO -->
+  <div class="tab" id="tab-financeiro">
+    <div class="card">
+      <h3>Resumo de taxas</h3>
+      <div class="row"><span class="label">Taxas pagas</span><span class="value" id="totalPago">R$ 0</span></div>
+      <div class="row"><span class="label">Taxas pendentes</span><span class="value" id="totalPendente">R$ 0</span></div>
+    </div>
+    <div id="financeiroList"></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="tab" id="tab-config">
+    <div class="card">
+      <h3>Configuração Firebase</h3>
+      <p style="font-size:13px; color:var(--cinza-escuro); margin-bottom:10px;">
+        Este painel já vem com a configuração do Firebase embutida no código, então funciona automaticamente para qualquer pessoa que abrir este link. Os campos abaixo só são necessários se você quiser usar um projeto Firebase diferente do padrão.
+      </p>
+      <textarea id="firebaseConfigInput" rows="8" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+      <button class="primary" onclick="saveFirebaseConfig()">Salvar e conectar</button>
+    </div>
+    <div class="card">
+      <h3>Chave Pix (cobrança da taxa)</h3>
+      <input type="text" id="pixKeyInput" placeholder="Sua chave Pix">
+      <button class="primary" style="margin-top:8px;" onclick="savePixKey()">Salvar chave Pix</button>
+    </div>
+    <div class="card">
+      <h3>Valor fixo da taxa por carga</h3>
+      <input type="number" id="taxaFixaInput" placeholder="Ex: 150">
+      <button class="primary" style="margin-top:8px;" onclick="saveTaxaFixa()">Salvar valor</button>
+    </div>
+  </div>
+
+</main>
+
+<button class="fab" id="fabAdd" onclick="openCargaModal()">+</button>
+
+<!-- MODAL NOVA CARGA -->
+<div class="modal-bg" id="modalCarga">
+  <div class="modal">
+    <h2>Nova Carga</h2>
+    <form id="formCarga" onsubmit="return false;">
+      <label>Transportadora</label>
+      <input type="text" id="f_transportadora" required>
+      <label>Origem (cidade/local de coleta)</label>
+      <input type="text" id="f_origem" required>
+      <label>Destino (cidade)</label>
+      <input type="text" id="f_destino" required>
+      <label>Região do destino (usada para filtrar motoristas)</label>
+      <select id="f_regiao" required>
+        <option value="Norte">Norte</option>
+        <option value="Nordeste">Nordeste</option>
+        <option value="Centro-Oeste">Centro-Oeste</option>
+        <option value="Sudeste">Sudeste</option>
+        <option value="Sul">Sul</option>
+      </select>
+      <label>Tipo de carga</label>
+      <input type="text" id="f_tipoCarga" placeholder="Ex: grãos, carga seca, eletrônicos" required>
+      <label>Peso / Volume</label>
+      <input type="text" id="f_peso" placeholder="Ex: 28 toneladas">
+      <label>Tipo de carreta exigida</label>
+      <select id="f_tipoCarreta" required>
+        <option value="Graneleira">Graneleira</option>
+        <option value="Sider">Sider</option>
+        <option value="Baú">Baú</option>
+        <option value="Prancha">Prancha</option>
+        <option value="Caçamba">Caçamba</option>
+        <option value="Qualquer">Qualquer</option>
+      </select>
+      <label>Data de coleta</label>
+      <input type="date" id="f_dataColeta" required>
+      <label>Taxa de agenciamento (R$)</label>
+      <input type="number" id="f_taxa">
+      <div class="actions">
+        <button type="button" class="secondary" onclick="closeCargaModal()">Cancelar</button>
+        <button type="button" class="primary" onclick="salvarCarga()">Salvar e disparar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL NOVO/EDITAR MOTORISTA -->
+<div class="modal-bg" id="modalMotorista">
+  <div class="modal">
+    <h2 id="motoristaModalTitle">Novo Motorista</h2>
+    <form id="formMotorista" onsubmit="return false;">
+      <input type="hidden" id="m_id">
+      <label>Nome completo</label>
+      <input type="text" id="m_nome" required>
+      <label>Telefone (com DDD e código do país, ex: 5571999999999)</label>
+      <input type="text" id="m_telefone" required>
+      <label>CNH categoria E</label>
+      <select id="m_cnhE"><option value="true">Sim</option><option value="false">Não</option></select>
+      <label>CRLV do cavalo</label>
+      <select id="m_crlvCavalo"><option value="true">Sim</option><option value="false">Não</option></select>
+      <label>CRLV da carreta</label>
+      <select id="m_crlvCarreta"><option value="true">Sim</option><option value="false">Não</option></select>
+      <label>RNTRC (ANTT)</label>
+      <input type="text" id="m_rntrc" placeholder="Número do RNTRC">
+      <label>Tipo de carreta</label>
+      <select id="m_tipoCarreta">
+        <option value="Graneleira">Graneleira</option>
+        <option value="Sider">Sider</option>
+        <option value="Baú">Baú</option>
+        <option value="Prancha">Prancha</option>
+        <option value="Caçamba">Caçamba</option>
+      </select>
+      <label>Capacidade (toneladas)</label>
+      <input type="number" id="m_capacidade">
+      <label>Status do cadastro</label>
+      <select id="m_status"><option value="aprovado">Aprovado</option><option value="pendente-cad">Pendente</option></select>
+      <label>Documentos / Observações (PIS, Pix, link do Drive, proprietário etc.)</label>
+      <textarea id="m_documentos" rows="4" placeholder="Cole aqui as informações que você quer ter à mão pra copiar e enviar quando precisar (ex: chave Pix, número do PIS, link da pasta com os documentos, dados do proprietário)"></textarea>
+      <div class="actions">
+        <button type="button" class="secondary" onclick="closeMotoristaModal()">Cancelar</button>
+        <button type="button" class="primary" onclick="salvarMotorista()">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp, getDoc, runTransaction
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ── Configuração padrão do Firebase, embutida no código ──
+// Assim o painel funciona pra qualquer pessoa que abrir o link, sem precisar
+// configurar nada manualmente. Pode ser sobrescrita na aba "Config" se necessário.
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+  authDomain: "interliga-app.firebaseapp.com",
+  projectId: "interliga-app",
+  storageBucket: "interliga-app.firebasestorage.app",
+  messagingSenderId: "913895237568",
+  appId: "1:913895237568:web:5a1fcb6c59298722e54a25"
+};
+
+let app, db;
+let cargasCache = [];
+let motoristasCache = [];
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+function loadLocalConfig(){
+  // Se houver uma configuração customizada salva neste navegador, usa ela.
+  // Senão, usa a configuração padrão embutida no código.
+  const cfg = localStorage.getItem('frete_firebase_config');
+  if(cfg){
+    document.getElementById('firebaseConfigInput').value = cfg;
+    initFirebase(JSON.parse(cfg));
+  } else {
+    document.getElementById('firebaseConfigInput').value = JSON.stringify(DEFAULT_FIREBASE_CONFIG);
+    initFirebase(DEFAULT_FIREBASE_CONFIG);
+  }
+  const pix = localStorage.getItem('frete_pix_key');
+  if(pix) document.getElementById('pixKeyInput').value = pix;
+  const taxa = localStorage.getItem('frete_taxa_fixa');
+  if(taxa) document.getElementById('taxaFixaInput').value = taxa;
+}
+
+window.saveFirebaseConfig = function(){
+  try{
+    const raw = document.getElementById('firebaseConfigInput').value;
+    const parsed = JSON.parse(raw);
+    localStorage.setItem('frete_firebase_config', raw);
+    initFirebase(parsed);
+    toast('Configuração salva e conectada');
+  }catch(e){
+    toast('JSON inválido: ' + e.message);
+  }
+}
+
+window.savePixKey = function(){
+  const v = document.getElementById('pixKeyInput').value;
+  localStorage.setItem('frete_pix_key', v);
+  toast('Chave Pix salva');
+}
+
+window.saveTaxaFixa = function(){
+  const v = document.getElementById('taxaFixaInput').value;
+  localStorage.setItem('frete_taxa_fixa', v);
+  document.getElementById('f_taxa').value = v;
+  toast('Valor da taxa salvo');
+}
+
+function initFirebase(cfg){
+  try{
+    app = initializeApp(cfg, 'frete-app-' + Date.now());
+    db = getFirestore(app);
+    document.getElementById('connText').textContent = 'conectado';
+    document.getElementById('connDot').classList.add('ok');
+    listenCargas();
+    listenMotoristas();
+  }catch(e){
+    document.getElementById('connText').textContent = 'erro';
+    document.getElementById('connDot').classList.add('erro');
+    toast('Erro ao conectar: ' + e.message);
+  }
+}
+
+// ---------- CARGAS ----------
+function listenCargas(){
+  const q = query(collection(db,'frete_cargas'), orderBy('createdAt','desc'));
+  onSnapshot(q, snap => {
+    cargasCache = [];
+    snap.forEach(d => cargasCache.push({id:d.id, ...d.data()}));
+    renderCargas();
+    renderFinanceiro();
+  }, err => {
+    document.getElementById('cargasList').innerHTML =
+      `<div class="empty" style="color:#DC2626;">Erro ao carregar cargas:<br><b>${err.code}</b><br>${err.message}</div>`;
+    document.getElementById('connText').textContent = 'erro: ' + err.code;
+    document.getElementById('connDot').classList.add('erro');
+  });
+}
+
+function renderCargas(){
+  const el = document.getElementById('cargasList');
+  renderStats();
+  if(cargasCache.length===0){ el.innerHTML = '<div class="empty">Nenhuma carga cadastrada ainda.</div>'; return; }
+  el.innerHTML = cargasCache.map(c => `
+    <div class="card">
+      <div class="row"><h3>${c.transportadora||''}</h3><span class="badge ${c.status}">${labelStatus(c.status)}</span></div>
+      <div class="row"><span class="label">Origem → Destino</span><span class="value">${c.origem||''} → ${c.destino||''}</span></div>
+      <div class="row"><span class="label">Tipo / Peso</span><span class="value">${c.tipoCarga||''} · ${c.peso||''}</span></div>
+      <div class="row"><span class="label">Carreta exigida</span><span class="value">${c.tipoCarretaExigida||''}</span></div>
+      <div class="row"><span class="label">Coleta</span><span class="value">${c.dataColeta||''}</span></div>
+      <div class="row"><span class="label">Taxa</span><span class="value">R$ ${c.taxa||0} <span class="badge ${c.pagamentoStatus==='pago'?'pago':'pendente'}">${c.pagamentoStatus==='pago'?'PAGO':'PENDENTE'}</span></span></div>
+      ${c.motoristaNome ? `<div class="row"><span class="label">Motorista</span><span class="value">${c.motoristaNome}</span></div>` : ''}
+      <div class="small-btn-row">
+        ${c.status==='aberta' ? `<button class="secondary" onclick="dispararCarga('${c.id}')">📲 Disparar p/ motoristas</button>` : ''}
+        ${c.status==='aceita' && c.pagamentoStatus!=='pago' ? `<button class="secondary" onclick="marcarPago('${c.id}')">✅ Marcar taxa paga</button>` : ''}
+        ${c.status!=='concluida' && c.status!=='cancelada' ? `<button class="danger" onclick="cancelarCarga('${c.id}')">Cancelar</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function labelStatus(s){
+  return {aberta:'ABERTA', aceita:'ACEITA', concluida:'CONCLUÍDA', cancelada:'CANCELADA'}[s] || s;
+}
+
+function renderStats(){
+  const cargasAbertas = cargasCache.filter(c => c.status === 'aberta').length;
+  const cargasAceitas = cargasCache.filter(c => c.status === 'aceita').length;
+  const motoristasDisponiveis = motoristasCache.filter(m => m.status === 'aprovado' && m.disponivel === true).length;
+  const motoristasTotal = motoristasCache.length;
+
+  document.getElementById('statCargasAbertas').textContent = cargasAbertas;
+  document.getElementById('statCargasAceitas').textContent = cargasAceitas;
+  document.getElementById('statMotoristasDisponiveis').textContent = motoristasDisponiveis;
+  document.getElementById('statMotoristasTotal').textContent = motoristasTotal;
+}
+
+window.openCargaModal = function(){
+  document.getElementById('modalCarga').classList.add('active');
+}
+window.closeCargaModal = function(){
+  document.getElementById('modalCarga').classList.remove('active');
+}
+
+window.salvarCarga = async function(){
+  if(!db){ toast('Configure o Firebase primeiro (aba Config)'); return; }
+  const taxaPadrao = localStorage.getItem('frete_taxa_fixa') || 0;
+  const carga = {
+    transportadora: val('f_transportadora'),
+    origem: val('f_origem'),
+    destino: val('f_destino'),
+    regiao: val('f_regiao'),
+    tipoCarga: val('f_tipoCarga'),
+    peso: val('f_peso'),
+    tipoCarretaExigida: val('f_tipoCarreta'),
+    dataColeta: val('f_dataColeta'),
+    taxa: Number(val('f_taxa') || taxaPadrao),
+    status: 'aberta',
+    pagamentoStatus: 'pendente',
+    offeredTo: [],
+    motoristaId: null,
+    motoristaNome: null,
+    createdAt: serverTimestamp()
+  };
+  if(!carga.transportadora || !carga.origem || !carga.destino){
+    toast('Preencha os campos obrigatórios'); return;
+  }
+  try{
+    const ref = await addDoc(collection(db,'frete_cargas'), carga);
+    closeCargaModal();
+    toast('Carga salva. Disparando para motoristas compatíveis...');
+    await dispararCargaInterno(ref.id);
+  }catch(e){
+    toast('Erro ao salvar: ' + e.code + ' - ' + e.message);
+  }
+}
+
+window.dispararCarga = async function(id){
+  await dispararCargaInterno(id);
+  toast('Carga disparada para motoristas compatíveis');
+}
+
+// Grava a fila de disparo em uma coleção que o bot (Baileys) escuta.
+// O bot, ao detectar um novo doc em 'frete_disparos', envia as mensagens WhatsApp.
+async function dispararCargaInterno(cargaId){
+  const cargaSnap = await getDoc(doc(db,'frete_cargas',cargaId));
+  if(!cargaSnap.exists()) return;
+  const carga = cargaSnap.data();
+  const compativeis = motoristasCache.filter(m =>
+    m.status === 'aprovado' &&
+    m.disponivel === true &&
+    (carga.tipoCarretaExigida === 'Qualquer' || m.tipoCarreta === carga.tipoCarretaExigida) &&
+    (m.regiaoInteresse === carga.regiao || m.regiaoInteresse === 'Qualquer regiao' || m.regiaoInteresse === 'Qualquer região')
+  );
+  if(compativeis.length === 0){
+    toast('Nenhum motorista disponível compatível agora');
+    return;
+  }
+  await addDoc(collection(db,'frete_disparos'), {
+    cargaId,
+    motoristasIds: compativeis.map(m=>m.id),
+    createdAt: serverTimestamp(),
+    processado: false
+  });
+  await updateDoc(doc(db,'frete_cargas',cargaId), { offeredTo: compativeis.map(m=>m.id) });
+}
+
+window.marcarPago = async function(id){
+  await updateDoc(doc(db,'frete_cargas',id), { pagamentoStatus:'pago' });
+  toast('Pagamento marcado como recebido');
+}
+
+window.cancelarCarga = async function(id){
+  if(!confirm('Cancelar esta carga?')) return;
+  await updateDoc(doc(db,'frete_cargas',id), { status:'cancelada' });
+  toast('Carga cancelada');
+}
+
+// ---------- MOTORISTAS ----------
+function listenMotoristas(){
+  const q = query(collection(db,'frete_motoristas'), orderBy('nome'));
+  onSnapshot(q, snap => {
+    motoristasCache = [];
+    snap.forEach(d => motoristasCache.push({id:d.id, ...d.data()}));
+    renderMotoristas();
+  }, err => {
+    document.getElementById('motoristasList').innerHTML =
+      `<div class="empty" style="color:#DC2626;">Erro ao carregar motoristas:<br><b>${err.code}</b><br>${err.message}</div>`;
+  });
+}
+
+function pendenciaMotorista(motoristaId){
+  return cargasCache
+    .filter(c => c.motoristaId === motoristaId && c.pagamentoStatus === 'pendente' && c.status !== 'cancelada')
+    .reduce((soma, c) => soma + (c.taxa || 0), 0);
+}
+
+function renderMotoristas(){
+  renderStats();
+  const el = document.getElementById('motoristasList');
+  if(motoristasCache.length===0){ el.innerHTML = '<div class="empty">Nenhum motorista cadastrado ainda.<br><br><button class="primary" onclick="openMotoristaModal()">+ Cadastrar motorista</button></div>'; return; }
+  el.innerHTML = `<button class="secondary" style="margin-bottom:10px;" onclick="openMotoristaModal()">+ Novo motorista</button>` +
+    motoristasCache.map(m => {
+      const pendencia = pendenciaMotorista(m.id);
+      return `
+    <div class="card">
+      <div class="row"><h3>${m.nome}</h3><span class="badge ${m.status}">${m.status==='aprovado'?'APROVADO':'PENDENTE'}</span></div>
+      <div class="row"><span class="label">Telefone</span><span class="value">${m.telefone}</span></div>
+      <div class="row"><span class="label">Carreta</span><span class="value">${m.tipoCarreta||'-'} · ${m.capacidade||'-'}t</span></div>
+      <div class="row"><span class="label">RNTRC</span><span class="value">${m.rntrc||'-'}</span></div>
+      <div class="row"><span class="label">CNH-E</span><span class="value">${m.cnhE?'✅':'❌'}</span></div>
+      <div class="row"><span class="label">CRLV cavalo / carreta</span><span class="value">${(m.crlvCavalo!==undefined?m.crlvCavalo:m.crlv)?'✅':'❌'} / ${(m.crlvCarreta!==undefined?m.crlvCarreta:m.crlv)?'✅':'❌'}</span></div>
+      <div class="row"><span class="label">Disponibilidade</span><span class="value"><span class="badge ${m.disponivel?'disponivel':'indisponivel'}">${m.disponivel?'DISPONÍVEL':'INDISPONÍVEL'}</span></span></div>
+      ${m.regiaoInteresse ? `<div class="row"><span class="label">Região desejada</span><span class="value">${m.regiaoInteresse}</span></div>` : ''}
+      ${pendencia > 0 ? `<div class="pendencia-aviso">⚠️ Pendência financeira: R$ ${pendencia}</div>` : ''}
+      <div class="small-btn-row">
+        <button class="secondary" onclick='editMotorista(${JSON.stringify(m).replace(/'/g,"&apos;")})'>Editar</button>
+        ${m.documentos ? `<button class="secondary" onclick='copiarDocumentos(${JSON.stringify(m.documentos)})'>📋 Copiar documentos</button>` : ''}
+        <button class="danger" onclick="excluirMotorista('${m.id}')">Excluir</button>
+      </div>
+    </div>
+  `;
+    }).join('');
+}
+
+window.openMotoristaModal = function(){
+  document.getElementById('motoristaModalTitle').textContent = 'Novo Motorista';
+  ['m_id','m_nome','m_telefone','m_rntrc','m_capacidade','m_documentos'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('m_cnhE').value='true';
+  document.getElementById('m_crlvCavalo').value='true';
+  document.getElementById('m_crlvCarreta').value='true';
+  document.getElementById('m_tipoCarreta').value='Graneleira';
+  document.getElementById('m_status').value='aprovado';
+  document.getElementById('modalMotorista').classList.add('active');
+}
+window.closeMotoristaModal = function(){
+  document.getElementById('modalMotorista').classList.remove('active');
+}
+
+window.editMotorista = function(m){
+  document.getElementById('motoristaModalTitle').textContent = 'Editar Motorista';
+  document.getElementById('m_id').value = m.id;
+  document.getElementById('m_nome').value = m.nome||'';
+  document.getElementById('m_telefone').value = m.telefone||'';
+  document.getElementById('m_cnhE').value = String(!!m.cnhE);
+  document.getElementById('m_crlvCavalo').value = String(m.crlvCavalo !== undefined ? !!m.crlvCavalo : !!m.crlv);
+  document.getElementById('m_crlvCarreta').value = String(m.crlvCarreta !== undefined ? !!m.crlvCarreta : !!m.crlv);
+  document.getElementById('m_rntrc').value = m.rntrc||'';
+  document.getElementById('m_tipoCarreta').value = m.tipoCarreta||'Graneleira';
+  document.getElementById('m_capacidade').value = m.capacidade||'';
+  document.getElementById('m_status').value = m.status||'aprovado';
+  document.getElementById('m_documentos').value = m.documentos||'';
+  document.getElementById('modalMotorista').classList.add('active');
+}
+
+window.salvarMotorista = async function(){
+  if(!db){ toast('Configure o Firebase primeiro (aba Config)'); return; }
+  const id = val('m_id');
+  const telefone = val('m_telefone').replace(/\D/g,'');
+  if(!val('m_nome') || !telefone){ toast('Preencha nome e telefone'); return; }
+  const data = {
+    nome: val('m_nome'),
+    telefone,
+    cnhE: val('m_cnhE')==='true',
+    crlvCavalo: val('m_crlvCavalo')==='true',
+    crlvCarreta: val('m_crlvCarreta')==='true',
+    rntrc: val('m_rntrc'),
+    tipoCarreta: val('m_tipoCarreta'),
+    capacidade: Number(val('m_capacidade')||0),
+    status: val('m_status'),
+    documentos: val('m_documentos'),
+  };
+  if(id){
+    await updateDoc(doc(db,'frete_motoristas',id), data).catch(e=>toast('Erro: '+e.code+' - '+e.message));
+  } else {
+    await setDoc(doc(db,'frete_motoristas',telefone), {
+      ...data, disponivel:false, regiaoInteresse:null, createdAt: serverTimestamp()
+    }).catch(e=>toast('Erro: '+e.code+' - '+e.message));
+  }
+  closeMotoristaModal();
+  toast('Motorista salvo');
+}
+
+window.copiarDocumentos = function(texto){
+  navigator.clipboard.writeText(texto).then(()=>{
+    toast('Documentos copiados! Já pode colar e enviar.');
+  }).catch(()=>{
+    toast('Não foi possível copiar automaticamente.');
+  });
+}
+
+window.excluirMotorista = async function(id){
+  if(!confirm('Excluir este motorista?')) return;
+  await deleteDoc(doc(db,'frete_motoristas',id));
+  toast('Motorista excluído');
+}
+
+// ---------- FINANCEIRO ----------
+function renderFinanceiro(){
+  const pagas = cargasCache.filter(c=>c.pagamentoStatus==='pago');
+  const pendentes = cargasCache.filter(c=>c.pagamentoStatus==='pendente' && c.status!=='cancelada');
+  document.getElementById('totalPago').textContent = 'R$ ' + pagas.reduce((s,c)=>s+(c.taxa||0),0);
+  document.getElementById('totalPendente').textContent = 'R$ ' + pendentes.reduce((s,c)=>s+(c.taxa||0),0);
+  const el = document.getElementById('financeiroList');
+  el.innerHTML = pendentes.map(c => `
+    <div class="card">
+      <div class="row"><span class="label">${c.transportadora} (${c.motoristaNome||'sem motorista'})</span><span class="value">R$ ${c.taxa}</span></div>
+    </div>
+  `).join('') || '<div class="empty">Nenhuma taxa pendente</div>';
+}
+
+function val(id){ return document.getElementById(id).value; }
+
+// ---------- NAV ----------
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+loadLocalConfig();
+</script>
+</body>
+</html>
