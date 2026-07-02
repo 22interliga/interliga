@@ -565,7 +565,7 @@ function iniciarEscutaCorridas() {
 
             // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila avançou,
             // mesmo que tenha voltado pro mesmo motorista — por isso usa ofertaExpiraEm, que sempre muda)
-            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.ofertaExpiraEm ?? 0);
+            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.rodadaFila || 0) + ':' + (corrida.ofertaExpiraEm ?? 0);
             if (state._ultimaOfertaProcessada === chaveOferta) return;
             state._ultimaOfertaProcessada = chaveOferta;
 

@@ -766,10 +766,10 @@ function calcularPrecos() {
 
     let preco;
     if (semCoordenada) {
-      // Sem coordenada — mostra "A partir de R$ X" (o mínimo da categoria)
+      // Sem coordenada — mostra o mínimo de cada categoria individualmente
       preco = t.minimo;
       if (priceEl) priceEl.textContent = 'A partir de R$ ' + preco.toFixed(2).replace('.', ',');
-      if (etaEl) etaEl.textContent = '— min';
+      if (etaEl) etaEl.textContent = 'Combine c/ motorista';
     } else {
       preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
       preco = preco + risco.acrescimo;
@@ -935,11 +935,13 @@ function iniciarFilaWatchdog(corridaId) {
       if (!expirou) return;
       let indiceAtual = typeof data.filaIndiceAtual === 'number' ? data.filaIndiceAtual : 0;
       let proximoIndice = indiceAtual + 1;
-      if (proximoIndice >= fila.length) proximoIndice = 0; // deu a volta — avisa todo mundo de novo
+      if (proximoIndice >= fila.length) proximoIndice = 0;
+      const novaExpiracao = Date.now() + 25000; // 25s — tempo maior pra motorista ver/reagir
       await fb.updateDoc(fb.doc(db, 'corridas', corridaId), {
         filaIndiceAtual: proximoIndice,
         motoristaAlvoAtual: fila[proximoIndice],
-        ofertaExpiraEm: Date.now() + 15000,
+        ofertaExpiraEm: novaExpiracao, // sempre muda — garante que o motorista recebe de novo mesmo que já tenha visto
+        rodadaFila: (data.rodadaFila || 0) + 1, // incrementa a rodada pra chave de deduplicação ser única
       });
     } catch (e) { console.warn('[passageiro] erro no watchdog da fila:', e); }
   }, 5000);
@@ -2307,8 +2309,13 @@ window.addEventListener('popstate', () => {
   }
 });
 
-// Estado inicial no histórico — garante que o popstate funciona desde o primeiro "voltar"
-history.pushState(null, '', '');
+// Estado inicial no histórico — empurrado só UMA VEZ pra não acumular estados.
+// Se empilhasse várias vezes, o botão voltar do Android dispararia o popstate
+// múltiplas vezes antes de funcionar, causando o bug de "voltar ao botão Entrar".
+if (!window._historicoInicializado) {
+  window._historicoInicializado = true;
+  history.pushState(null, '', '');
+}
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro

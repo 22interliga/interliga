@@ -18,7 +18,7 @@
   --yellow: #F59E0B;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--tx); min-height: 100vh; font-size: 14px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--tx); min-height: 100vh; font-size: 14px; overflow-x: hidden; }
 
 /* LOGIN */
 #login-wrap { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
@@ -68,8 +68,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .notif-btn { width: 36px; height: 36px; background: var(--s2); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; position: relative; }
 
 /* CONTENT */
-.content { margin-left: 240px; padding-top: 56px; min-height: 100vh; }
-.content-inner { padding: 20px; }
+.content { margin-left: 240px; padding-top: 56px; min-height: 100vh; overflow-y: auto; }
+.content-inner { padding: 20px; max-width: 1400px; }
 
 /* OVERLAY */
 .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; }
@@ -959,48 +959,42 @@ textarea.inp { resize: vertical; }
               </div>
             </div>
 
-            <!-- Categorias de veículo -->
+            <!-- Categorias de veículo — dinâmicas, salvas no Firebase -->
             <div class="card" style="margin-bottom:14px;">
-              <div class="ct" style="margin-bottom:14px;">🚗 Categorias de Veículo</div>
-              <div class="tbl-wrap">
-                <table>
-                  <thead><tr><th>CATEGORIA</th><th>BANDEIRADA (R$)</th><th>TARIFA KM (R$)</th><th>PREÇO MÍNIMO (R$)</th><th>FIXO ATÉ (KM)</th><th>VALOR FIXO (R$)</th><th>MULTIPLICADOR DINÂMICO</th><th>ATIVO</th></tr></thead>
-                  <tbody id="precos-categorias-tbody">
-                    <tr>
-                      <td><b>🚗 Interliga X</b><br><small style="color:var(--t2)">Até 4 passageiros</small></td>
-                      <td><input class="inp" type="number" id="prec-x-bandeirada" value="5.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-x-tarifakm" value="2.40" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-x-minimo" value="8.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-x-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-x-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-x-mult" value="1.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div id="prec-x-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
-                    </tr>
-                    <tr>
-                      <td><b>🚙 Interliga Plus</b><br><small style="color:var(--t2)">SUV / Executivo</small></td>
-                      <td><input class="inp" type="number" id="prec-plus-bandeirada" value="7.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-plus-tarifakm" value="3.36" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-plus-minimo" value="12.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-plus-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-plus-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-plus-mult" value="1.4" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div id="prec-plus-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
-                    </tr>
-                    <tr>
-                      <td><b>🚐 Interliga Van</b><br><small style="color:var(--t2)">Até 8 passageiros</small></td>
-                      <td><input class="inp" type="number" id="prec-van-bandeirada" value="10.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-van-tarifakm" value="4.80" step="0.10" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-van-minimo" value="18.00" step="0.50" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-van-kmfixo" value="0" step="0.5" min="0" style="width:70px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-van-valorfixo" value="0" step="0.5" min="0" style="width:80px;padding:6px 8px;"/></td>
-                      <td><input class="inp" type="number" id="prec-van-mult" value="2.0" step="0.1" style="width:70px;padding:6px 8px;"/>×</td>
-                      <td><div id="prec-van-ativo" data-on="1" onclick="this.dataset.on=this.dataset.on==='0'?'1':'0';this.style.background=this.dataset.on==='0'?'#6B7280':'var(--green)'" style="width:46px;height:26px;background:var(--green);border-radius:13px;position:relative;cursor:pointer;"><div style="position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;right:3px;"></div></div></td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <div class="ct">🚗 Categorias de Veículo</div>
+                <button class="pbtn" onclick="toggleFormCategoria()">+ Nova categoria</button>
+              </div>
+
+              <div id="form-categoria" style="display:none;background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px;">
+                <input type="hidden" id="cat-id-editando">
+                <div class="g2" style="margin-bottom:10px;">
+                  <div class="fl"><div class="lbl">ÍCONE (emoji)</div><input class="inp" id="cat-icone" value="🚗" maxlength="4" style="max-width:70px;"/></div>
+                  <div class="fl"><div class="lbl">NOME DA CATEGORIA</div><input class="inp" id="cat-nome" placeholder="Ex: Interliga Moto"/></div>
+                </div>
+                <div class="fl" style="margin-bottom:10px;"><div class="lbl">DESCRIÇÃO</div><input class="inp" id="cat-desc" placeholder="Ex: Mototáxi · Até 1 passageiro"/></div>
+                <div class="g2" style="margin-bottom:10px;">
+                  <div class="fl"><div class="lbl">BANDEIRADA (R$)</div><input class="inp" type="number" id="cat-bandeirada" value="5.00" step="0.50"/></div>
+                  <div class="fl"><div class="lbl">TARIFA KM (R$)</div><input class="inp" type="number" id="cat-tarifakm" value="2.40" step="0.10"/></div>
+                </div>
+                <div class="g2" style="margin-bottom:10px;">
+                  <div class="fl"><div class="lbl">PREÇO MÍNIMO (R$)</div><input class="inp" type="number" id="cat-minimo" value="8.00" step="0.50"/></div>
+                  <div class="fl"><div class="lbl">MULTIPLICADOR</div><input class="inp" type="number" id="cat-mult" value="1.0" step="0.1"/></div>
+                </div>
+                <div class="g2" style="margin-bottom:14px;">
+                  <div class="fl"><div class="lbl">FIXO ATÉ (KM)</div><input class="inp" type="number" id="cat-kmfixo" value="0" step="0.5" min="0"/></div>
+                  <div class="fl"><div class="lbl">VALOR FIXO (R$)</div><input class="inp" type="number" id="cat-valorfixo" value="0" step="0.5" min="0"/></div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <button class="pbtn" onclick="salvarCategoria()">💾 Salvar</button>
+                  <button class="pbtn" style="background:var(--t2);" onclick="toggleFormCategoria()">Cancelar</button>
+                </div>
+              </div>
+
+              <div id="categorias-lista" style="display:flex;flex-direction:column;gap:8px;">
+                <div style="text-align:center;color:var(--t2);padding:20px;">Carregando...</div>
               </div>
             </div>
-
             <!-- Áreas de risco -->
             <div class="card" style="margin-bottom:14px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -1348,7 +1342,7 @@ function showSection(id,navEl){
     estabelecimentos: carregarEstabelecimentosAdmin,
     comerciantes: carregarRestaurantesAdmin,
     pedidos: carregarPedidosFoodAdmin,
-    precificacao: () => { updateCidade(); carregarZonasRisco(); carregarFaixasHorario(); },
+    precificacao: () => { carregarCategoriasAdmin(); carregarZonasRisco(); carregarFaixasHorario(); },
   };
   if (carregadores[id]) carregadores[id]();
 }
@@ -2021,6 +2015,139 @@ async function enviarMensagemEmMassa(tipo) {
   }
 }
 
+// ═══════════════════════════════════════
+// CATEGORIAS DE VEÍCULO — dinâmicas, salvas no Firebase
+// ═══════════════════════════════════════
+let _categoriasCacheAdmin = [];
+
+function toggleFormCategoria() {
+  const f = document.getElementById('form-categoria');
+  if (!f) return;
+  const abrindo = f.style.display === 'none';
+  f.style.display = abrindo ? 'block' : 'none';
+  if (abrindo) {
+    // Limpa o formulário pra novo cadastro
+    document.getElementById('cat-id-editando').value = '';
+    document.getElementById('cat-icone').value = '🚗';
+    document.getElementById('cat-nome').value = '';
+    document.getElementById('cat-desc').value = '';
+    document.getElementById('cat-bandeirada').value = '5.00';
+    document.getElementById('cat-tarifakm').value = '2.40';
+    document.getElementById('cat-minimo').value = '8.00';
+    document.getElementById('cat-mult').value = '1.0';
+    document.getElementById('cat-kmfixo').value = '0';
+    document.getElementById('cat-valorfixo').value = '0';
+  }
+}
+
+async function carregarCategoriasAdmin() {
+  if (!dbAdmin) return;
+  const lista = document.getElementById('categorias-lista');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'categorias_veiculo'));
+    _categoriasCacheAdmin = [];
+
+    // Se não tem nenhuma cadastrada, usa as 3 padrão
+    if (snap.empty) {
+      lista.innerHTML = `<div style="text-align:center;color:var(--t2);padding:20px;">
+        Nenhuma categoria cadastrada ainda.<br>
+        <small>Clique em "+ Nova categoria" para criar as suas.</small>
+      </div>`;
+      return;
+    }
+
+    snap.forEach(d => _categoriasCacheAdmin.push({ id: d.id, ...d.data() }));
+    _categoriasCacheAdmin.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+    lista.innerHTML = _categoriasCacheAdmin.map(c => `
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg);border-radius:10px;padding:10px 14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">${c.icone || '🚗'}</span>
+          <div>
+            <b>${c.nome}</b>
+            <div style="font-size:12px;color:var(--t2);">${c.desc || ''} · Band. ${formatMoeda(c.bandeirada)} · Km ${formatMoeda(c.tarifakm)} · Mín. ${formatMoeda(c.minimo)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="pbtn" onclick="editarCategoria('${c.id}')">✏️ Editar</button>
+          <button class="pbtn" style="background:var(--red);" onclick="removerCategoria('${c.id}','${c.nome}')">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar categorias:', e);
+    if (lista) lista.innerHTML = `<div style="color:var(--red);padding:14px;">⚠️ ${e.code || e.message}</div>`;
+  }
+}
+
+async function salvarCategoria() {
+  const id = document.getElementById('cat-id-editando').value;
+  const icone = document.getElementById('cat-icone').value.trim() || '🚗';
+  const nome = document.getElementById('cat-nome').value.trim();
+  const desc = document.getElementById('cat-desc').value.trim();
+  const bandeirada = Number(document.getElementById('cat-bandeirada').value) || 0;
+  const tarifakm = Number(document.getElementById('cat-tarifakm').value) || 0;
+  const minimo = Number(document.getElementById('cat-minimo').value) || 0;
+  const multiplicador = Number(document.getElementById('cat-mult').value) || 1;
+  const kmFixo = Number(document.getElementById('cat-kmfixo').value) || 0;
+  const valorFixo = Number(document.getElementById('cat-valorfixo').value) || 0;
+
+  if (!nome) { showToast('⚠️ Informe o nome da categoria'); return; }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  // O código da categoria é gerado a partir do nome (ex: "Interliga Moto" → "moto")
+  const codigo = nome.toLowerCase().replace(/interliga\s*/i, '').replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || 'cat_' + Date.now();
+
+  const dados = { icone, nome, desc, codigo, bandeirada, tarifakm, minimo, multiplicador, kmFixo, valorFixo, ativo: true };
+
+  try {
+    if (id) {
+      await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'categorias_veiculo', id), dados);
+      showToast('✅ Categoria atualizada!');
+    } else {
+      dados.ordem = _categoriasCacheAdmin.length;
+      dados.criadoEm = fbAdmin.serverTimestamp();
+      await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'categorias_veiculo'), dados);
+      showToast('✅ Categoria criada!');
+    }
+    toggleFormCategoria();
+    carregarCategoriasAdmin();
+    // Recarrega também no mapa de carregamento de preços (já pega do Firebase)
+    tabelaPrecosCarregada = false;
+  } catch (e) {
+    console.error('[admin] erro ao salvar categoria:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+function editarCategoria(id) {
+  const c = _categoriasCacheAdmin.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cat-id-editando').value = id;
+  document.getElementById('cat-icone').value = c.icone || '🚗';
+  document.getElementById('cat-nome').value = c.nome || '';
+  document.getElementById('cat-desc').value = c.desc || '';
+  document.getElementById('cat-bandeirada').value = c.bandeirada || 0;
+  document.getElementById('cat-tarifakm').value = c.tarifakm || 0;
+  document.getElementById('cat-minimo').value = c.minimo || 0;
+  document.getElementById('cat-mult').value = c.multiplicador || 1;
+  document.getElementById('cat-kmfixo').value = c.kmFixo || 0;
+  document.getElementById('cat-valorfixo').value = c.valorFixo || 0;
+  document.getElementById('form-categoria').style.display = 'block';
+  document.getElementById('form-categoria').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function removerCategoria(id, nome) {
+  if (!confirm(`Remover a categoria "${nome}"? Os motoristas cadastrados nessa categoria não serão afetados, mas ela não aparecerá mais pra novos passageiros.`)) return;
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'categorias_veiculo', id));
+    showToast('🗑️ Categoria removida');
+    carregarCategoriasAdmin();
+  } catch (e) {
+    showToast('⚠️ Erro — ' + (e.code || e.message));
+  }
+}
+
 async function carregarFranqueados(){
   if (!dbAdmin) return;
   const tb = document.getElementById('franq-tbody');
@@ -2235,7 +2362,7 @@ async function carregarAnuncios(){
   if (!dbAdmin) return;
   const lista = document.getElementById('anuncios-lista');
   try {
-    const snap = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'anuncios'), fbAdmin.orderBy('criadoEm', 'desc')));
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'anuncios'));
     if (snap.empty) { lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:20px;">Nenhum an\u00fancio publicado ainda</div>'; return; }
     lista.innerHTML = snap.docs.map(d => {
       const a = d.data();
