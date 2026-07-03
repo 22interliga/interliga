@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Interliga · Painel da Franquia</title>
+<style>
+  :root{
+    --preto:#0A0A0A; --grafite:#151515; --grafite-2:#1E1E1E;
+    --azul:#1F8CE6; --azul-fraco:#1F8CE633;
+    --verde:#2ECC71; --ambar:#F2A93B; --vermelho:#E5484D;
+    --fumee:#F5F5F5; --fumee-fraco:#9A9A9A; --linha:#2A2A2A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--preto); color:var(--fumee); font-family:'Barlow', system-ui, sans-serif; min-height:100vh; }
+  h1,h2,.display{ font-family:'Bebas Neue','Barlow Condensed',system-ui,sans-serif; letter-spacing:.02em; }
+  .eyebrow{ font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.14em; font-size:.72rem; color:var(--fumee-fraco); }
+
+  /* ---------- login ---------- */
+  #tela-login{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card-login{ width:100%; max-width:360px; border:1px solid var(--linha); border-radius:16px; background:var(--grafite); padding:32px 26px; text-align:center; }
+  .logo-franquia{ width:64px; height:64px; border-radius:16px; background:var(--azul-fraco); border:1px solid var(--azul); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-family:'Bebas Neue'; font-size:1.4rem; color:var(--azul); }
+  .card-login h1{ font-size:1.5rem; margin-bottom:2px; }
+  .card-login .eyebrow{ margin-bottom:22px; }
+  .campo{ text-align:left; margin-bottom:14px; }
+  .campo label{ display:block; font-family:'Barlow Condensed'; font-size:.76rem; text-transform:uppercase; letter-spacing:.08em; color:var(--fumee-fraco); margin-bottom:5px; }
+  .campo input{ width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--linha); background:var(--grafite-2); color:var(--fumee); font-size:.95rem; }
+  .campo input:focus-visible{ outline:2px solid var(--azul); outline-offset:1px; }
+  .btn-entrar{ width:100%; padding:12px; border-radius:9px; border:none; background:var(--azul); color:#fff; font-family:'Barlow Condensed'; font-size:1rem; letter-spacing:.04em; cursor:pointer; margin-top:6px; }
+  .btn-entrar:hover{ filter:brightness(1.08); }
+  .erro-login{ color:var(--vermelho); font-size:.8rem; margin-top:10px; min-height:1em; }
+
+  /* ---------- painel ---------- */
+  #tela-painel{ display:none; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--linha); position:sticky; top:0; background:rgba(10,10,10,.92); backdrop-filter:blur(8px); z-index:20; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand .logo-mini{ width:34px; height:34px; border-radius:9px; background:var(--azul-fraco); border:1px solid var(--azul); display:flex; align-items:center; justify-content:center; font-family:'Bebas Neue'; color:var(--azul); font-size:.9rem; }
+  .brand .display{ font-size:1.25rem; }
+  .brand .tag{ font-size:.66rem; color:var(--fumee-fraco); font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.1em; }
+  .btn-sair{ background:none; border:1px solid var(--linha); color:var(--fumee-fraco); padding:8px 14px; border-radius:8px; font-family:'Barlow Condensed'; font-size:.8rem; cursor:pointer; }
+  .btn-sair:hover{ border-color:var(--vermelho); color:var(--vermelho); }
+
+  .aviso-escopo{ margin:16px 20px 0; padding:10px 14px; border-radius:10px; background:#1F8CE614; border:1px solid #1F8CE640; font-size:.8rem; color:var(--azul); }
+
+  main{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; padding:20px; }
+  @media (max-width:860px){ main{ grid-template-columns:1fr; } }
+  .bloco{ border:1px solid var(--linha); border-radius:14px; background:var(--grafite); overflow:hidden; }
+  .bloco header{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--linha); }
+  .bloco header h2{ font-size:1.05rem; }
+  .bloco .corpo{ padding:14px 18px 18px; display:flex; flex-direction:column; gap:10px; }
+
+  .cards-financeiro{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .card-fin{ background:var(--grafite-2); border:1px solid var(--linha); border-radius:10px; padding:14px; }
+  .card-fin .valor{ font-family:'Bebas Neue'; font-size:1.5rem; }
+  .card-fin .delta{ font-size:.74rem; margin-top:2px; }
+  .delta.pos{ color:var(--verde); } .delta.neg{ color:var(--vermelho); }
+
+  .linha-item{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--grafite-2); border-radius:10px; border:1px solid var(--linha); }
+  .linha-item .titulo{ font-size:.9rem; } .linha-item .sub{ font-size:.75rem; color:var(--fumee-fraco); }
+  .status{ width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .status.online{ background:var(--verde);} .status.pendente{background:var(--ambar);} .status.atraso{background:var(--vermelho);}
+
+  .limite-preco{ display:flex; flex-direction:column; gap:8px; }
+  .limite-preco .linha-item{ cursor:default; }
+  .badge-master{ font-family:'Barlow Condensed'; font-size:.66rem; padding:2px 8px; border-radius:999px; background:#F2A93B22; color:var(--ambar); border:1px solid #F2A93B55; }
+</style>
+</head>
+<body>
+
+<!-- ========== TELA DE LOGIN ========== -->
+<div id="tela-login">
+  <div class="card-login">
+    <div class="logo-franquia" id="logo-inicial">IL</div>
+    <h1 id="titulo-login">Painel da Franquia</h1>
+    <div class="eyebrow">Acesso restrito ao franqueado</div>
+    <div class="campo">
+      <label>E-mail</label>
+      <input type="email" id="input-user" autocomplete="username">
+    </div>
+    <div class="campo">
+      <label>Senha</label>
+      <input type="password" id="input-senha" autocomplete="current-password">
+    </div>
+    <button class="btn-entrar" id="btn-entrar">Entrar</button>
+    <div class="erro-login" id="erro-login"></div>
+  </div>
+</div>
+
+<!-- ========== PAINEL (após login) ========== -->
+<div id="tela-painel">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo-mini" id="logo-topo">IL</div>
+      <div>
+        <div class="display" id="nome-franquia-topo">Interliga</div>
+        <div class="tag" id="cidade-franquia-topo">Franquia</div>
+      </div>
+    </div>
+    <button class="btn-sair" id="btn-sair">Sair</button>
+  </div>
+
+  <div class="aviso-escopo">
+    Você está vendo apenas os dados da sua franquia — corridas, motoristas e financeiro de outras cidades não aparecem aqui.
+  </div>
+
+  <main>
+    <div class="bloco">
+      <header><h2>Operacional da cidade</h2></header>
+      <div class="corpo" id="corpo-operacional"></div>
+    </div>
+
+    <div class="bloco">
+      <header><h2>Financeiro da franquia</h2></header>
+      <div class="corpo">
+        <div class="cards-financeiro" id="cards-financeiro"></div>
+      </div>
+    </div>
+
+    <div class="bloco" style="grid-column:1/-1;">
+      <header>
+        <h2>Precificação local</h2>
+        <span class="badge-master">limites definidos pelo Admin Master</span>
+      </header>
+      <div class="corpo limite-preco" id="corpo-precificacao"></div>
+    </div>
+  </main>
+</div>
+
+<script type="module">
+  // ============================================================
+  // FIREBASE — preencha com as credenciais do projeto "interliga-app"
+  // pra ligar o painel aos dados reais. Enquanto ficar vazio, o
+  // painel roda em MODO DEMONSTRAÇÃO com as franquias de exemplo
+  // definidas em FRANQUIAS_DEMO logo abaixo.
+  // ============================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+    authDomain: "interliga-app.firebaseapp.com",
+    projectId: "interliga-app",
+    storageBucket: "interliga-app.firebasestorage.app",
+    messagingSenderId: "913895237568",
+    appId: "1:913895237568:web:faad95e8af089150e54a25"
+  };
+
+  let db = null, auth = null;
+
+  // ============================================================
+  // COMO CADASTRAR UM FRANQUEADO NOVO:
+  //
+  // 1) No Firebase Console → Authentication → Users → "Add user":
+  //    cria o login com o e-mail e senha do franqueado.
+  //
+  // 2) No Firestore → coleção "franqueados", já existente no seu
+  //    projeto: cria (ou confirma) um documento com o MESMO e-mail
+  //    no campo "email". Campos usados por este painel:
+  //      nome, cidade, email, plano, permissao, ativo
+  //
+  // O login busca o usuário pelo Firebase Authentication (seguro,
+  // senha nunca fica visível no Firestore) e depois usa o e-mail
+  // pra achar o perfil correspondente na coleção "franqueados".
+  // ============================================================
+
+  // ---------- login de demonstração (funciona sem Firebase configurado) ----------
+  const LOGIN_DEMO = { email: 'demo@interliga.com.br', senha: 'demo2026' };
+  const FRANQUEADO_DEMO = {
+    nome: 'Franqueado Demonstração',
+    cidade: 'Candeias',
+    email: 'demo@interliga.com.br',
+    plano: 'Básico — R$ 299/mês',
+    permissao: 'Acesso completo à cidade',
+    ativo: true
+  };
+
+  function dadosDemoOperacional(){
+    return [
+      { titulo:'Corrida — Centro → Bairro Industrial', sub:'Motorista local · 5 min', status:'online' },
+      { titulo:'Corrida — Terminal → Praça', sub:'Aguardando aceite', status:'pendente' },
+      { titulo:'Corrida — atraso no trajeto', sub:'Parada há 18 min', status:'atraso' },
+    ];
+  }
+
+  function dadosDemoFinanceiro(){
+    return [
+      { label:'Faturamento hoje', valor:'R$ 420', delta:'+8% vs. ontem', pos:true },
+      { label:'Faturamento semana', valor:'R$ 2.180', delta:'+3% vs. semana passada', pos:true },
+      { label:'Sua mensalidade', valor:'R$ 150', delta:'vence dia 10', pos:false },
+      { label:'Repasse Admin Master', valor:'R$ 98', delta:'referente à semana', pos:false },
+    ];
+  }
+
+  // Gera um prefixo de Firestore a partir do nome da cidade (ex: "Simões Filho" -> "simoesfilho_")
+  function prefixoDaCidade(cidade){
+    return (cidade || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .toLowerCase().replace(/[^a-z0-9]/g, '') + '_';
+  }
+
+  function siglaDaCidade(cidade){
+    const palavras = (cidade || 'IL').trim().split(/\s+/);
+    return palavras.length >= 2
+      ? (palavras[0][0] + palavras[1][0]).toUpperCase()
+      : (cidade || 'IL').slice(0, 2).toUpperCase();
+  }
+
+  // ---------- busca dados operacionais reais no Firestore ----------
+  async function dadosReaisOperacional(prefix) {
+    const { collection, query, getDocs, limit } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    try {
+      const ref = collection(db, `${prefix}corridas`);
+      const snap = await getDocs(query(ref, limit(5)));
+      return snap.docs.map(d => {
+        const c = d.data();
+        return {
+          titulo: `Corrida — ${c.origem || '?'} → ${c.destino || '?'}`,
+          sub: c.motoristaNome ? `Motorista: ${c.motoristaNome}` : 'Aguardando motorista',
+          status: c.status === 'em_andamento' ? 'online' : c.status === 'atrasada' ? 'atraso' : 'pendente'
+        };
+      });
+    } catch (e) {
+      console.warn(`[franquia] não foi possível ler ${prefix}corridas:`, e.message || e);
+      return [];
+    }
+  }
+
+  let franqueadoAtivo = null;
+
+  function aplicarIdentidade(f){
+    const sigla = siglaDaCidade(f.cidade);
+    document.getElementById('titulo-login').textContent = 'Painel da Franquia';
+    document.getElementById('logo-inicial').textContent = sigla;
+    document.getElementById('logo-topo').textContent = sigla;
+    document.getElementById('nome-franquia-topo').textContent = `Interliga ${f.cidade || ''}`;
+    document.getElementById('cidade-franquia-topo').textContent = f.nome || 'Franquia';
+    document.documentElement.style.setProperty('--azul', '#1F8CE6');
+  }
+
+  async function renderPainel(f){
+    const usandoDemo = !db;
+    const prefix = prefixoDaCidade(f.cidade);
+    const operacional = usandoDemo ? dadosDemoOperacional() : await dadosReaisOperacional(prefix);
+    const financeiro = dadosDemoFinanceiro(); // financeiro real depende de agregações — plugar depois
+
+    document.getElementById('corpo-operacional').innerHTML = operacional.length
+      ? operacional.map(i => `
+        <div class="linha-item">
+          <div><div class="titulo">${i.titulo}</div><div class="sub">${i.sub}</div></div>
+          <div class="status ${i.status}"></div>
+        </div>`).join('')
+      : '<div class="linha-item"><div class="sub">Nenhuma corrida em andamento agora.</div></div>';
+
+    document.getElementById('cards-financeiro').innerHTML = financeiro.map(c => `
+      <div class="card-fin">
+        <div class="eyebrow">${c.label}</div>
+        <div class="valor">${c.valor}</div>
+        <div class="delta ${c.pos?'pos':'neg'}">${c.delta}</div>
+      </div>`).join('');
+
+    document.getElementById('corpo-precificacao').innerHTML = `
+      <div class="linha-item"><div><div class="titulo">Plano contratado</div><div class="sub">Definido pelo Admin Master</div></div><div>${f.plano || '—'}</div></div>
+      <div class="linha-item"><div><div class="titulo">Permissão</div><div class="sub">Nível de acesso</div></div><div>${f.permissao || '—'}</div></div>
+      <div class="linha-item"><div><div class="titulo">Status</div><div class="sub">Situação da franquia</div></div><div>${f.ativo ? 'Ativo' : 'Inativo'}</div></div>
+    `;
+  }
+
+  // Busca o perfil do franqueado na coleção "franqueados" pelo e-mail
+  async function buscarFranqueadoPorEmail(email) {
+    const { collection, query, where, getDocs, limit } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    try {
+      const ref = collection(db, 'franqueados');
+      const snap = await getDocs(query(ref, where('email', '==', email), limit(1)));
+      return snap.empty ? null : snap.docs[0].data();
+    } catch (e) {
+      console.error('[franquia] erro ao buscar franqueado no Firestore:', e.message || e);
+      return null;
+    }
+  }
+
+  document.getElementById('btn-entrar').addEventListener('click', async () => {
+    const email = document.getElementById('input-user').value.trim().toLowerCase();
+    const senha = document.getElementById('input-senha').value;
+    const erro = document.getElementById('erro-login');
+    const btn = document.getElementById('btn-entrar');
+
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    erro.textContent = '';
+
+    let f = null;
+
+    if (auth) {
+      // ---- modo real: Firebase Authentication ----
+      try {
+        const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+        await signInWithEmailAndPassword(auth, email, senha);
+        f = await buscarFranqueadoPorEmail(email);
+        if (!f) erro.textContent = 'Login válido, mas não encontramos seu cadastro de franqueado. Fale com o Admin Master.';
+      } catch (e) {
+        erro.textContent = 'E-mail ou senha inválidos.';
+      }
+    } else {
+      // ---- modo demonstração: sem Firebase configurado ----
+      if (email === LOGIN_DEMO.email && senha === LOGIN_DEMO.senha) {
+        f = FRANQUEADO_DEMO;
+      } else {
+        erro.textContent = 'E-mail ou senha inválidos.';
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+
+    if (!f) return;
+
+    franqueadoAtivo = f;
+    aplicarIdentidade(f);
+    await renderPainel(f);
+    document.getElementById('tela-login').style.display = 'none';
+    document.getElementById('tela-painel').style.display = 'block';
+  });
+
+  document.getElementById('input-senha').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') document.getElementById('btn-entrar').click();
+  });
+
+  document.getElementById('btn-sair').addEventListener('click', async () => {
+    if (auth) {
+      const { signOut } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+      signOut(auth).catch(() => {});
+    }
+    franqueadoAtivo = null;
+    document.getElementById('input-user').value = '';
+    document.getElementById('input-senha').value = '';
+    document.getElementById('tela-painel').style.display = 'none';
+    document.getElementById('tela-login').style.display = 'flex';
+  });
+
+  // aplica identidade genérica na tela de login antes do primeiro acesso
+  document.getElementById('titulo-login').textContent = 'Painel da Franquia';
+  document.getElementById('logo-inicial').textContent = 'IL';
+
+  // ---------- inicialização do Firebase ----------
+  import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js').then(async ({ initializeApp }) => {
+    const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    console.log('✅ Firebase conectado — login por e-mail/senha ativo.');
+  }).catch(e => console.error('Erro ao iniciar Firebase:', e));
+</script>
+
+</body>
+</html>
