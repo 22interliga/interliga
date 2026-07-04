@@ -1,12 +1,12 @@
 {
-  "name": "Interliga",
-  "short_name": "Interliga",
-  "description": "Interliga - Mobilidade que conecta voc\u00ea",
-  "start_url": "./",
+  "name": "Interliga Motorista",
+  "short_name": "Interliga Motorista",
+  "description": "Interliga - Painel do Motorista",
+  "start_url": "./motorista.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F7F8FC",
+  "background_color": "#0D1117",
   "theme_color": "#FF6B00",
   "icons": [
     {
