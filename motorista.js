@@ -300,18 +300,30 @@ document.getElementById('online-toggle')?.addEventListener('click', () => {
   }
 });
 
-function atualizarStatsHome() {
+async function atualizarStatsHome() {
   const historico = JSON.parse(localStorage.getItem('interliga_motorista_historico') || '[]');
-  document.getElementById('stat-corridas').textContent = historico.length;
-  const totalKm = historico.reduce((acc, c) => acc + (c.km || 0), 0);
-  document.getElementById('stat-km').textContent = totalKm.toFixed(0);
-  document.getElementById('stat-avaliacao').textContent = state.motorista.avaliacao;
+  document.getElementById('stat-avaliacao').textContent = state.motorista.avaliacao || '—';
 
   const hoje = new Date().toDateString();
   const ganhosHoje = historico
     .filter(c => new Date(c.data).toDateString() === hoje)
     .reduce((acc, c) => acc + (c.valor || 0), 0);
   document.getElementById('earnings-today').textContent = 'R$ ' + ganhosHoje.toFixed(2).replace('.', ',');
+
+  // Busca total de corridas do Firebase pra mostrar número real ao motorista
+  if (firebaseReady && db && meuMotoristaId) {
+    fb.getDocs(fb.query(
+      fb.collection(db, 'corridas'),
+      fb.where('motoristaId', '==', meuMotoristaId),
+      fb.where('status', '==', 'finalizada')
+    )).then(snap => {
+      document.getElementById('stat-corridas').textContent = snap.size || historico.length;
+    }).catch(() => {
+      document.getElementById('stat-corridas').textContent = historico.length;
+    });
+  } else {
+    document.getElementById('stat-corridas').textContent = historico.length;
+  }
 }
 
 // ─────────────────────────────────────
@@ -862,9 +874,32 @@ function onEnterOngoing() {
   setText('passenger-name', corrida.passageiroNome || 'Passageiro');
   setText('passenger-avatar', (corrida.passageiroNome || 'PS').slice(0, 2).toUpperCase());
   setText('passenger-rating', '⭐ —');
+  setText('passenger-corridas', '');
+
   if (corrida.passageiroId && firebaseReady && db) {
-    fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)).then(snap => {
-      if (snap.exists() && snap.data().avaliacao) setText('passenger-rating', '⭐ ' + snap.data().avaliacao);
+    // Busca avaliação e total de corridas do passageiro ao mesmo tempo
+    Promise.all([
+      fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)),
+      fb.getDocs(fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('passageiroId', '==', corrida.passageiroId),
+        fb.where('status', '==', 'finalizada')
+      )),
+    ]).then(([snapPax, snapCorridas]) => {
+      if (snapPax.exists() && snapPax.data().avaliacao) {
+        setText('passenger-rating', '⭐ ' + snapPax.data().avaliacao);
+      }
+      const totalCorridas = snapCorridas.size;
+      const elCorridas = document.getElementById('passenger-corridas');
+      if (elCorridas) {
+        if (totalCorridas === 0) {
+          elCorridas.textContent = '🆕 Primeiro pedido!';
+          elCorridas.style.color = '#f59e0b';
+        } else {
+          elCorridas.textContent = `🚗 ${totalCorridas} corrida${totalCorridas > 1 ? 's' : ''} realizad${totalCorridas > 1 ? 'as' : 'a'}`;
+          elCorridas.style.color = 'var(--text-soft)';
+        }
+      }
     }).catch(() => {});
   }
 
