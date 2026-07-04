@@ -58,7 +58,10 @@ async function initFirebase() {
       } else {
         meuMotoristaId = null;
         const telaAtual = document.querySelector('.screen[data-active="true"]')?.id;
-        if (telaAtual !== 'screen-cadastro-motorista') {
+        const processandoLogin = document.getElementById('btn-fazer-login-motorista')?.disabled;
+        if (!processandoLogin &&
+            telaAtual !== 'screen-cadastro-motorista' &&
+            telaAtual !== 'screen-login-motorista') {
           go('screen-login-motorista');
         }
       }

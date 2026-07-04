@@ -98,7 +98,13 @@ async function initFirebase() {
         window.meuPassageiroId = null;
         if (localStorage.getItem('interliga_papel') === 'passageiro') {
           const telaAtual = state.currentScreen;
-          if (telaAtual !== 'screen-cadastro-passageiro' && telaAtual !== 'screen-role-choice') {
+          // Não redireciona pro login se já está no login ou cadastro,
+          // nem se o botão de login está sendo processado (evita o loop de "entra e volta")
+          const processandoLogin = document.getElementById('btn-fazer-login-passageiro')?.disabled;
+          if (!processandoLogin &&
+              telaAtual !== 'screen-login-passageiro' &&
+              telaAtual !== 'screen-cadastro-passageiro' &&
+              telaAtual !== 'screen-role-choice') {
             go('screen-login-passageiro');
           }
         }
