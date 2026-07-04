@@ -269,7 +269,7 @@ function initHomeMap() {
         L.circleMarker([latitude, longitude], { radius: 8, color: '#FF6B00', fillColor: '#FF6B00', fillOpacity: 0.8 }).addTo(homeMapInstance);
       },
       () => {}, // silenciosamente ignora se negar permissão
-      { timeout: 5000 }
+      { timeout: 8000, maximumAge: 30000, enableHighAccuracy: false }
     );
   };
   tryInit();
@@ -458,7 +458,7 @@ function onEnterRide() {
           state.origem = { texto: data.display_name, lat: latitude, lon: longitude };
         }
       } catch (e) {}
-    }, () => {}, { timeout: 5000 });
+    }, () => {}, { timeout: 8000, maximumAge: 30000, enableHighAccuracy: false });
   }
 }
 
