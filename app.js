@@ -432,6 +432,7 @@ function onEnterRide() {
   if (!tabelaPrecosCarregada) carregarTabelaPrecos();
   if (!estabelecimentosCarregados) carregarEstabelecimentos();
   if (!regrasHorarioCarregadas) carregarRegrasHorario();
+  if (!rotasFixasCarregadas) carregarRotasFixasApp();
   carregarZonaDemanda(); // sempre recarrega — a demanda muda rápido, diferente dos outros (preço, risco, etc)
   clearInterval(intervalZonaDemanda);
   intervalZonaDemanda = setInterval(carregarZonaDemanda, 20000);
@@ -579,6 +580,38 @@ async function resolverCodigoIndicacao(codigo) {
   }
 }
 let tabelaPrecosCarregada = false;
+let tabelaPrecosCachePorCidade = {};
+let rotasFixasCache = [];
+let rotasFixasCarregadas = false;
+
+async function carregarRotasFixasApp() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await fb.getDocs(fb.collection(db, 'rotas_fixas'));
+    rotasFixasCache = [];
+    snap.forEach(d => rotasFixasCache.push({ id: d.id, ...d.data() }));
+    rotasFixasCarregadas = true;
+    calcularPrecos(); // recalcula se já tem origem/destino
+  } catch (e) {
+    console.warn('[passageiro] erro ao carregar rotas fixas:', e);
+  }
+}
+
+function verificarRotaFixa(textoOrigem, textoDestino) {
+  if (!rotasFixasCache.length) return null;
+  const orig = (textoOrigem || '').toLowerCase();
+  const dest = (textoDestino || '').toLowerCase();
+  for (const rota of rotasFixasCache) {
+    const palavraOrig = (rota.palavraOrigem || '').toLowerCase();
+    const palavraDest = (rota.palavraDestino || '').toLowerCase();
+    const bateuIda = (!palavraOrig || orig.includes(palavraOrig)) && dest.includes(palavraDest);
+    const bateuVolta = palavraOrig && palavraDest && orig.includes(palavraDest) && dest.includes(palavraOrig);
+    if (bateuIda) return { preco: rota.precoIda, nome: rota.nome, categoriaId: rota.categoriaId || null };
+    if (bateuVolta) return { preco: rota.precoVolta || rota.precoIda, nome: rota.nome, categoriaId: rota.categoriaId || null };
+  }
+  return null;
+}
+
 const TABELA_PRECOS_PADRAO = {
   x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  kmFixo: 0, valorFixo: 0, multiplicador: 1.0, ativo: true },
   plus: { bandeirada: 7,  tarifaKm: 3.36, minimo: 12, kmFixo: 0, valorFixo: 0, multiplicador: 1.4, ativo: true },
@@ -588,12 +621,40 @@ const TABELA_PRECOS_PADRAO = {
 async function carregarTabelaPrecos() {
   if (!firebaseReady || !db) return;
   try {
+    // Primeiro carrega as categorias dinâmicas do Firebase
+    const snapCats = await fb.getDocs(fb.collection(db, 'categorias_veiculo'));
+    if (!snapCats.empty) {
+      // Converte as categorias dinâmicas pro formato que calcularPrecos() espera
+      const catsFirebase = {};
+      snapCats.forEach(d => {
+        const c = d.data();
+        const codigo = c.codigo || d.id;
+        catsFirebase[codigo] = {
+          bandeirada: Number(c.bandeirada || 0),
+          tarifaKm: Number(c.tarifakm || 0),
+          minimo: Number(c.minimo || 0),
+          kmFixo: Number(c.kmFixo || 0),
+          valorFixo: Number(c.valorFixo || 0),
+          multiplicador: Number(c.multiplicador || 1),
+          ativo: c.ativo !== false,
+          nome: c.nome,
+          icone: c.icone,
+        };
+      });
+      // Aplica pra todas as cidades
+      CIDADES_INTERLIGA.forEach(c => {
+        tabelaPrecosCachePorCidade[c.codigo] = catsFirebase;
+      });
+    }
+
+    // Depois carrega preços específicos por cidade (override das categorias gerais)
     await Promise.all(CIDADES_INTERLIGA.map(async (c) => {
       const snap = await fb.getDoc(fb.doc(db, 'precos', c.codigo));
-      if (snap.exists()) tabelaPrecosCachePorCidade[c.codigo] = snap.data();
+      if (snap.exists()) tabelaPrecosCachePorCidade[c.codigo] = { ...tabelaPrecosCachePorCidade[c.codigo], ...snap.data() };
     }));
+
     tabelaPrecosCarregada = true;
-    calcularPrecos(); // recalcula com os preços certos, se já tinha origem/destino escolhidos
+    calcularPrecos();
   } catch (e) {
     console.warn('[passageiro] erro ao carregar tabela de preços, usando padrão:', e);
   }
@@ -752,7 +813,34 @@ function calcularPrecos() {
   const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
   const multiplicadorZona = semCoordenada ? 1.0 : obterMultiplicadorZona(state.origem.lat, state.origem.lon, cidade);
 
-  for (const cat of ['x', 'plus', 'van']) {
+  // Verifica se bate com uma rota fixa — se sim, aplica o preço tabelado diretamente
+  const rotaFixa = verificarRotaFixa(state.origem.texto, state.destino.texto);
+  if (rotaFixa) {
+    document.querySelectorAll('.category-item').forEach(el => {
+      const cat = el.dataset.cat;
+      // Se a rota é pra uma categoria específica, mostra só ela; senão mostra todas
+      const visivel = !rotaFixa.categoriaId || cat === rotaFixa.categoriaId;
+      el.style.display = visivel ? '' : 'none';
+      if (visivel) {
+        const priceEl = document.getElementById(`price-${cat}`);
+        const etaEl = document.getElementById(`eta-${cat}`);
+        if (priceEl) priceEl.textContent = '🗺️ R$ ' + rotaFixa.preco.toFixed(2).replace('.', ',');
+        if (etaEl) etaEl.textContent = rotaFixa.nome;
+        state.precos[cat] = rotaFixa.preco;
+      }
+    });
+    return; // não calcula mais nada, o preço fixo já está aplicado
+  }
+
+  // Usa as categorias que vieram do Firebase; se não carregou ainda, usa as 3 padrão
+  const categorias = Object.keys(tabela).length > 0
+    ? Object.keys(tabela)
+    : ['x', 'plus', 'van'];
+
+  // Esconde todos os items primeiro e mostra só os que existem no Firebase
+  document.querySelectorAll('.category-item').forEach(el => el.style.display = 'none');
+
+  for (const cat of categorias) {
     const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
     const priceEl = document.getElementById(`price-${cat}`);
     const etaEl = document.getElementById(`eta-${cat}`);
