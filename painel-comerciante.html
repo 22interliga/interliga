@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interliga — Painel do Comerciante</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root {
+    --bg: #0D1117; --surface: #1A1F2E; --border: #2A3142;
+    --text: #E8EAF0; --text-soft: #9098A8;
+    --orange: #FF6B00; --green: #22C55E; --red: #E8002D;
+    --yellow: #F59E0B; --blue: #3B82F6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* LOGIN */
+  #tela-login { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .login-logo { font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+  .login-logo span { color: var(--orange); }
+  .login-sub { color: var(--text-soft); font-size: 14px; margin-bottom: 32px; }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 360px; }
+  .login-label { font-size: 11px; font-weight: 700; color: var(--text-soft); margin-bottom: 6px; letter-spacing: 0.5px; }
+  .login-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 15px; margin-bottom: 14px; }
+  .login-btn { width: 100%; background: var(--orange); color: white; font-weight: 700; font-size: 15px; border: none; border-radius: 10px; padding: 14px; cursor: pointer; margin-top: 4px; }
+  .login-erro { color: var(--red); font-size: 13px; margin-top: 8px; text-align: center; }
+
+  /* PAINEL */
+  #tela-painel { display: none; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+  .header-logo { font-size: 18px; font-weight: 900; }
+  .header-logo span { color: var(--orange); }
+  .header-rest { font-size: 13px; color: var(--text-soft); }
+  .btn-sair { background: transparent; border: 1px solid var(--border); color: var(--text-soft); padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+  .main { padding: 16px; max-width: 800px; margin: 0 auto; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-soft); background: transparent; }
+  .tab.active { background: var(--orange); color: white; border-color: var(--orange); }
+
+  .pedido-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .pedido-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .pedido-cliente { font-weight: 700; font-size: 15px; }
+  .pedido-hora { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+  .pedido-itens { font-size: 13px; color: var(--text-soft); margin-bottom: 10px; line-height: 1.6; }
+  .pedido-endereco { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; }
+  .pedido-total { font-size: 16px; font-weight: 700; color: var(--orange); margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .badge-confirmado { background: rgba(59,130,246,0.2); color: var(--blue); }
+  .badge-preparando { background: rgba(245,158,11,0.2); color: var(--yellow); }
+  .badge-entrega { background: rgba(255,107,0,0.2); color: var(--orange); }
+  .badge-entregue { background: rgba(34,197,94,0.2); color: var(--green); }
+  .badge-cancelado { background: rgba(232,0,45,0.15); color: var(--red); }
+  .pedido-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-status { padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; flex: 1; min-width: 120px; }
+  .btn-aceitar { background: var(--green); color: white; }
+  .btn-preparar { background: var(--yellow); color: white; }
+  .btn-entregar { background: var(--orange); color: white; }
+  .btn-entregar-proprio { background: var(--blue); color: white; }
+  .btn-cancelar { background: rgba(232,0,45,0.15); color: var(--red); }
+  .empty { text-align: center; padding: 48px 20px; color: var(--text-soft); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 800; color: var(--orange); }
+  .stat-lbl { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="tela-login">
+  <div class="login-logo">INTER<span>LIGA</span></div>
+  <div class="login-sub">Painel do Comerciante — Interifood</div>
+  <div class="login-card">
+    <div class="login-label">E-MAIL</div>
+    <input class="login-input" type="email" id="login-email" placeholder="seu@restaurante.com">
+    <div class="login-label">SENHA</div>
+    <input class="login-input" type="password" id="login-senha" placeholder="••••••••">
+    <button class="login-btn" id="btn-login">Entrar</button>
+    <div class="login-erro" id="login-erro" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- TELA DO PAINEL -->
+<div id="tela-painel">
+  <div class="header">
+    <div>
+      <div class="header-logo">INTER<span>LIGA</span> · Comerciante</div>
+      <div class="header-rest" id="header-rest-nome">Carregando...</div>
+    </div>
+    <button class="btn-sair" id="btn-sair">Sair</button>
+  </div>
+
+  <div class="main">
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-num" id="stat-novos">0</div><div class="stat-lbl">🆕 Novos</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-andamento">0</div><div class="stat-lbl">⏳ Em andamento</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-hoje">0</div><div class="stat-lbl">✅ Entregues hoje</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filtro="confirmado">🆕 Novos</button>
+      <button class="tab" data-filtro="preparando">👨‍🍳 Preparando</button>
+      <button class="tab" data-filtro="entrega">🛵 Em entrega</button>
+      <button class="tab" data-filtro="entregue">✅ Entregues</button>
+      <button class="tab" data-filtro="todos">Todos</button>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px;">
+      <span class="live-dot"></span>Atualizando em tempo real
+    </div>
+
+    <div id="lista-pedidos">
+      <div class="empty"><div class="empty-icon">⏳</div>Carregando pedidos...</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, doc, query, where, orderBy, limit, onSnapshot, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+  authDomain: "interliga-app.firebaseapp.com",
+  projectId: "interliga-app",
+  storageBucket: "interliga-app.firebasestorage.app",
+  messagingSenderId: "913895237568",
+  appId: "1:913895237568:web:faad95e8af089150e54a25",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let restauranteAtual = null;
+let pedidosListenerUnsub = null;
+let filtroAtual = 'confirmado';
+let todosPedidos = [];
+
+// ── LOGIN ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const erroEl = document.getElementById('login-erro');
+  erroEl.style.display = 'none';
+
+  if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.style.display = 'block'; return; }
+
+  document.getElementById('btn-login').textContent = 'Entrando...';
+  document.getElementById('btn-login').disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, email, senha);
+  } catch (e) {
+    erroEl.textContent = '❌ E-mail ou senha incorretos';
+    erroEl.style.display = 'block';
+  } finally {
+    document.getElementById('btn-login').textContent = 'Entrar';
+    document.getElementById('btn-login').disabled = false;
+  }
+});
+
+document.getElementById('btn-sair').addEventListener('click', async () => {
+  if (pedidosListenerUnsub) pedidosListenerUnsub();
+  await signOut(auth);
+});
+
+// ── AUTH STATE ──────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    document.getElementById('tela-login').style.display = 'flex';
+    document.getElementById('tela-painel').style.display = 'none';
+    return;
+  }
+
+  // Busca o restaurante vinculado a esse e-mail
+  try {
+    const q = query(collection(db, 'restaurantes_food'), where('emailComerciante', '==', user.email));
+    const snap = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(m => m.getDocs(q));
+
+    if (snap.empty) {
+      // Tenta pelo UID também
+      const q2 = query(collection(db, 'restaurantes_food'), where('comercianteUid', '==', user.uid));
+      const snap2 = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(m => m.getDocs(q2));
+      if (snap2.empty) {
+        alert('⚠️ Nenhum restaurante vinculado a esse e-mail. Peça ao administrador pra cadastrar seu e-mail no restaurante.');
+        await signOut(auth);
+        return;
+      }
+      restauranteAtual = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+    } else {
+      restauranteAtual = { id: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+
+    document.getElementById('header-rest-nome').textContent = restauranteAtual.nome || 'Meu restaurante';
+    document.getElementById('tela-login').style.display = 'none';
+    document.getElementById('tela-painel').style.display = 'block';
+
+    iniciarListenerPedidos();
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao carregar dados: ' + e.message);
+  }
+});
+
+// ── LISTENER DE PEDIDOS EM TEMPO REAL ──────────────────────────────────────
+function iniciarListenerPedidos() {
+  if (pedidosListenerUnsub) pedidosListenerUnsub();
+
+  const q = query(
+    collection(db, 'pedidos_food'),
+    where('restauranteId', '==', restauranteAtual.id),
+    orderBy('criadoEm', 'desc'),
+    limit(100)
+  );
+
+  pedidosListenerUnsub = onSnapshot(q, (snap) => {
+    todosPedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    atualizarStats();
+    renderPedidos();
+  }, (e) => {
+    console.error('Erro no listener:', e);
+    document.getElementById('lista-pedidos').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div>${e.message}</div>`;
+  });
+}
+
+// ── FILTROS ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    filtroAtual = tab.dataset.filtro;
+    renderPedidos();
+  });
+});
+
+// ── STATS ──────────────────────────────────────────────────────────────────
+function atualizarStats() {
+  const hoje = new Date().toDateString();
+  document.getElementById('stat-novos').textContent = todosPedidos.filter(p => p.status === 'confirmado').length;
+  document.getElementById('stat-andamento').textContent = todosPedidos.filter(p => ['preparando','entrega'].includes(p.status)).length;
+  document.getElementById('stat-hoje').textContent = todosPedidos.filter(p => {
+    const ms = p.criadoEm?.toMillis ? p.criadoEm.toMillis() : null;
+    return p.status === 'entregue' && ms && new Date(ms).toDateString() === hoje;
+  }).length;
+}
+
+// ── RENDERIZAR PEDIDOS ─────────────────────────────────────────────────────
+const BADGES = {
+  confirmado: '<span class="badge badge-confirmado">🆕 Novo</span>',
+  preparando: '<span class="badge badge-preparando">👨‍🍳 Preparando</span>',
+  entrega: '<span class="badge badge-entrega">🛵 Em entrega</span>',
+  entregue: '<span class="badge badge-entregue">✅ Entregue</span>',
+  cancelado: '<span class="badge badge-cancelado">❌ Cancelado</span>',
+};
+
+function renderPedidos() {
+  const lista = document.getElementById('lista-pedidos');
+  let pedidos = filtroAtual === 'todos' ? todosPedidos : todosPedidos.filter(p => p.status === filtroAtual);
+
+  if (pedidos.length === 0) {
+    lista.innerHTML = `<div class="empty"><div class="empty-icon">🍽️</div>Nenhum pedido nessa categoria</div>`;
+    return;
+  }
+
+  lista.innerHTML = pedidos.map(p => {
+    const ms = p.criadoEm?.toMillis ? p.criadoEm.toMillis() : null;
+    const hora = ms ? new Date(ms).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '—';
+    const itensTexto = (p.itens || []).map(i => `${i.qtd}× ${i.nome}`).join(', ');
+    const tipoEntrega = p.tipoEntrega === 'propria' ? '🏪 Entrega própria' : '🛵 Entregador Interliga';
+
+    let botoes = '';
+    if (p.status === 'confirmado') {
+      botoes = `
+        <button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','preparando')">✅ Aceitar e começar a preparar</button>
+        <button class="btn-status btn-cancelar" onclick="cancelarPedido('${p.id}')">❌ Recusar</button>
+      `;
+    } else if (p.status === 'preparando') {
+      if (p.tipoEntrega === 'propria') {
+        botoes = `<button class="btn-status btn-entregar-proprio" onclick="avancarStatus('${p.id}','entrega')">🏪 Saiu para entrega (entrega própria)</button>`;
+      } else {
+        botoes = `<button class="btn-status btn-entregar" onclick="avancarStatus('${p.id}','entrega')">🛵 Pronto — chamar entregador Interliga</button>`;
+      }
+    } else if (p.status === 'entrega') {
+      botoes = `<button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','entregue')">✅ Confirmar entrega ao cliente</button>`;
+    }
+
+    return `
+      <div class="pedido-card">
+        <div class="pedido-header">
+          <div>
+            <div class="pedido-cliente">${p.passageiroNome || 'Cliente'}</div>
+            <div class="pedido-hora">🕐 ${hora} · ${tipoEntrega}</div>
+          </div>
+          ${BADGES[p.status] || ''}
+        </div>
+        <div class="pedido-itens">${itensTexto}</div>
+        <div class="pedido-endereco">📍 ${p.endereco || '—'}</div>
+        <div class="pedido-total">Total: R$ ${Number(p.total||0).toFixed(2).replace('.',',')}</div>
+        ${botoes ? `<div class="pedido-actions">${botoes}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// ── AÇÕES ──────────────────────────────────────────────────────────────────
+window.avancarStatus = async (pedidoId, novoStatus) => {
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: novoStatus,
+      atualizadoEm: serverTimestamp(),
+    });
+  } catch (e) { alert('Erro: ' + e.message); }
+};
+
+window.cancelarPedido = async (pedidoId) => {
+  if (!confirm('Recusar esse pedido?')) return;
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: 'cancelado',
+      atualizadoEm: serverTimestamp(),
+    });
+  } catch (e) { alert('Erro: ' + e.message); }
+};
+</script>
+</body>
+</html>

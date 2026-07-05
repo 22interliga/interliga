@@ -673,6 +673,10 @@ textarea.inp { resize: vertical; }
                   <option value="simoes">Simões Filho — BA</option>
                 </select>
               </div>
+              <div class="fl" style="margin-bottom:14px;">
+                <div class="lbl">E-MAIL DO COMERCIANTE (acesso ao painel)</div>
+                <input class="inp" id="rest-email" type="email" placeholder="comerciante@restaurante.com"/>
+              </div>
               <button class="pbtn" onclick="salvarRestaurante()">💾 Salvar restaurante</button>
             </div>
 
@@ -1698,7 +1702,9 @@ async function salvarRestaurante(){
   if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
 
   try {
-    const dados = { nome, categoria, emoji, tempoEntrega, taxaEntrega, tipoEntrega, cidade, ativo: true };
+    const dados = { nome, categoria, emoji, tempoEntrega, taxaEntrega, tipoEntrega, cidade,
+      emailComerciante: document.getElementById('rest-email')?.value.trim().toLowerCase() || null,
+      ativo: true };
     if (id) {
       await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'restaurantes_food', id), dados);
       showToast('✅ Restaurante atualizado!');
@@ -1745,6 +1751,7 @@ async function carregarRestaurantesAdmin(){
             ${status}
             <button class="pbtn" onclick="editarCardapioRestaurante('${r.id}')">🍴 Cardápio</button>
             <button class="pbtn" onclick="editarRestaurante('${r.id}')">✏️ Editar</button>
+            <a href="painel-comerciante.html" target="_blank" class="pbtn" style="text-decoration:none;display:inline-block;">🏪 Painel</a>
             <button class="pbtn" onclick="toggleRestauranteAtivo('${r.id}',${r.ativo!==false})">${r.ativo!==false?'Desativar':'Ativar'}</button>
           </div>
         </div>
