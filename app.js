@@ -1733,6 +1733,25 @@ document.getElementById('btn-open-chat')?.addEventListener('click', () => {
 // Número do bot Interliga (Railway/Baileys) — faz a ponte anônima entre passageiro e motorista
 const BOT_NUMERO = '5571981899571';
 
+document.getElementById('btn-share-ride')?.addEventListener('click', () => {
+  const corridaId = state.corridaId;
+  if (!corridaId) { showToast('⚠️ Nenhuma corrida ativa pra compartilhar'); return; }
+
+  const url = `${location.origin}${location.pathname}?acompanhar=${corridaId}`;
+  const texto = `🚗 Estou numa corrida com a Interliga! Acompanhe em tempo real:\n${url}`;
+
+  if (navigator.share) {
+    navigator.share({ title: 'Minha corrida Interliga', text: texto, url })
+      .catch(() => {}); // ignora se usuário cancelar
+  } else {
+    navigator.clipboard?.writeText(texto).then(() => {
+      showToast('📋 Link copiado! Cole no WhatsApp pra compartilhar.');
+    }).catch(() => {
+      showToast('🔗 Link: ' + url);
+    });
+  }
+});
+
 document.getElementById('btn-call-driver')?.addEventListener('click', () => {
   const corridaInfo = state.corridaId || 'atual';
   const msg = encodeURIComponent(
@@ -2025,12 +2044,34 @@ function renderLastRide() {
   document.getElementById('last-ride-price').textContent = 'R$ ' + Number(ultima.preco).toFixed(2).replace('.', ',');
 }
 
-function renderTripsScreen() {
-  const historico = getStorageJSON('interliga_corridas', []);
+async function renderTripsScreen() {
   const listEl = document.getElementById('trips-list');
   if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;color:var(--text-soft);padding:20px;">Carregando...</div>';
 
-  if (historico.length === 0) {
+  let corridas = [];
+
+  // Busca do Firebase (corridas reais finalizadas)
+  if (firebaseReady && db && meuPassageiroId) {
+    try {
+      const snap = await fb.getDocs(fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('passageiroId', '==', meuPassageiroId),
+        fb.where('status', '==', 'finalizada'),
+        fb.orderBy('criadoEm', 'desc'),
+        fb.limit(50)
+      ));
+      snap.forEach(d => corridas.push({ id: d.id, ...d.data(), _origem: 'firebase' }));
+    } catch (e) {
+      // Se falhar (sem índice), usa o histórico local como fallback
+      corridas = getStorageJSON('interliga_corridas', []);
+      console.warn('[trips] usando histórico local:', e.message);
+    }
+  }
+
+  if (corridas.length === 0) corridas = getStorageJSON('interliga_corridas', []);
+
+  if (corridas.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🧳</div>
@@ -2040,16 +2081,26 @@ function renderTripsScreen() {
     return;
   }
 
-  listEl.innerHTML = historico.map(c => `
-    <div class="trip-card">
-      <div class="trip-card-top">
-        <span>${new Date(c.criadoEm).toLocaleDateString('pt-BR')} · ${new Date(c.criadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
-        <span class="trip-card-price">R$ ${Number(c.preco).toFixed(2).replace('.', ',')}</span>
-      </div>
-      <div class="trip-card-route">📍 ${c.origem} → 🏁 ${c.destino}</div>
-      ${c.motoristaNome ? `<div style="font-size:12px;color:var(--text-soft);margin-top:4px;">🚗 ${c.motoristaNome}${c.motoristaVeiculo ? ' · ' + c.motoristaVeiculo : ''}${c.motoristaPlaca ? ' · ' + c.motoristaPlaca : ''}</div>` : ''}
-    </div>
-  `).join('');
+  listEl.innerHTML = corridas.map(c => {
+    const data = c.criadoEm?.toDate ? c.criadoEm.toDate() : new Date(c.criadoEm);
+    const dataFmt = data.toLocaleDateString('pt-BR') + ' · ' + data.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    const motorista = c.motoristaNome
+      ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--text-soft);">
+          <span>🚗 ${c.motoristaNome}</span>
+          ${c.motoristaVeiculo ? `<span>· ${c.motoristaVeiculo}</span>` : ''}
+          ${c.motoristaPlaca ? `<span>· ${c.motoristaPlaca}</span>` : ''}
+          ${c.motoristaAvaliacao ? `<span style="color:var(--orange);">· ⭐ ${c.motoristaAvaliacao}</span>` : ''}
+        </div>` : '';
+    return `
+      <div class="trip-card">
+        <div class="trip-card-top">
+          <span>${dataFmt}</span>
+          <span class="trip-card-price">R$ ${Number(c.preco||0).toFixed(2).replace('.', ',')}</span>
+        </div>
+        <div class="trip-card-route">📍 ${c.origem || '—'} → 🏁 ${c.destino || '—'}</div>
+        ${motorista}
+      </div>`;
+  }).join('');
 }
 
 // ─────────────────────────────────────

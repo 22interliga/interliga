@@ -705,6 +705,36 @@ function exibirCorridaRecebida(corrida) {
     document.getElementById('request-distancia').textContent = '-- km';
   }
 
+  // Mostra info do passageiro no card de oferta
+  const nomePax = corrida.passageiroNome || 'Passageiro';
+  const elPaxNome = document.getElementById('request-pax-nome');
+  const elPaxAvatar = document.getElementById('request-pax-avatar');
+  const elPaxStats = document.getElementById('request-pax-stats');
+  if (elPaxNome) elPaxNome.textContent = nomePax;
+  if (elPaxAvatar) elPaxAvatar.textContent = nomePax.slice(0, 2).toUpperCase();
+  if (elPaxStats) elPaxStats.textContent = 'Carregando...';
+
+  if (corrida.passageiroId && firebaseReady && db) {
+    Promise.all([
+      fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)),
+      fb.getDocs(fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('passageiroId', '==', corrida.passageiroId),
+        fb.where('status', '==', 'finalizada')
+      )),
+    ]).then(([snapPax, snapCorridas]) => {
+      const avaliacao = snapPax.exists() ? snapPax.data().avaliacao : null;
+      const total = snapCorridas.size;
+      if (elPaxStats) {
+        const estrelas = avaliacao ? `⭐ ${avaliacao}` : '';
+        const corridas = total === 0 ? '🆕 Primeira corrida!' : `🚗 ${total} corrida${total > 1 ? 's' : ''}`;
+        elPaxStats.textContent = [estrelas, corridas].filter(Boolean).join(' · ');
+      }
+    }).catch(() => {
+      if (elPaxStats) elPaxStats.textContent = '—';
+    });
+  }
+
   iniciarCountdown();
 }
 
