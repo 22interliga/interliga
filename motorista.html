@@ -356,7 +356,11 @@
       <div class="page-title">Perfil</div>
     </header>
     <div class="profile-card">
-      <div class="profile-avatar">M</div>
+      <div style="position:relative;width:80px;cursor:pointer;" onclick="document.getElementById('input-trocar-foto-mot').click()">
+        <div class="profile-avatar" id="profile-driver-avatar">M</div>
+        <div style="position:absolute;bottom:0;right:0;width:26px;height:26px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;border:2px solid #0D1117;">📷</div>
+        <input type="file" id="input-trocar-foto-mot" accept="image/*" style="display:none;">
+      </div>
       <div class="profile-name" id="profile-driver-name">Motorista</div>
       <div class="profile-phone" id="profile-driver-phone">—</div>
       <div class="profile-vehicle" id="profile-driver-vehicle">—</div>

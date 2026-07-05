@@ -1561,6 +1561,20 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
     return mostrarErro('Sem conexão com o servidor — confira sua internet e tenta de novo');
   }
 
+  // Verifica CPF duplicado (passageiro ou motorista já cadastrado com esse CPF)
+  btn.textContent = 'Verificando CPF...';
+  try {
+    const [snapPax, snapMot] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'passageiros'), fb.where('cpf', '==', cpf))),
+      fb.getDocs(fb.query(fb.collection(db, 'motoristas'), fb.where('cpf', '==', cpf))),
+    ]);
+    if (!snapPax.empty || !snapMot.empty) {
+      btn.disabled = false;
+      btn.textContent = 'Enviar cadastro';
+      return mostrarErro('⚠️ Já existe uma conta com esse CPF. Use "Entrar" se já tem cadastro.');
+    }
+  } catch (e) { console.warn('[cadastro] erro ao verificar CPF:', e); }
+
   btn.textContent = 'Enviando...';
 
   try {
@@ -1669,7 +1683,35 @@ async function verificarCadastroPassageiro() {
 }
 
 function aplicarStatusCadastro(dados) {
-  state.passageiroDados = dados; // guarda pra usar cidade como fallback quando sem coordenada
+  state.passageiroDados = dados;
+
+  // Foto de perfil real
+  const avatarInner = document.getElementById('profile-avatar-inner');
+  if (avatarInner && dados.selfie) {
+    avatarInner.innerHTML = `<img src="${dados.selfie}" alt="Foto">`;
+  } else if (avatarInner && dados.nome) {
+    avatarInner.textContent = dados.nome.trim().charAt(0).toUpperCase();
+  }
+
+  // Troca de foto pelo perfil
+  const inputFoto = document.getElementById('input-trocar-foto-pax');
+  if (inputFoto && !inputFoto._wiredPerfil) {
+    inputFoto._wiredPerfil = true;
+    inputFoto.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !firebaseReady || !db || !meuPassageiroId) return;
+      try {
+        showToast('📷 Atualizando foto...');
+        const novaFoto = await comprimirImagemArquivo(file);
+        await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { selfie: novaFoto }, { merge: true });
+        if (avatarInner) avatarInner.innerHTML = `<img src="${novaFoto}" alt="Foto">`;
+        showToast('✅ Foto atualizada!');
+      } catch (err) {
+        showToast('⚠️ Erro ao atualizar foto');
+      }
+    });
+  }
+
   if (dados.bloqueado === true) {
     document.getElementById('bloqueio-motivo-texto').textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
     go('screen-bloqueado');

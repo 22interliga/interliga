@@ -1627,6 +1627,19 @@ document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('clic
     return mostrarErro('Sem conexão com o servidor — confira sua internet e tenta de novo');
   }
 
+  btn.textContent = 'Verificando CPF...';
+  try {
+    const [snapPax, snapMot] = await Promise.all([
+      fb.getDocs(fb.query(fb.collection(db, 'passageiros'), fb.where('cpf', '==', cpf))),
+      fb.getDocs(fb.query(fb.collection(db, 'motoristas'), fb.where('cpf', '==', cpf))),
+    ]);
+    if (!snapPax.empty || !snapMot.empty) {
+      btn.disabled = false;
+      btn.textContent = 'Enviar cadastro';
+      return mostrarErro('⚠️ Já existe uma conta com esse CPF. Use "Entrar" se já tem cadastro.');
+    }
+  } catch (e) { console.warn('[motorista] erro ao verificar CPF:', e); }
+
   btn.textContent = 'Enviando...';
 
   try {
@@ -1748,8 +1761,44 @@ async function verificarCadastroMotorista() {
     if (elNome) elNome.textContent = state.motorista.nome || 'Motorista';
     const elTelefone = document.getElementById('profile-driver-phone');
     if (elTelefone) elTelefone.textContent = state.motorista.celular || '—';
-    const elAvatar = document.querySelector('.profile-avatar');
-    if (elAvatar) elAvatar.textContent = (state.motorista.nome || 'M').trim().charAt(0).toUpperCase();
+    const elAvatar = document.getElementById('profile-driver-avatar');
+    if (elAvatar) {
+      if (dados.selfie) {
+        elAvatar.innerHTML = `<img src="${dados.selfie}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        elAvatar.textContent = (state.motorista.nome || 'M').trim().charAt(0).toUpperCase();
+      }
+    }
+    const inputFotoMot = document.getElementById('input-trocar-foto-mot');
+    if (inputFotoMot && !inputFotoMot._wiredPerfil) {
+      inputFotoMot._wiredPerfil = true;
+      inputFotoMot.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !firebaseReady || !db || !meuMotoristaId) return;
+        try {
+          showToast('📷 Atualizando foto...');
+          const novaFoto = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const max = 400;
+                const ratio = Math.min(max/img.width, max/img.height, 1);
+                canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+              };
+              img.onerror = reject; img.src = ev.target.result;
+            };
+            reader.onerror = reject; reader.readAsDataURL(file);
+          });
+          await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { selfie: novaFoto }, { merge: true });
+          if (elAvatar) elAvatar.innerHTML = `<img src="${novaFoto}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+          showToast('✅ Foto atualizada!');
+        } catch (err) { showToast('⚠️ Erro ao atualizar foto'); }
+      });
+    }
     const elCpf = document.getElementById('perfil-mot-cpf');
     if (elCpf && state.motorista.cpf) elCpf.textContent = state.motorista.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
     const elEmail = document.getElementById('perfil-mot-email');
