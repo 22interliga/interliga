@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acompanhar Corrida — Interliga</title>
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #0D1117; color: #fff; height: 100vh; display: flex; flex-direction: column; }
+  .header { background: #151B25; padding: 14px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1E2633; }
+  .header-logo { font-size: 18px; font-weight: 900; }
+  .header-logo span { color: #FF6B00; }
+  .header-sub { font-size: 12px; color: #9098A8; }
+  #map { flex: 1; }
+  .info-panel { background: #151B25; padding: 16px 20px; border-top: 1px solid #1E2633; }
+  .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+  .status-aguardando { background: rgba(245,166,35,0.15); color: #F5A623; }
+  .status-aceita { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .status-finalizada { background: rgba(255,107,0,0.15); color: #FF6B00; }
+  .route-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #9098A8; margin-bottom: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .dot-green { background: #22c55e; }
+  .dot-orange { background: #FF6B00; }
+  .motorista-card { display: flex; align-items: center; gap: 10px; background: #1A2233; border-radius: 10px; padding: 10px 14px; margin-top: 10px; }
+  .motorista-avatar { width: 36px; height: 36px; border-radius: 50%; background: #FF6B00; color: white; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .motorista-nome { font-weight: 600; font-size: 13px; }
+  .motorista-det { font-size: 11px; color: #9098A8; margin-top: 2px; }
+  .loading { text-align: center; padding: 40px 20px; color: #9098A8; }
+  .erro { text-align: center; padding: 40px 20px; color: #E8002D; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">INTER<span>LIGA</span></div>
+    <div class="header-sub">Acompanhamento de corrida em tempo real</div>
+  </div>
+</div>
+
+<div id="map"><div class="loading">🗺️ Carregando mapa...</div></div>
+
+<div class="info-panel" id="info-panel">
+  <div class="loading">Buscando informações da corrida...</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const corridaId = new URLSearchParams(location.search).get('id');
+if (!corridaId) {
+  document.getElementById('info-panel').innerHTML = '<div class="erro">❌ Link inválido — ID da corrida não encontrado.</div>';
+  document.getElementById('map').innerHTML = '';
+  throw new Error('sem id');
+}
+
+const app = initializeApp({
+  apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+  authDomain: "interliga-app.firebaseapp.com",
+  projectId: "interliga-app",
+  storageBucket: "interliga-app.firebasestorage.app",
+  messagingSenderId: "913895237568",
+  appId: "1:913895237568:web:faad95e8af089150e54a25",
+});
+const db = getFirestore(app);
+
+// Mapa
+const map = L.map('map').setView([-12.7440, -38.6170], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+
+let markerMotorista = null;
+
+const statusLabels = {
+  aguardando: { texto: '⏳ Procurando motorista', classe: 'status-aguardando' },
+  aceita: { texto: '🚗 Motorista a caminho', classe: 'status-aceita' },
+  em_andamento: { texto: '🚗 Em andamento', classe: 'status-aceita' },
+  finalizada: { texto: '✅ Corrida finalizada', classe: 'status-finalizada' },
+};
+
+onSnapshot(doc(db, 'corridas', corridaId), (snap) => {
+  if (!snap.exists()) {
+    document.getElementById('info-panel').innerHTML = '<div class="erro">❌ Corrida não encontrada.</div>';
+    return;
+  }
+
+  const c = snap.data();
+  const sl = statusLabels[c.status] || { texto: c.status, classe: 'status-aguardando' };
+
+  // Atualiza posição do motorista no mapa
+  if (c.motoristaLat && c.motoristaLon) {
+    const pos = [c.motoristaLat, c.motoristaLon];
+    if (markerMotorista) {
+      markerMotorista.setLatLng(pos);
+    } else {
+      markerMotorista = L.marker(pos, {
+        icon: L.divIcon({ html: '🚗', className: '', iconSize: [28, 28] })
+      }).addTo(map);
+    }
+    map.setView(pos, 15);
+  }
+
+  // Painel de informações
+  document.getElementById('info-panel').innerHTML = `
+    <span class="status-badge ${sl.classe}">${sl.texto}</span>
+    <div class="route-row"><div class="dot dot-green"></div><span>${c.origem || '—'}</span></div>
+    <div class="route-row"><div class="dot dot-orange"></div><span>${c.destino || '—'}</span></div>
+    ${c.motoristaNome ? `
+    <div class="motorista-card">
+      <div class="motorista-avatar">${c.motoristaNome.slice(0,2).toUpperCase()}</div>
+      <div>
+        <div class="motorista-nome">🚗 ${c.motoristaNome}</div>
+        <div class="motorista-det">${c.motoristaVeiculo || ''} ${c.motoristaPlaca ? '· ' + c.motoristaPlaca : ''} ${c.motoristaAvaliacao ? '· ⭐ ' + c.motoristaAvaliacao : ''}</div>
+      </div>
+    </div>` : ''}
+    ${c.status === 'finalizada' ? '<div style="text-align:center;padding-top:14px;color:#9098A8;font-size:12px;">Esta corrida foi finalizada.</div>' : ''}
+  `;
+});
+</script>
+</body>
+</html>

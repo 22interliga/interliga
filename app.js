@@ -1298,11 +1298,14 @@ function iniciarChatCorrida() {
     snap.docChanges().forEach(change => {
       if (change.type === 'added') {
         const msg = change.doc.data();
-        const tipo = msg.de === 'passageiro' ? 'me' : 'them';
+        // Só renderiza mensagens DO MOTORISTA — as do passageiro já foram
+        // renderizadas por enviarMensagemChat() antes de ir pro Firebase
+        // (evita duplicação)
+        if (msg.de === 'passageiro') return;
         if (msg.tipo === 'audio') {
-          renderChatMessage(null, tipo, msg.audioData);
+          renderChatMessage(null, 'them', msg.audioData);
         } else {
-          renderChatMessage(msg.texto, tipo);
+          renderChatMessage(msg.texto, 'them');
         }
       }
     });
@@ -1737,17 +1740,19 @@ document.getElementById('btn-share-ride')?.addEventListener('click', () => {
   const corridaId = state.corridaId;
   if (!corridaId) { showToast('⚠️ Nenhuma corrida ativa pra compartilhar'); return; }
 
-  const url = `${location.origin}${location.pathname}?acompanhar=${corridaId}`;
-  const texto = `🚗 Estou numa corrida com a Interliga! Acompanhe em tempo real:\n${url}`;
+  // Página dedicada de acompanhamento — não abre o app, só mostra o mapa
+  const base = location.origin + location.pathname.replace('index.html', '').replace(/\/$/, '');
+  const url = `${base}/acompanhar.html?id=${corridaId}`;
+  const texto = `🚗 Estou numa corrida com a Interliga!\nAcompanhe em tempo real onde estou:\n${url}`;
 
   if (navigator.share) {
     navigator.share({ title: 'Minha corrida Interliga', text: texto, url })
-      .catch(() => {}); // ignora se usuário cancelar
+      .catch(() => {});
   } else {
     navigator.clipboard?.writeText(texto).then(() => {
       showToast('📋 Link copiado! Cole no WhatsApp pra compartilhar.');
     }).catch(() => {
-      showToast('🔗 Link: ' + url);
+      showToast('🔗 Link copiado!');
     });
   }
 });
@@ -1957,12 +1962,10 @@ function renderRotaAtual() {
       : '';
   }
 
-  // Mostrar botão de avançar só se houver uma parada intermediária pendente (não o destino final)
+  // O botão de avançar parada é controlado pelo MOTORISTA, não pelo passageiro.
+  // O passageiro só acompanha — esconde o botão sempre no lado dele.
   const btnAvancar = document.getElementById('btn-avancar-parada');
-  if (btnAvancar) {
-    const temParadaPendente = indiceRotaAtual < sequenciaRota.length - 2;
-    btnAvancar.hidden = !temParadaPendente;
-  }
+  if (btnAvancar) btnAvancar.hidden = true;
 }
 
 function obterPontoAtualDaRota() {
@@ -1979,7 +1982,13 @@ function avancarParaProximaParada() {
   }
 }
 
-document.getElementById('btn-avancar-parada')?.addEventListener('click', avancarParaProximaParada);
+// O controle de avanço de parada é exclusivo do MOTORISTA.
+// O passageiro só acompanha — o botão existe no HTML mas nunca deve aparecer nem funcionar.
+const btnAvancarPassageiro = document.getElementById('btn-avancar-parada');
+if (btnAvancarPassageiro) {
+  btnAvancarPassageiro.hidden = true;
+  btnAvancarPassageiro.style.display = 'none'; // garante que não aparece mesmo se hidden for sobrescrito
+}
 
 let paradaSelecionadaModal = null;
 
