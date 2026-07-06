@@ -936,6 +936,19 @@ function onEnterOngoing() {
   chegouAoCliente = false;
   sequenciaRotaMotorista = [];
   indiceRotaAtualMotorista = 0;
+
+  // Monta a rota imediatamente com os dados que já temos (não espera o listener)
+  if (corrida.sequenciaRota && corrida.sequenciaRota.length > 0) {
+    sequenciaRotaMotorista = corrida.sequenciaRota;
+    indiceRotaAtualMotorista = corrida.indiceRotaAtual || 0;
+  } else {
+    sequenciaRotaMotorista = [
+      { texto: corrida.origem || 'Origem', tipo: 'origem' },
+      { texto: corrida.destino || 'Destino', tipo: 'destino' },
+    ];
+  }
+  renderRotaMotorista();
+
   const btnCheguei = document.getElementById('btn-cheguei');
   const btnFinalizar = document.getElementById('btn-finalizar-corrida');
   const btnSeguir = document.getElementById('btn-seguir-viagem');
@@ -968,9 +981,20 @@ function escutarMudancasRota() {
 
   rotaListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', state.corridaAtualId), (snap) => {
     const data = snap.data();
-    if (!data || !data.sequenciaRota) return;
-    sequenciaRotaMotorista = data.sequenciaRota;
-    indiceRotaAtualMotorista = data.indiceRotaAtual || 0;
+    if (!data) return;
+
+    if (data.sequenciaRota && data.sequenciaRota.length > 0) {
+      // Corrida com rota estruturada (paradas cadastradas)
+      sequenciaRotaMotorista = data.sequenciaRota;
+      indiceRotaAtualMotorista = data.indiceRotaAtual || 0;
+    } else if (sequenciaRotaMotorista.length === 0) {
+      // Corrida simples (só origem → destino) — monta a rota mínima
+      sequenciaRotaMotorista = [
+        { texto: data.origem || 'Origem', tipo: 'origem' },
+        { texto: data.destino || 'Destino', tipo: 'destino' },
+      ];
+      indiceRotaAtualMotorista = 0;
+    }
     renderRotaMotorista();
   }, (erro) => console.error('[motorista] erro no listener de rota:', erro));
 }

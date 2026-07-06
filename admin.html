@@ -3513,18 +3513,23 @@ function formatCpfExibicao(cpf){
 }
 
 async function carregarVerificacoesPendentes(){
-  if (!dbAdmin) return;
+  if (!dbAdmin || !authAdmin?.currentUser) return;
+
+  // Força refresh do token pra garantir que as claims estão atualizadas
+  try { await authAdmin.currentUser.getIdToken(true); } catch(e) {}
 
   const listaMot = document.getElementById('verif-motoristas-lista');
   let totalPendentes = 0;
 
   try {
-    const snapMot = await fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'motoristas'), fbAdmin.where('verificacao', '==', 'pendente')));
-    const docsMot = meuPapelAdmin === 'franqueado'
-      ? snapMot.docs.filter(d => d.data().cidade === minhaCidadeFranqueado)
-      : snapMot.docs;
+    // Busca todos e filtra no cliente — evita necessidade de índice composto no Firestore
+    const snapMot = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'motoristas'));
+    let docsMot = snapMot.docs.filter(d => d.data().verificacao === 'pendente');
+    if (meuPapelAdmin === 'franqueado') {
+      docsMot = docsMot.filter(d => d.data().cidade === minhaCidadeFranqueado);
+    }
     if (docsMot.length === 0) {
-      listaMot.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum motorista pendente</div>';
+      listaMot.innerHTML = '<div class="card" style="text-align:center;color:var(--t2);padding:20px;">Nenhum motorista pendente de aprovação</div>';
     } else {
       listaMot.innerHTML = docsMot.map(d => cartaoVerificacao('motorista', d.id, d.data())).join('');
     }
