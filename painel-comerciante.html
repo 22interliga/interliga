@@ -190,7 +190,7 @@ onAuthStateChanged(auth, async (user) => {
       const q2 = query(collection(db, 'restaurantes_food'), where('comercianteUid', '==', user.uid));
       const snap2 = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(m => m.getDocs(q2));
       if (snap2.empty) {
-        alert('⚠️ Nenhum restaurante vinculado a esse e-mail. Peça ao administrador pra cadastrar seu e-mail no restaurante.');
+        alert('⚠️ Nenhum restaurante vinculado ao e-mail: ' + user.email + '\n\nPeça ao administrador para:\n1. Acessar Admin → Comerciantes\n2. Clicar em "Editar" no seu restaurante\n3. Preencher o campo "E-mail do comerciante" com: ' + user.email + '\n4. Salvar');
         await signOut(auth);
         return;
       }

@@ -59,8 +59,8 @@
           <option value="simoes">Simões Filho — BA</option>
         </select>
       </div>
-      <div class="cadastro-field"><label>Crie uma senha</label><input type="password" class="cadastro-input" id="cad-pax-senha" placeholder="Mínimo 6 caracteres"></div>
-      <div class="cadastro-field"><label>Confirme a senha</label><input type="password" class="cadastro-input" id="cad-pax-senha-confirma" placeholder="Repita a senha"></div>
+      <div class="cadastro-field"><label>Crie uma senha</label><input type="password" class="cadastro-input" id="cad-pax-senha" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+      <div class="cadastro-field"><label>Confirme a senha</label><input type="password" class="cadastro-input" id="cad-pax-senha-confirma" placeholder="Repita a senha" autocomplete="new-password"></div>
       <div class="cadastro-field"><label>Código de indicação (opcional)</label><input type="text" class="cadastro-input" id="cad-pax-codigo-indicacao" placeholder="Se alguém te indicou, coloca aqui" style="text-transform:uppercase;"></div>
     </div>
 
@@ -86,7 +86,7 @@
     </div>
     <div class="form-card" style="display:flex;flex-direction:column;gap:14px;margin-top:10px;">
       <div class="cadastro-field"><label>E-mail</label><input type="email" class="cadastro-input" id="login-pax-email" placeholder="seu@email.com"></div>
-      <div class="cadastro-field"><label>Senha</label><input type="password" class="cadastro-input" id="login-pax-senha" placeholder="Sua senha"></div>
+      <div class="cadastro-field"><label>Senha</label><input type="password" class="cadastro-input" id="login-pax-senha" placeholder="Sua senha" autocomplete="current-password"></div>
     </div>
     <div id="login-pax-erro" class="cadastro-erro" hidden></div>
     <button class="btn-primary" id="btn-fazer-login-passageiro">Entrar</button>

@@ -38,7 +38,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 /* SIDEBAR */
 .sidebar {
-  width: 240px; min-height: 100vh; background: var(--s0);
+  width: 240px; height: 100vh; background: var(--s0);
   border-right: 1px solid var(--bd); display: flex; flex-direction: column;
   position: fixed; top: 0; left: 0; z-index: 100; transition: transform .3s;
   overflow-y: auto;
@@ -255,8 +255,8 @@ textarea.inp { resize: vertical; }
           <div class="page-sub" id="page-sub">Visão geral da plataforma</div>
         </div>
         <div class="topbar-right">
-          <input class="search-box" placeholder="🔍 Buscar..." />
-          <div class="notif-btn">🔔</div>
+          <input class="search-box" placeholder="🔍 Buscar..." id="admin-search-input" oninput="executarBuscaAdmin(this.value)"/>
+          <div class="notif-btn" id="admin-notif-btn" onclick="showSection('verificacoes', document.querySelector('[onclick*=verificacoes]'))" title="Verificações pendentes">🔔<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;" id="notif-count">0</span></div>
         </div>
       </div>
 
@@ -1264,6 +1264,8 @@ async function entrarNoPainel(user) {
   minhaCidadeFranqueado = info.cidade;
   meuFranquiaId = info.papel === 'franqueado' ? info.uid : null;
   if (meuFranquiaId) aplicarWhiteLabel(meuFranquiaId);
+  atualizarSino();
+  setInterval(atualizarSino, 60000); // atualiza a cada 1 minuto
 
   document.getElementById('login-wrap').style.display = 'none';
   document.getElementById('admin-panel').style.display = 'block';
@@ -1700,6 +1702,9 @@ async function salvarRestaurante(){
 
   if (!nome || !categoria) { showToast('⚠️ Preencha nome e categoria'); return; }
   if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  // Força refresh do token antes de salvar (evita permission-denied por token expirado)
+  try { await authAdmin?.currentUser?.getIdToken(true); } catch(e) {}
 
   try {
     const dados = { nome, categoria, emoji, tempoEntrega, taxaEntrega, tipoEntrega, cidade,
@@ -2391,6 +2396,59 @@ async function aplicarWhiteLabel(franquiaId) {
   } catch (e) {
     console.warn('[white-label] erro ao aplicar:', e);
   }
+}
+
+// ═══════════════════════════════════════
+// BUSCA GLOBAL NO ADMIN
+// ═══════════════════════════════════════
+function executarBuscaAdmin(termo) {
+  termo = (termo || '').toLowerCase().trim();
+  if (!termo) {
+    // Limpa o highlight de busca
+    document.querySelectorAll('.search-highlight').forEach(el => {
+      el.outerHTML = el.textContent;
+    });
+    return;
+  }
+
+  // Busca em motoristas
+  const linhasMotoristas = document.querySelectorAll('#motoristas-tbody tr');
+  linhasMotoristas.forEach(tr => {
+    const texto = tr.textContent.toLowerCase();
+    tr.style.display = texto.includes(termo) ? '' : 'none';
+  });
+
+  // Busca em passageiros
+  const linhasPax = document.querySelectorAll('#passageiros-tbody tr');
+  linhasPax.forEach(tr => {
+    const texto = tr.textContent.toLowerCase();
+    tr.style.display = texto.includes(termo) ? '' : 'none';
+  });
+
+  // Se o termo não encontrar nada visível, vai pra seção de motoristas automaticamente
+  const visiveis = [...linhasMotoristas, ...linhasPax].filter(tr => tr.style.display !== 'none');
+  if (visiveis.length > 0 && linhasMotoristas.length > 0) {
+    showSection('motoristas', document.querySelector('[onclick*="motoristas"]'));
+  }
+}
+
+// ═══════════════════════════════════════
+// SINO — atualiza o badge com verificações pendentes
+// ═══════════════════════════════════════
+async function atualizarSino() {
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.query(
+      fbAdmin.collection(dbAdmin, 'motoristas'),
+      fbAdmin.where('verificacao', '==', 'pendente')
+    ));
+    const count = snap.size;
+    const badge = document.getElementById('notif-count');
+    if (badge) {
+      badge.textContent = count;
+      badge.style.display = count > 0 ? 'flex' : 'none';
+    }
+  } catch(e) {}
 }
 
 async function carregarFranqueados(){
