@@ -1338,19 +1338,36 @@ function iniciarChatMotorista() {
     fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'),
     fb.orderBy('ts', 'asc'), fb.limit(50)
   );
+
+  let primeiraCaraga = true;
+
   state.chatListenerUnsub = fb.onSnapshot(q, (snap) => {
+    const container = document.getElementById('chat-messages-driver');
+    if (!container) return;
+
+    if (primeiraCaraga) {
+      // Na primeira carga, renderiza todas as mensagens do zero
+      primeiraCaraga = false;
+      container.innerHTML = '';
+      snap.docs.forEach(doc => {
+        const msg = doc.data();
+        const tipo = msg.de === 'motorista' ? 'me' : msg.de === 'sistema' ? 'sys' : 'them';
+        renderChatMessageMotorista(msg.texto, tipo, msg.audioData || null);
+      });
+      return;
+    }
+
+    // Após primeira carga, só adiciona as novas
     snap.docChanges().forEach(change => {
       if (change.type === 'added') {
         const msg = change.doc.data();
-        if (msg.de !== 'motorista') {
-          if (msg.tipo === 'audio') {
-            renderChatMessageMotorista(null, 'them', msg.audioData);
-          } else {
-            renderChatMessageMotorista(msg.texto, 'them');
-          }
-        }
+        if (change.doc.metadata.hasPendingWrites) return;
+        const tipo = msg.de === 'motorista' ? 'me' : msg.de === 'sistema' ? 'sys' : 'them';
+        renderChatMessageMotorista(msg.texto, tipo, msg.audioData || null);
       }
     });
+  }, (e) => {
+    console.warn('[motorista] erro no chat listener:', e);
   });
 }
 
