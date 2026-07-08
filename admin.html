@@ -2423,15 +2423,27 @@ function executarBuscaAdmin(termo) {
 async function atualizarSino() {
   if (!dbAdmin) return;
   try {
-    const snap = await fbAdmin.getDocs(fbAdmin.query(
-      fbAdmin.collection(dbAdmin, 'motoristas'),
-      fbAdmin.where('verificacao', '==', 'pendente')
-    ));
-    const count = snap.size;
+    const [snapMotPendentes, snapDevolucoes, snapNovos] = await Promise.all([
+      fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'motoristas'), fbAdmin.where('verificacao', '==', 'pendente'))),
+      fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'pedidos_food'), fbAdmin.where('status', '==', 'devolvido'))),
+      fbAdmin.getDocs(fbAdmin.query(fbAdmin.collection(dbAdmin, 'pedidos_food'), fbAdmin.where('status', '==', 'confirmado'))),
+    ]);
+
+    const total = snapMotPendentes.size + snapDevolucoes.size + snapNovos.size;
     const badge = document.getElementById('notif-count');
     if (badge) {
-      badge.textContent = count;
-      badge.style.display = count > 0 ? 'flex' : 'none';
+      badge.textContent = total;
+      badge.style.display = total > 0 ? 'flex' : 'none';
+    }
+
+    // Tooltip no sino
+    const btn = document.getElementById('admin-notif-btn');
+    if (btn) {
+      const partes = [];
+      if (snapMotPendentes.size > 0) partes.push(`${snapMotPendentes.size} motorista(s) pendente(s)`);
+      if (snapDevolucoes.size > 0) partes.push(`${snapDevolucoes.size} devolução(ões)`);
+      if (snapNovos.size > 0) partes.push(`${snapNovos.size} pedido(s) novo(s)`);
+      btn.title = partes.length > 0 ? partes.join(' · ') : 'Sem notificações';
     }
   } catch(e) {}
 }

@@ -94,7 +94,24 @@
       <div class="header-logo">INTER<span>LIGA</span> · Comerciante</div>
       <div class="header-rest" id="header-rest-nome">Carregando...</div>
     </div>
-    <button class="btn-sair" id="btn-sair">Sair</button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="btn-sino" style="position:relative;cursor:pointer;width:36px;height:36px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;" onclick="abrirNotificacoes()">
+        🔔
+        <span id="sino-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E8002D;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
+      </div>
+      <button class="btn-sair" id="btn-sair">Sair</button>
+    </div>
+  </div>
+
+  <!-- Painel de notificações -->
+  <div id="painel-notif" style="display:none;position:fixed;top:60px;right:16px;width:300px;max-height:400px;overflow-y:auto;background:#1A1F2E;border:1px solid #2A3142;border-radius:14px;z-index:999;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <div style="padding:14px 16px;border-bottom:1px solid #2A3142;display:flex;justify-content:space-between;align-items:center;">
+      <b style="font-size:14px;">Notificações</b>
+      <span style="cursor:pointer;color:#9098A8;font-size:12px;" onclick="document.getElementById('painel-notif').style.display='none'">✕ Fechar</span>
+    </div>
+    <div id="lista-notif" style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+      <div style="text-align:center;color:#9098A8;font-size:13px;padding:16px;">Nenhuma notificação</div>
+    </div>
   </div>
 
   <div class="main">
@@ -110,6 +127,7 @@
       <button class="tab" data-filtro="entrega">🛵 Em entrega</button>
       <button class="tab" data-filtro="entregue">✅ Entregues</button>
       <button class="tab" data-filtro="todos">Todos</button>
+      <button class="tab" data-filtro="devolvido" style="color:#E8002D;">↩️ Devoluções</button>
     </div>
 
     <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px;">
@@ -229,6 +247,7 @@ function iniciarListenerPedidos() {
         return tb - ta;
       });
     atualizarStats();
+    processarNotificacoes(todosPedidos);
     renderPedidos();
   }, (e) => {
     console.error('Erro no listener:', e);
@@ -265,6 +284,8 @@ const BADGES = {
   preparando: '<span class="badge badge-preparando">👨‍🍳 Preparando</span>',
   entrega: '<span class="badge badge-entrega">🛵 Em entrega</span>',
   entregue: '<span class="badge badge-entregue">✅ Entregue</span>',
+  devolvido: '<span class="badge badge-cancelado">↩️ Devolvido</span>',
+  devolvido: '<span class="badge badge-cancelado">↩️ Devolvido</span>',
   cancelado: '<span class="badge badge-cancelado">❌ Cancelado</span>',
 };
 
@@ -297,6 +318,14 @@ function renderPedidos() {
       }
     } else if (p.status === 'entrega') {
       botoes = `<button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','entregue')">✅ Confirmar entrega ao cliente</button>`;
+    } else if (p.status === 'devolvido') {
+      botoes = `
+        <div style="background:rgba(232,0,45,0.1);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;">
+          <b>↩️ Motivo da devolução:</b> ${p.motivoDevolucao || 'Não informado'}
+        </div>
+        <button class="btn-status btn-aceitar" onclick="reenviarPedido('${p.id}')">🔄 Tentar nova entrega</button>
+        <button class="btn-status btn-cancelar" onclick="avancarStatus('${p.id}','cancelado')">❌ Cancelar e reembolsar</button>
+      `;
     }
 
     return `
@@ -318,6 +347,79 @@ function renderPedidos() {
 }
 
 // ── AÇÕES ──────────────────────────────────────────────────────────────────
+// ── NOTIFICAÇÕES ───────────────────────────────────────────────────────────
+let notificacoesLidas = new Set(JSON.parse(localStorage.getItem('notif_lidas') || '[]'));
+let todasNotificacoes = [];
+
+function processarNotificacoes(pedidos) {
+  const novas = [];
+  pedidos.forEach(p => {
+    // Novo pedido
+    if (p.status === 'confirmado') {
+      novas.push({ id: p.id + '_novo', tipo: 'novo', texto: `🆕 Novo pedido de ${p.passageiroNome || 'Cliente'}`, ts: p.criadoEm });
+    }
+    // Devolução
+    if (p.status === 'devolvido') {
+      novas.push({ id: p.id + '_dev', tipo: 'devolucao', texto: `↩️ Pedido devolvido — ${p.motivoDevolucao || 'Não entregue'}`, ts: p.atualizadoEm });
+    }
+  });
+
+  todasNotificacoes = novas.sort((a, b) => {
+    const ta = a.ts?.toMillis ? a.ts.toMillis() : 0;
+    const tb = b.ts?.toMillis ? b.ts.toMillis() : 0;
+    return tb - ta;
+  });
+
+  const naoLidas = todasNotificacoes.filter(n => !notificacoesLidas.has(n.id)).length;
+  const badge = document.getElementById('sino-badge');
+  if (badge) {
+    badge.textContent = naoLidas;
+    badge.style.display = naoLidas > 0 ? 'flex' : 'none';
+  }
+
+  // Toca som se tiver notificação nova não lida
+  if (naoLidas > 0) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880; gain.gain.value = 0.1;
+      osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+}
+
+function abrirNotificacoes() {
+  const painel = document.getElementById('painel-notif');
+  painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+
+  const lista = document.getElementById('lista-notif');
+  if (todasNotificacoes.length === 0) {
+    lista.innerHTML = '<div style="text-align:center;color:#9098A8;font-size:13px;padding:16px;">Nenhuma notificação</div>';
+  } else {
+    lista.innerHTML = todasNotificacoes.map(n => {
+      const lida = notificacoesLidas.has(n.id);
+      const cor = n.tipo === 'devolucao' ? '#E8002D' : '#FF6B00';
+      return `<div style="padding:10px 12px;border-radius:10px;background:${lida ? 'transparent' : 'rgba(255,107,0,0.1)'};border-left:3px solid ${lida ? '#2A3142' : cor};cursor:pointer;" onclick="marcarLida('${n.id}')">
+        <div style="font-size:13px;color:#E8EAF0;">${n.texto}</div>
+        ${!lida ? '<div style="font-size:11px;color:#FF6B00;margin-top:4px;">● Nova</div>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Marca todas como lidas ao abrir
+  todasNotificacoes.forEach(n => notificacoesLidas.add(n.id));
+  localStorage.setItem('notif_lidas', JSON.stringify([...notificacoesLidas]));
+  const badge = document.getElementById('sino-badge');
+  if (badge) badge.style.display = 'none';
+}
+
+window.marcarLida = (id) => {
+  notificacoesLidas.add(id);
+  localStorage.setItem('notif_lidas', JSON.stringify([...notificacoesLidas]));
+};
+
 window.avancarStatus = async (pedidoId, novoStatus) => {
   try {
     await updateDoc(doc(db, 'pedidos_food', pedidoId), {
@@ -325,6 +427,33 @@ window.avancarStatus = async (pedidoId, novoStatus) => {
       atualizadoEm: serverTimestamp(),
     });
   } catch (e) { alert('Erro: ' + e.message); }
+};
+
+window.reenviarPedido = async (pedidoId) => {
+  if (!confirm('Colocar esse pedido na fila novamente para um novo entregador?')) return;
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: 'aguardando_entregador',
+      entregadorId: null,
+      entregadorNome: null,
+      motivoDevolucao: null,
+      atualizadoEm: serverTimestamp(),
+    });
+    showToast('✅ Pedido enviado para novo entregador!');
+  } catch(e) { alert('Erro: ' + e.message); }
+};
+
+window.abrirSuporte = (pedidoId, passageiroNome, motivo) => {
+  const msg = encodeURIComponent(
+    `Olá! Temos um problema com seu pedido.
+
+Situação: Pedido devolvido
+Motivo: ${motivo || 'Não informado'}
+
+Precisamos verificar o que aconteceu. Como podemos ajudar?`
+  );
+  // Abre WhatsApp do suporte (pode ser substituído pelo número real)
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
 };
 
 window.cancelarPedido = async (pedidoId) => {
