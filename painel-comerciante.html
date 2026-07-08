@@ -217,12 +217,17 @@ function iniciarListenerPedidos() {
   const q = query(
     collection(db, 'pedidos_food'),
     where('restauranteId', '==', restauranteAtual.id),
-    orderBy('criadoEm', 'desc'),
     limit(100)
   );
 
   pedidosListenerUnsub = onSnapshot(q, (snap) => {
-    todosPedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    todosPedidos = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.criadoEm?.toMillis ? a.criadoEm.toMillis() : new Date(a.criadoEm||0).getTime();
+        const tb = b.criadoEm?.toMillis ? b.criadoEm.toMillis() : new Date(b.criadoEm||0).getTime();
+        return tb - ta;
+      });
     atualizarStats();
     renderPedidos();
   }, (e) => {

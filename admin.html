@@ -1740,6 +1740,7 @@ async function carregarRestaurantesAdmin(){
             ${status}
             <button class="pbtn" onclick="editarCardapioRestaurante('${r.id}')">🍴 Cardápio</button>
             <button class="pbtn" onclick="editarRestaurante('${r.id}')">✏️ Editar</button>
+            <button class="pbtn" style="background:#7C3AED;" onclick="criarAcessoComerciante('${r.id}','${r.nome}','${r.emailComerciante||''}')">🔑 Criar acesso</button>
             <a href="painel-comerciante.html" target="_blank" class="pbtn" style="text-decoration:none;display:inline-block;">🏪 Painel</a>
             <button class="pbtn" onclick="toggleRestauranteAtivo('${r.id}',${r.ativo!==false})">${r.ativo!==false?'Desativar':'Ativar'}</button>
           </div>
@@ -2433,6 +2434,49 @@ async function atualizarSino() {
       badge.style.display = count > 0 ? 'flex' : 'none';
     }
   } catch(e) {}
+}
+
+async function criarAcessoComerciante(restauranteId, nomeRestaurante, emailAtual) {
+  const email = prompt(`E-mail do comerciante para "${nomeRestaurante}":`, emailAtual || '');
+  if (!email || !email.trim()) return;
+  const senha = prompt('Senha inicial (mínimo 6 caracteres):', '');
+  if (!senha || senha.length < 6) { showToast('⚠️ Senha muito curta — mínimo 6 caracteres'); return; }
+
+  try {
+    showToast('Criando acesso...');
+    // Cria conta em instância secundária (não derruba o admin logado)
+    const { initializeApp, deleteApp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    const appTemp = initializeApp(firebaseConfig, 'criar-comerciante-' + Date.now());
+    const authTemp = fbAdmin.getAuth(appTemp);
+    
+    let uid;
+    try {
+      const cred = await fbAdmin.createUserWithEmailAndPassword(authTemp, email.trim(), senha);
+      uid = cred.user.uid;
+    } catch(e) {
+      if (e.code === 'auth/email-already-in-use') {
+        showToast('⚠️ Email já tem conta — atualizando email no restaurante...');
+      } else {
+        throw e;
+      }
+    }
+
+    // Salva o email no restaurante
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'restaurantes_food', restauranteId), {
+      emailComerciante: email.trim().toLowerCase(),
+      ...(uid ? { comercianteUid: uid } : {}),
+    });
+
+    await fbAdmin.signOut(authTemp);
+    await deleteApp(appTemp);
+
+    showToast('✅ Acesso criado!');
+    alert(`✅ Acesso criado para "${nomeRestaurante}"!\n\nEnvie ao comerciante:\nLink: ${location.origin}/interliga/painel-comerciante.html\nE-mail: ${email.trim()}\nSenha: ${senha}\n\n⚠️ Peça pra trocar a senha no primeiro acesso.`);
+    carregarRestaurantesAdmin();
+  } catch(e) {
+    console.error('[admin] erro ao criar acesso:', e);
+    showToast('⚠️ Erro: ' + (e.code || e.message));
+  }
 }
 
 async function carregarFranqueados(){
