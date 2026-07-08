@@ -261,6 +261,7 @@ function atualizarStats() {
 // ── RENDERIZAR PEDIDOS ─────────────────────────────────────────────────────
 const BADGES = {
   confirmado: '<span class="badge badge-confirmado">🆕 Novo</span>',
+  aguardando_entregador: '<span class="badge badge-preparando">🛵 Aguard. entregador</span>',
   preparando: '<span class="badge badge-preparando">👨‍🍳 Preparando</span>',
   entrega: '<span class="badge badge-entrega">🛵 Em entrega</span>',
   entregue: '<span class="badge badge-entregue">✅ Entregue</span>',
@@ -292,7 +293,7 @@ function renderPedidos() {
       if (p.tipoEntrega === 'propria') {
         botoes = `<button class="btn-status btn-entregar-proprio" onclick="avancarStatus('${p.id}','entrega')">🏪 Saiu para entrega (entrega própria)</button>`;
       } else {
-        botoes = `<button class="btn-status btn-entregar" onclick="avancarStatus('${p.id}','entrega')">🛵 Pronto — chamar entregador Interliga</button>`;
+        botoes = `<button class="btn-status btn-entregar" onclick="avancarStatus('${p.id}','aguardando_entregador')">🛵 Pronto — chamar entregador Interliga</button>`;
       }
     } else if (p.status === 'entrega') {
       botoes = `<button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','entregue')">✅ Confirmar entrega ao cliente</button>`;

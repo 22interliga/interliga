@@ -343,7 +343,9 @@ function aplicarStatusPedido(pedido) {
   const titulos = {
     confirmado: '✅ Pedido confirmado',
     preparando: '👨‍🍳 Preparando seu pedido',
-    entrega: '🛵 Saiu para entrega',
+    aguardando_entregador: '🛵 Procurando entregador...',
+    entrega: '🛵 Entregador a caminho do restaurante',
+    entrega_a_caminho: '🛵 Saiu para entrega!',
     entregue: '🏠 Pedido entregue!',
   };
   document.getElementById('food-tracking-title').textContent = titulos[status] || '';

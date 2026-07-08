@@ -209,6 +209,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span>Pedidos</span>
       </button>
+      <button class="nav-item" data-go="screen-entregas" id="nav-entregas" style="position:relative;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        <span>Entregas</span>
+        <span id="badge-entregas" style="display:none;position:absolute;top:4px;right:14px;background:#FF6B00;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
+      </button>
       <button class="nav-item" data-go="screen-earnings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         <span>Ganhos</span>
@@ -320,6 +325,41 @@
       <button class="btn-arrived" id="btn-cheguei">🔔 Avisar que cheguei</button>
       <button class="btn-arrived" id="btn-seguir-viagem" hidden>▶ Seguir viagem (próxima parada/destino)</button>
       <button class="btn-primary" id="btn-finalizar-corrida" hidden>✓ Finalizar corrida</button>
+    </div>
+  </section>
+
+  <!-- ══════════════════ ENTREGAS INTERIFOOD ══════════════════ -->
+  <section class="screen" id="screen-entregas">
+    <header class="page-header">
+      <button class="back-btn" data-go="screen-home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="page-header-info">
+        <div class="page-title">🛵 Entregas Interifood</div>
+        <div class="page-sub">Pedidos disponíveis para entrega</div>
+      </div>
+    </header>
+
+    <!-- Entrega em andamento -->
+    <div id="entrega-em-andamento" hidden style="margin:16px;background:#1A1F2E;border-radius:14px;border:2px solid #FF6B00;padding:16px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px;">🛵 Entrega em andamento</div>
+      <div style="font-size:13px;color:#9098A8;margin-bottom:4px;">Restaurante: <b id="entrega-restaurante-nome" style="color:#E8EAF0;">—</b></div>
+      <div style="font-size:13px;color:#9098A8;margin-bottom:4px;">Endereço restaurante: <b id="entrega-restaurante-end" style="color:#E8EAF0;">—</b></div>
+      <div style="font-size:13px;color:#9098A8;margin-bottom:4px;">Cliente: <b id="entrega-cliente-nome" style="color:#E8EAF0;">—</b></div>
+      <div style="font-size:13px;color:#9098A8;margin-bottom:12px;">Entregar em: <b id="entrega-cliente-end" style="color:#E8EAF0;">—</b></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-accept" id="btn-entrega-coletei" style="flex:1;">✅ Coletei no restaurante</button>
+        <button class="btn-accept" id="btn-entrega-entregue" hidden style="flex:1;background:#22C55E;">🏠 Entreguei ao cliente</button>
+      </div>
+    </div>
+
+    <!-- Lista de pedidos disponíveis -->
+    <div id="lista-pedidos-entrega" style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+      <div style="text-align:center;color:#9098A8;padding:30px;">
+        <div style="font-size:32px;margin-bottom:8px;">🛵</div>
+        <div style="font-weight:600;">Nenhuma entrega disponível</div>
+        <div style="font-size:13px;margin-top:4px;">Quando um restaurante precisar de entregador, aparece aqui</div>
+      </div>
     </div>
   </section>
 

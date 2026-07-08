@@ -293,6 +293,7 @@ document.getElementById('online-toggle')?.addEventListener('click', () => {
     iniciarEscutaCorridas();
     iniciarDisponibilidade();
     atualizarGridDemanda();
+    iniciarListenerEntregas();
   } else {
     showToast('🔴 Você está offline');
     pararEscutaCorridas();
@@ -2038,6 +2039,124 @@ window.addEventListener('popstate', () => {
 });
 
 history.pushState(null, '', '');
+
+// ═══════════════════════════════════════
+// ENTREGAS INTERIFOOD — motoboy recebe e entrega pedidos
+// ═══════════════════════════════════════
+let entregasListenerUnsub = null;
+let entregaAtualId = null;
+let entregaAtualDados = null;
+
+function iniciarListenerEntregas() {
+  if (!firebaseReady || !db) return;
+  if (entregasListenerUnsub) return;
+
+  // Escuta pedidos com status 'aguardando_entregador' — prontos pra busca
+  const q = fb.query(
+    fb.collection(db, 'pedidos_food'),
+    fb.where('status', '==', 'aguardando_entregador'),
+    fb.where('tipoEntrega', '==', 'interliga')
+  );
+
+  entregasListenerUnsub = fb.onSnapshot(q, (snap) => {
+    const badge = document.getElementById('badge-entregas');
+    const lista = document.getElementById('lista-pedidos-entrega');
+    if (!lista) return;
+
+    // Não mostra se já está em outra entrega
+    if (entregaAtualId) return;
+
+    const pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Atualiza badge
+    if (badge) {
+      badge.textContent = pedidos.length;
+      badge.style.display = pedidos.length > 0 ? 'flex' : 'none';
+    }
+
+    if (pedidos.length === 0) {
+      lista.innerHTML = `
+        <div style="text-align:center;color:#9098A8;padding:30px;">
+          <div style="font-size:32px;margin-bottom:8px;">🛵</div>
+          <div style="font-weight:600;">Nenhuma entrega disponível</div>
+          <div style="font-size:13px;margin-top:4px;">Quando um restaurante precisar de entregador, aparece aqui</div>
+        </div>`;
+      return;
+    }
+
+    lista.innerHTML = pedidos.map(p => {
+      const itens = (p.itens || []).map(i => `${i.qtd}x ${i.nome}`).join(', ');
+      return `
+        <div style="background:#1A1F2E;border-radius:14px;border:1px solid #2A3142;padding:16px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:6px;">🍔 ${p.restauranteNome || '—'}</div>
+          <div style="font-size:13px;color:#9098A8;margin-bottom:4px;">Itens: ${itens}</div>
+          <div style="font-size:13px;color:#9098A8;margin-bottom:8px;">📍 Entregar em: ${p.endereco || '—'}</div>
+          <div style="font-size:15px;font-weight:700;color:#FF6B00;margin-bottom:12px;">Taxa: ${formatMoeda(p.taxaEntrega || 0)}</div>
+          <button class="btn-accept" onclick="aceitarEntrega('${p.id}')">✅ Aceitar entrega</button>
+        </div>`;
+    }).join('');
+  });
+}
+
+async function aceitarEntrega(pedidoId) {
+  if (!firebaseReady || !db || !meuMotoristaId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', pedidoId), {
+      status: 'entrega',
+      entregadorId: meuMotoristaId,
+      entregadorNome: state.motorista?.nome || 'Entregador',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+
+    entregaAtualId = pedidoId;
+    // Busca os dados completos
+    const snap = await fb.getDoc(fb.doc(db, 'pedidos_food', pedidoId));
+    entregaAtualDados = snap.data();
+
+    // Mostra o card de entrega em andamento
+    document.getElementById('entrega-em-andamento').hidden = false;
+    document.getElementById('entrega-restaurante-nome').textContent = entregaAtualDados.restauranteNome || '—';
+    document.getElementById('entrega-restaurante-end').textContent = entregaAtualDados.enderecoRestaurante || 'Ver no mapa';
+    document.getElementById('entrega-cliente-nome').textContent = entregaAtualDados.passageiroNome || '—';
+    document.getElementById('entrega-cliente-end').textContent = entregaAtualDados.endereco || '—';
+
+    document.getElementById('lista-pedidos-entrega').innerHTML = '';
+    showToast('✅ Entrega aceita! Vá ao restaurante buscar o pedido.');
+  } catch(e) {
+    showToast('⚠️ Erro ao aceitar: ' + (e.message || e.code));
+  }
+}
+
+document.getElementById('btn-entrega-coletei')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'entrega_a_caminho',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    document.getElementById('btn-entrega-coletei').hidden = true;
+    document.getElementById('btn-entrega-entregue').hidden = false;
+    showToast('🛵 Ótimo! Agora entregue ao cliente.');
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+document.getElementById('btn-entrega-entregue')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'entregue',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    showToast('🏠 Entrega concluída!');
+    entregaAtualId = null;
+    entregaAtualDados = null;
+    document.getElementById('entrega-em-andamento').hidden = true;
+    document.getElementById('btn-entrega-coletei').hidden = false;
+    document.getElementById('btn-entrega-entregue').hidden = true;
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+function formatMoeda(v) { return 'R$ ' + Number(v||0).toFixed(2).replace('.', ','); }
 
 function boot() {
   initFirebase(); // assíncrono — quando conectar, chama verificarCadastroMotorista() que decide a tela certa
