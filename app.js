@@ -948,6 +948,15 @@ async function criarCorrida(origem, destino, preco, categoria) {
         criadoEm: fb.serverTimestamp(),
       });
       state.corridaId = docRef.id;
+      // Persiste no localStorage — se o app fechar e reabrir, consegue retomar a corrida
+      localStorage.setItem('interliga_corrida_ativa', JSON.stringify({
+        corridaId: docRef.id,
+        origem: origem.texto,
+        destino: destino.texto,
+        preco,
+        categoria,
+        criadoEm: Date.now(),
+      }));
 
       // Monta a fila de prioridade: motorista mais próximo primeiro (empate decide pela melhor avaliação).
       // Se ainda não houver motoristas disponíveis cadastrados, fica em modo aberto (oferece pra todo mundo).
@@ -1107,6 +1116,7 @@ function ouvirAceiteCorrida(corridaId) {
       if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
       if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
       pararEscutaPosicaoMotorista();
+      localStorage.removeItem('interliga_corrida_ativa'); // limpa corrida ativa
 
       // Atualizar status no histórico local (para aparecer corretamente em Minhas Viagens),
       // incluindo o preço final real (pode ter mudado por parada extra) e o motorista que atendeu
@@ -1705,7 +1715,49 @@ async function verificarCadastroPassageiro() {
     aplicarStatusCadastro(snap.data());
     if (snap.data().verificacao === 'pendente') {
       escutarStatusCadastro();
+      return;
     }
+
+    // Verifica se havia uma corrida ativa antes de fechar o app
+    const corridaAtiva = localStorage.getItem('interliga_corrida_ativa');
+    if (corridaAtiva) {
+      try {
+        const dadosCorrida = JSON.parse(corridaAtiva);
+        const idadeMs = Date.now() - (dadosCorrida.criadoEm || 0);
+        // Só retoma se foi criada há menos de 2 horas
+        if (idadeMs < 2 * 60 * 60 * 1000 && dadosCorrida.corridaId) {
+          const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
+          if (snapCorrida.exists()) {
+            const statusCorrida = snapCorrida.data().status;
+            if (['aguardando', 'aceita'].includes(statusCorrida)) {
+              // Retoma a corrida
+              state.corridaId = dadosCorrida.corridaId;
+              state.corridaLocalId = dadosCorrida.corridaId;
+              state.origem = { texto: dadosCorrida.origem };
+              state.destino = { texto: dadosCorrida.destino };
+              state.categoriaEscolhida = dadosCorrida.categoria;
+              state.precos = { [dadosCorrida.categoria]: dadosCorrida.preco };
+              go('screen-tracking');
+              montarSequenciaInicial();
+              document.getElementById('block-searching').hidden = statusCorrida !== 'aguardando';
+              document.getElementById('block-driver').hidden = statusCorrida !== 'aceita';
+              escutarAceiteCorrida(dadosCorrida.corridaId);
+              showToast('🔄 Corrida em andamento retomada!');
+              return;
+            } else {
+              // Corrida já terminou — limpa
+              localStorage.removeItem('interliga_corrida_ativa');
+            }
+          }
+        } else {
+          localStorage.removeItem('interliga_corrida_ativa');
+        }
+      } catch(e) {
+        console.warn('[passageiro] erro ao retomar corrida:', e);
+        localStorage.removeItem('interliga_corrida_ativa');
+      }
+    }
+
   } catch (e) {
     console.warn('[passageiro] erro ao verificar cadastro, liberando o app pra não travar o usuário:', e);
     go('screen-home');

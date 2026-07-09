@@ -884,6 +884,16 @@ async function aceitarCorrida() {
     localStorage.setItem('interliga_corridas', JSON.stringify(lst));
   } catch (e) {}
 
+  // Persiste a corrida ativa — se o app fechar e reabrir, retoma automaticamente
+  localStorage.setItem('interliga_mot_corrida_ativa', JSON.stringify({
+    corridaId: corrida.id,
+    origem: corrida.origem,
+    destino: corrida.destino,
+    preco: corrida.preco,
+    passageiroNome: corrida.passageiroNome,
+    aceitoEm: Date.now(),
+  }));
+
   document.getElementById('new-ride-banner').hidden = true;
   showToast('✓ Corrida aceita! Indo ao passageiro.');
 
@@ -1235,6 +1245,7 @@ function finalizarCorrida() {
   if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
     fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), { status: 'finalizada' }).catch(() => {});
   }
+  localStorage.removeItem('interliga_mot_corrida_ativa'); // limpa corrida ativa
 
   // Débito automático se o passageiro escolheu pagar pela Carteira do app
   if (corrida.formaPagamento === 'carteira' && corrida.passageiroId) {
@@ -1866,7 +1877,7 @@ async function verificarCadastroMotorista() {
   }
 }
 
-function aplicarStatusCadastroMotorista(dados) {
+async function aplicarStatusCadastroMotorista(dados) {
   if (dados.bloqueado === true) {
     // Força offline na hora — não pode continuar recebendo corridas se foi bloqueado
     state.online = false;
@@ -1881,6 +1892,33 @@ function aplicarStatusCadastroMotorista(dados) {
     return;
   }
   if (dados.verificacao === 'aprovado') {
+    // Verifica se havia corrida ativa antes de fechar o app
+    const corridaAtiva = localStorage.getItem('interliga_mot_corrida_ativa');
+    if (corridaAtiva) {
+      try {
+        const dadosCorrida = JSON.parse(corridaAtiva);
+        const idadeMs = Date.now() - (dadosCorrida.aceitoEm || 0);
+        if (idadeMs < 2 * 60 * 60 * 1000 && dadosCorrida.corridaId) {
+          const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
+          if (snapCorrida.exists() && ['aceita'].includes(snapCorrida.data().status)) {
+            state.corridaAtualId = dadosCorrida.corridaId;
+            state.corridaAtual = { id: dadosCorrida.corridaId, ...snapCorrida.data() };
+            state.emCorridaAtiva = true;
+            showToast('🔄 Corrida em andamento retomada!');
+            go('screen-ongoing');
+            onEnterOngoing();
+            return;
+          } else {
+            localStorage.removeItem('interliga_mot_corrida_ativa');
+          }
+        } else {
+          localStorage.removeItem('interliga_mot_corrida_ativa');
+        }
+      } catch(e) {
+        console.warn('[motorista] erro ao retomar corrida:', e);
+        localStorage.removeItem('interliga_mot_corrida_ativa');
+      }
+    }
     go('screen-home');
     configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
