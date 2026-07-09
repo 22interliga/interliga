@@ -637,8 +637,10 @@ async function carregarTabelaPrecos() {
         const codigo = c.codigo || d.id;
         catsFirebase[codigo] = {
           bandeirada: Number(c.bandeirada || 0),
-          tarifaKm: Number(c.tarifakm || 0),
-          minimo: Number(c.minimo || 0),
+          tarifaKm: Number(c.tarifakm || c.tarifaKm || 0),
+          minimo: Number(c.minimo || c.precoMinimo || 0),
+          kmFixo: Number(c.kmFixo || c.kmfixo || 0),
+          valorFixo: Number(c.valorFixo || c.valorfixo || 0),
           kmFixo: Number(c.kmFixo || 0),
           valorFixo: Number(c.valorFixo || 0),
           multiplicador: Number(c.multiplicador || 1),
@@ -895,7 +897,9 @@ document.getElementById('btn-confirmar-corrida')?.addEventListener('click', asyn
   if (!state.origem) state.origem = { texto: inputOrigem.value.trim(), lat: null, lon: null };
   if (!state.destino) state.destino = { texto: inputDestino.value.trim(), lat: null, lon: null };
 
-  const preco = state.precos[state.categoriaEscolhida] || 18;
+  // Usa o preço calculado — se for 0 (categoria sem preço configurado), usa o mínimo da tabela
+  const precoCalculado = state.precos[state.categoriaEscolhida];
+  const preco = (precoCalculado !== undefined && precoCalculado !== null) ? precoCalculado : 10;
 
   // Ir IMEDIATAMENTE para tracking — nunca bloquear a UI esperando rede
   go('screen-tracking');
