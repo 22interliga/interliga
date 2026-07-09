@@ -295,6 +295,17 @@ textarea.inp { resize: vertical; }
           </div>
 
           <!-- PASSAGEIROS -->
+          <!-- REPORTES DE MOTORISTAS -->
+          <div class="card" style="margin-top:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <div class="ct">🚨 Reportes de Motoristas pelos Passageiros</div>
+              <button class="pbtn" onclick="carregarReportes()">🔄 Atualizar</button>
+            </div>
+            <div id="reportes-lista" style="display:flex;flex-direction:column;gap:8px;">
+              <div style="text-align:center;color:var(--t2);padding:14px;">Clique em Atualizar para carregar</div>
+            </div>
+          </div>
+
           <div class="section" id="s-passageiros">
             <div class="section-header">
               <div class="section-title">👤 Passageiros</div>
@@ -1365,7 +1376,7 @@ function showSection(id,navEl){
   // Carrega dados reais do Firebase ao entrar em cada seção já conectada
   const carregadores = {
     dashboard: carregarDashboard,
-    verificacoes: carregarVerificacoesPendentes,
+    verificacoes: () => { carregarVerificacoesPendentes(); carregarReportes(); },
     passageiros: carregarPassageiros,
     motoristas: carregarMotoristas,
     corridas: carregarCorridas,
@@ -3625,6 +3636,51 @@ function cartaoVerificacao(tipo, id, d){
 function formatCpfExibicao(cpf){
   if (!cpf) return '—';
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+async function carregarReportes() {
+  if (!dbAdmin) return;
+  const lista = document.getElementById('reportes-lista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:14px;">Carregando...</div>';
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.query(
+      fbAdmin.collection(dbAdmin, 'reportes_motoristas'),
+      fbAdmin.orderBy('criadoEm', 'desc'),
+      fbAdmin.limit(50)
+    ));
+    if (snap.empty) {
+      lista.innerHTML = '<div style="text-align:center;color:var(--t2);padding:14px;">Nenhum reporte ainda</div>';
+      return;
+    }
+    lista.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      const data = r.criadoEm?.toDate ? r.criadoEm.toDate().toLocaleDateString('pt-BR') : '—';
+      return `<div style="background:var(--bg);border-radius:10px;padding:12px;border-left:3px solid var(--red);">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div>
+            <b style="color:var(--red);">🚨 ${r.motoristaNome || 'Motorista'}</b>
+            <div style="font-size:12px;color:var(--t2);margin-top:2px;">${data}</div>
+          </div>
+          <button class="pbtn" style="background:var(--red);font-size:12px;" onclick="bloquearMotoristaViaReporte('${r.motoristaId}','${r.motoristaNome||''}')">🚫 Bloquear motorista</button>
+        </div>
+        <div style="font-size:13px;margin-top:8px;">Motivo: ${r.motivo || '—'}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    lista.innerHTML = `<div style="color:var(--red);padding:14px;">⚠️ ${e.code||e.message}</div>`;
+  }
+}
+
+async function bloquearMotoristaViaReporte(motoristaId, nome) {
+  if (!confirm(`Bloquear o motorista "${nome}"?`)) return;
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'motoristas', motoristaId), {
+      bloqueado: true, motivoBloqueio: 'Bloqueado por reporte de passageiro'
+    });
+    showToast(`🚫 ${nome} bloqueado!`);
+    carregarReportes();
+  } catch(e) { showToast('⚠️ Erro — ' + (e.code||e.message)); }
 }
 
 async function carregarVerificacoesPendentes(){

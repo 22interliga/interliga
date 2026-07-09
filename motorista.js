@@ -815,6 +815,12 @@ function recusarCorrida() {
   state.corridaAtual = null;
   state.corridaAtualId = null;
   state.emCorridaAtiva = false;
+
+  // Volta a escutar novas corridas após recusar
+  if (state.online) {
+    setTimeout(() => iniciarEscutaCorridas(), 1000);
+  }
+
   go('screen-home');
 }
 
@@ -2136,6 +2142,7 @@ document.getElementById('btn-entrega-coletei')?.addEventListener('click', async 
     });
     document.getElementById('btn-entrega-coletei').hidden = true;
     document.getElementById('btn-entrega-entregue').hidden = false;
+    document.getElementById('btn-entrega-devolver').hidden = false;
     showToast('🛵 Ótimo! Agora entregue ao cliente.');
   } catch(e) { showToast('⚠️ Erro: ' + e.message); }
 });
@@ -2148,13 +2155,33 @@ document.getElementById('btn-entrega-entregue')?.addEventListener('click', async
       atualizadoEm: fb.serverTimestamp(),
     });
     showToast('🏠 Entrega concluída!');
-    entregaAtualId = null;
-    entregaAtualDados = null;
-    document.getElementById('entrega-em-andamento').hidden = true;
-    document.getElementById('btn-entrega-coletei').hidden = false;
-    document.getElementById('btn-entrega-entregue').hidden = true;
+    resetarEntregaAtual();
   } catch(e) { showToast('⚠️ Erro: ' + e.message); }
 });
+
+document.getElementById('btn-entrega-devolver')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  const motivo = prompt('Motivo da devolução:\n1 - Cliente não encontrado\n2 - Cliente recusou o pedido\n3 - Endereço incorreto\n4 - Outro\n\nDigite o número ou descreva:');
+  if (!motivo) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'devolvido',
+      motivoDevolucao: motivo,
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    showToast('↩️ Devolução registrada — retorne ao restaurante.');
+    resetarEntregaAtual();
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+function resetarEntregaAtual() {
+  entregaAtualId = null;
+  entregaAtualDados = null;
+  document.getElementById('entrega-em-andamento').hidden = true;
+  document.getElementById('btn-entrega-coletei').hidden = false;
+  document.getElementById('btn-entrega-entregue').hidden = true;
+  document.getElementById('btn-entrega-devolver').hidden = true;
+}
 
 function formatMoeda(v) { return 'R$ ' + Number(v||0).toFixed(2).replace('.', ','); }
 

@@ -1165,6 +1165,32 @@ document.getElementById('btn-enviar-avaliacao-motorista')?.addEventListener('cli
 
 document.getElementById('link-pular-avaliacao-motorista')?.addEventListener('click', () => go('screen-home'));
 
+document.getElementById('btn-reportar-motorista')?.addEventListener('click', async () => {
+  const motoristaId = state.motoristaIdParaAvaliar;
+  const motoristaNome = document.getElementById('avaliar-mot-nome')?.textContent || 'o motorista';
+
+  const motivo = prompt(`Qual o motivo do reporte de "${motoristaNome}"?\n\n1 - Comportamento inadequado\n2 - Veículo diferente do cadastrado\n3 - Não seguiu a rota\n4 - Cobrou valor diferente\n5 - Outro\n\nDigite o número ou descreva:`);
+  if (!motivo) return;
+
+  try {
+    if (firebaseReady && db && meuPassageiroId) {
+      await fb.addDoc(fb.collection(db, 'reportes_motoristas'), {
+        motoristaId,
+        motoristaNome,
+        passageiroId: meuPassageiroId,
+        motivo,
+        criadoEm: fb.serverTimestamp(),
+        corridaId: state.corridaId || null,
+      });
+    }
+    showToast('✅ Reporte enviado ao administrador');
+    go('screen-home');
+  } catch(e) {
+    console.error('[passageiro] erro ao reportar motorista:', e);
+    showToast('⚠️ Erro ao enviar reporte');
+  }
+});
+
 // Atualiza a média de avaliação de um motorista ou passageiro, de forma segura mesmo
 // com várias avaliações chegando ao mesmo tempo (usa transação do Firebase).
 async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
