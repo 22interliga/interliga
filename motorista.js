@@ -876,6 +876,19 @@ async function aceitarCorrida() {
 
   pararDisponibilidade(); // fico fora da fila de novas ofertas enquanto rodo essa corrida
 
+  // Salva corrida ativa no localStorage para restaurar se o app fechar
+  try {
+    localStorage.setItem('interliga_mot_corrida_ativa', JSON.stringify({
+      corridaId: corrida.id,
+      origem: corrida.origem,
+      destino: corrida.destino,
+      passageiroId: corrida.passageiroId,
+      passageiroNome: corrida.passageiroNome,
+      preco: corrida.preco,
+      criadoEm: Date.now(),
+    }));
+  } catch(e) {}
+
   // Também atualizar localStorage (mesmo dispositivo / fallback)
   try {
     const lst = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
@@ -1900,7 +1913,7 @@ async function aplicarStatusCadastroMotorista(dados) {
         const idadeMs = Date.now() - (dadosCorrida.aceitoEm || 0);
         if (idadeMs < 2 * 60 * 60 * 1000 && dadosCorrida.corridaId) {
           const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
-          if (snapCorrida.exists() && ['aceita'].includes(snapCorrida.data().status)) {
+          if (snapCorrida.exists() && ['aceita', 'em_andamento'].includes(snapCorrida.data().status)) {
             state.corridaAtualId = dadosCorrida.corridaId;
             state.corridaAtual = { id: dadosCorrida.corridaId, ...snapCorrida.data() };
             state.emCorridaAtiva = true;

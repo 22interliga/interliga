@@ -1092,7 +1092,10 @@ function ouvirAceiteCorrida(corridaId) {
   if (!db) { console.warn('[passageiro] db não disponível'); return; }
   if (state.corridaListenerUnsub) state.corridaListenerUnsub();
 
-  let jaExibiuMotoristaEncontrado = false;
+  // Se a corrida já está aceita/em andamento (restauração após fechar app),
+  // marca a flag pra não tentar mostrar a tela de "motorista encontrado" de novo
+  let jaExibiuMotoristaEncontrado = window._corridaRestoradaJaAceita || false;
+  window._corridaRestoradaJaAceita = false; // limpa a flag global
 
   state.corridaListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', corridaId), (snap) => {
     const data = snap.data();
@@ -1729,19 +1732,49 @@ async function verificarCadastroPassageiro() {
           const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
           if (snapCorrida.exists()) {
             const statusCorrida = snapCorrida.data().status;
-            if (['aguardando', 'aceita'].includes(statusCorrida)) {
-              // Retoma a corrida
+            const dadosFirebase = snapCorrida.data();
+
+            if (['aguardando', 'aceita', 'em_andamento'].includes(statusCorrida)) {
+              // Restaura estado completo
               state.corridaId = dadosCorrida.corridaId;
               state.corridaLocalId = dadosCorrida.corridaId;
-              state.origem = { texto: dadosCorrida.origem };
-              state.destino = { texto: dadosCorrida.destino };
+              state.origem = { texto: dadosFirebase.origem || dadosCorrida.origem };
+              state.destino = { texto: dadosFirebase.destino || dadosCorrida.destino };
               state.categoriaEscolhida = dadosCorrida.categoria;
               state.precos = { [dadosCorrida.categoria]: dadosCorrida.preco };
+
               go('screen-tracking');
               montarSequenciaInicial();
-              document.getElementById('block-searching').hidden = statusCorrida !== 'aguardando';
-              document.getElementById('block-driver').hidden = statusCorrida !== 'aceita';
-              escutarAceiteCorrida(dadosCorrida.corridaId);
+
+              if (statusCorrida === 'aguardando') {
+                document.getElementById('block-searching').hidden = false;
+                document.getElementById('block-driver').hidden = true;
+                escutarAceiteCorrida(dadosCorrida.corridaId);
+              } else {
+                // Motorista já aceitou ou corrida em andamento — mostra dados do motorista
+                document.getElementById('block-searching').hidden = true;
+                document.getElementById('block-driver').hidden = false;
+
+                const nomeEl = document.getElementById('driver-name');
+                const veiculoEl = document.getElementById('driver-vehicle');
+                const placaEl = document.getElementById('driver-plate');
+                const avalEl = document.getElementById('driver-rating');
+                const priceEl = document.getElementById('driver-price');
+
+                if (nomeEl) nomeEl.textContent = dadosFirebase.motoristaNome || '—';
+                if (veiculoEl) veiculoEl.textContent = dadosFirebase.motoristaVeiculo || '—';
+                if (placaEl) placaEl.textContent = dadosFirebase.motoristaPlaca || '—';
+                if (avalEl) avalEl.textContent = '⭐ ' + (dadosFirebase.motoristaAvaliacao || '5.0');
+                if (priceEl) priceEl.textContent = 'R$ ' + Number(dadosFirebase.preco || dadosCorrida.preco || 0).toFixed(2).replace('.', ',');
+
+                escutarAceiteCorrida(dadosCorrida.corridaId);
+                // Corrida já aceita — sinaliza pro listener não tentar exibir motorista de novo
+                window._corridaRestoradaJaAceita = true;
+                try { iniciarMapaTrackingPassageiro(); } catch(e) {}
+                try { escutarPosicaoMotorista(); } catch(e) {}
+                try { iniciarChatCorrida(); } catch(e) {}
+              }
+
               showToast('🔄 Corrida em andamento retomada!');
               return;
             } else {
