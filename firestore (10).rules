@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin: qualquer usuário autenticado que tenha um documento em /admins/{uid}
+    // OU que tenha email nos emails fixos
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'admin@interliga.com.br' ||
+        request.auth.token.email == 'miqueias@interliga.com.br' ||
+        request.auth.token.email == 'interliga2026a@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    function souFranqueado() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/franqueados/$(request.auth.uid));
+    }
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+    // Admins collection - para adicionar novos admins sem mudar regras
+    match /admins/{uid} {
+      allow read, write: if isAdmin();
+    }
+    match /corridas/{corridaId} {
+      allow read, write: if estaAutenticado();
+      match /mensagens/{mensagemId} {
+        allow read, write: if estaAutenticado();
+      }
+    }
+    match /motoristas/{motoristaId} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado() && (
+        request.auth.uid == motoristaId || isAdmin() || souFranqueado()
+      );
+      allow delete: if isAdmin();
+    }
+    match /passageiros/{uid} {
+      allow read: if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado() && (
+        request.auth.uid == uid || isAdmin() || souFranqueado()
+      );
+    }
+    match /motoristas_disponiveis/{motoristaId} {
+      allow read, write: if estaAutenticado();
+    }
+    match /zonas_risco/{zonaId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /regras_horario/{regraId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /precos/{cidadeId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /repasses_pagos/{motoristaId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /config/{configId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin();
+    }
+    match /franqueados/{uid} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin();
+    }
+    match /estabelecimentos/{estabId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /avaliacoes/{avaliacaoId} {
+      allow read, write: if estaAutenticado();
+    }
+    match /carteira_transacoes/{transacaoId} {
+      allow read, create: if estaAutenticado();
+    }
+    match /anuncios/{anuncioId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /restaurantes_food/{restId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+      match /cardapio/{itemId} {
+        allow read: if estaAutenticado();
+        allow write: if isAdmin() || souFranqueado();
+      }
+    }
+    match /pedidos_food/{pedidoId} {
+      allow read, create: if estaAutenticado();
+      allow update: if estaAutenticado();
+    }
+    match /categorias_veiculo/{catId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /rotas_fixas/{rotaId} {
+      allow read: if estaAutenticado();
+      allow write: if isAdmin() || souFranqueado();
+    }
+    match /reportes_motoristas/{reporteId} {
+      allow create: if estaAutenticado();
+      allow read: if isAdmin();
+    }
+
+    // ===== Clube do Churrasco 071 (Módulo 2) =====
+    match /churrasco071_produtos/{docId} {
+      allow read, write: if true;
+    }
+    match /churrasco071_comandas/{docId} {
+      allow read, write: if true;
+    }
+    match /churrasco071_vendas/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
