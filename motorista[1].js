@@ -42,7 +42,7 @@ async function initFirebase() {
       messagingSenderId: "913895237568",
       appId: "1:913895237568:web:faad95e8af089150e54a25",
     };
-    const fbApp = initializeApp(firebaseConfig);
+    const fbApp = initializeApp(firebaseConfig, 'interliga-motorista');
     fbAppInstancia = fbApp;
     db = fb.getFirestore(fbApp);
     authMotorista = authMod.getAuth(fbApp);
