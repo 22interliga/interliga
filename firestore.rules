@@ -1,8 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Admin: qualquer usuário autenticado que tenha um documento em /admins/{uid}
-    // OU que tenha email nos emails fixos
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.email == 'admin@interliga.com.br' ||
@@ -18,16 +16,23 @@ service cloud.firestore {
     function estaAutenticado() {
       return request.auth != null;
     }
-    // Admins collection - para adicionar novos admins sem mudar regras
     match /admins/{uid} {
       allow read, write: if isAdmin();
     }
+
     match /corridas/{corridaId} {
-      allow read, write: if estaAutenticado();
+      allow read: if estaAutenticado() && (
+        resource.data.status == 'aguardando' ||
+        request.auth.uid == resource.data.passageiroId ||
+        request.auth.uid == resource.data.motoristaId ||
+        isAdmin() || souFranqueado()
+      );
+      allow write: if estaAutenticado();
       match /mensagens/{mensagemId} {
         allow read, write: if estaAutenticado();
       }
     }
+
     match /motoristas/{motoristaId} {
       allow read: if estaAutenticado();
       allow create: if estaAutenticado();
@@ -77,9 +82,14 @@ service cloud.firestore {
     match /avaliacoes/{avaliacaoId} {
       allow read, write: if estaAutenticado();
     }
+
     match /carteira_transacoes/{transacaoId} {
-      allow read, create: if estaAutenticado();
+      allow read: if estaAutenticado() && (
+        request.auth.uid == resource.data.uid || isAdmin()
+      );
+      allow create: if estaAutenticado();
     }
+
     match /anuncios/{anuncioId} {
       allow read: if estaAutenticado();
       allow write: if isAdmin() || souFranqueado();
@@ -109,15 +119,16 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
-    // ===== Clube do Churrasco 071 (Módulo 2) =====
+    // AINDA NÃO SUBA — churrasco071 precisa do login anônimo no index.html
+    // antes de trocar para estaAutenticado(), senão quebra o sistema do cliente.
     match /churrasco071_produtos/{docId} {
-      allow read, write: if true;
+      allow read, write: if estaAutenticado();
     }
     match /churrasco071_comandas/{docId} {
-      allow read, write: if true;
+      allow read, write: if estaAutenticado();
     }
     match /churrasco071_vendas/{docId} {
-      allow read, write: if true;
+      allow read, write: if estaAutenticado();
     }
   }
 }
