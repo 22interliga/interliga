@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interliga — Painel do Comerciante</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root {
+    --bg: #0D1117; --surface: #1A1F2E; --border: #2A3142;
+    --text: #E8EAF0; --text-soft: #9098A8;
+    --orange: #FF6B00; --green: #22C55E; --red: #E8002D;
+    --yellow: #F59E0B; --blue: #3B82F6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* LOGIN */
+  #tela-login { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .login-logo { font-size: 28px; font-weight: 900; margin-bottom: 8px; }
+  .login-logo span { color: var(--orange); }
+  .login-sub { color: var(--text-soft); font-size: 14px; margin-bottom: 32px; }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 100%; max-width: 360px; }
+  .login-label { font-size: 11px; font-weight: 700; color: var(--text-soft); margin-bottom: 6px; letter-spacing: 0.5px; }
+  .login-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 15px; margin-bottom: 14px; }
+  .login-btn { width: 100%; background: var(--orange); color: white; font-weight: 700; font-size: 15px; border: none; border-radius: 10px; padding: 14px; cursor: pointer; margin-top: 4px; }
+  .login-erro { color: var(--red); font-size: 13px; margin-top: 8px; text-align: center; }
+
+  /* PAINEL */
+  #tela-painel { display: none; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+  .header-logo { font-size: 18px; font-weight: 900; }
+  .header-logo span { color: var(--orange); }
+  .header-rest { font-size: 13px; color: var(--text-soft); }
+  .btn-sair { background: transparent; border: 1px solid var(--border); color: var(--text-soft); padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+  .main { padding: 16px; max-width: 800px; margin: 0 auto; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-soft); background: transparent; }
+  .tab.active { background: var(--orange); color: white; border-color: var(--orange); }
+
+  .pedido-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .pedido-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .pedido-cliente { font-weight: 700; font-size: 15px; }
+  .pedido-hora { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+  .pedido-itens { font-size: 13px; color: var(--text-soft); margin-bottom: 10px; line-height: 1.6; }
+  .pedido-endereco { font-size: 12px; color: var(--text-soft); margin-bottom: 12px; }
+  .pedido-total { font-size: 16px; font-weight: 700; color: var(--orange); margin-bottom: 12px; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .badge-confirmado { background: rgba(59,130,246,0.2); color: var(--blue); }
+  .badge-preparando { background: rgba(245,158,11,0.2); color: var(--yellow); }
+  .badge-entrega { background: rgba(255,107,0,0.2); color: var(--orange); }
+  .badge-entregue { background: rgba(34,197,94,0.2); color: var(--green); }
+  .badge-cancelado { background: rgba(232,0,45,0.15); color: var(--red); }
+  .pedido-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-status { padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; flex: 1; min-width: 120px; }
+  .btn-aceitar { background: var(--green); color: white; }
+  .btn-preparar { background: var(--yellow); color: white; }
+  .btn-entregar { background: var(--orange); color: white; }
+  .btn-entregar-proprio { background: var(--blue); color: white; }
+  .btn-cancelar { background: rgba(232,0,45,0.15); color: var(--red); }
+  .empty { text-align: center; padding: 48px 20px; color: var(--text-soft); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 800; color: var(--orange); }
+  .stat-lbl { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+</style>
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="tela-login">
+  <div class="login-logo">INTER<span>LIGA</span></div>
+  <div class="login-sub">Painel do Comerciante — Interifood</div>
+  <div class="login-card">
+    <div class="login-label">E-MAIL</div>
+    <input class="login-input" type="email" id="login-email" placeholder="seu@restaurante.com">
+    <div class="login-label">SENHA</div>
+    <input class="login-input" type="password" id="login-senha" placeholder="••••••••">
+    <button class="login-btn" id="btn-login">Entrar</button>
+    <div class="login-erro" id="login-erro" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- TELA DO PAINEL -->
+<div id="tela-painel">
+  <div class="header">
+    <div>
+      <div class="header-logo">INTER<span>LIGA</span> · Comerciante</div>
+      <div class="header-rest" id="header-rest-nome">Carregando...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="btn-sino" style="position:relative;cursor:pointer;width:36px;height:36px;background:var(--surface);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;" onclick="abrirNotificacoes()">
+        🔔
+        <span id="sino-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#E8002D;color:white;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;">0</span>
+      </div>
+      <button class="btn-sair" id="btn-sair">Sair</button>
+    </div>
+  </div>
+
+  <!-- Painel de notificações -->
+  <div id="painel-notif" style="display:none;position:fixed;top:60px;right:16px;width:300px;max-height:400px;overflow-y:auto;background:#1A1F2E;border:1px solid #2A3142;border-radius:14px;z-index:999;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <div style="padding:14px 16px;border-bottom:1px solid #2A3142;display:flex;justify-content:space-between;align-items:center;">
+      <b style="font-size:14px;">Notificações</b>
+      <span style="cursor:pointer;color:#9098A8;font-size:12px;" onclick="document.getElementById('painel-notif').style.display='none'">✕ Fechar</span>
+    </div>
+    <div id="lista-notif" style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+      <div style="text-align:center;color:#9098A8;font-size:13px;padding:16px;">Nenhuma notificação</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-num" id="stat-novos">0</div><div class="stat-lbl">🆕 Novos</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-andamento">0</div><div class="stat-lbl">⏳ Em andamento</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-hoje">0</div><div class="stat-lbl">✅ Entregues hoje</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filtro="confirmado">🆕 Novos</button>
+      <button class="tab" data-filtro="preparando">👨‍🍳 Preparando</button>
+      <button class="tab" data-filtro="entrega">🛵 Em entrega</button>
+      <button class="tab" data-filtro="entregue">✅ Entregues</button>
+      <button class="tab" data-filtro="todos">Todos</button>
+      <button class="tab" data-filtro="devolvido" style="color:#E8002D;">↩️ Devoluções</button>
+    </div>
+
+    <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px;">
+      <span class="live-dot"></span>Atualizando em tempo real
+    </div>
+
+    <div id="lista-pedidos">
+      <div class="empty"><div class="empty-icon">⏳</div>Carregando pedidos...</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { getFirestore, collection, doc, query, where, orderBy, limit, onSnapshot, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAAwR-TwQlWIgR4hBRjWtjfm_qFSkultUY",
+  authDomain: "interliga-app.firebaseapp.com",
+  projectId: "interliga-app",
+  storageBucket: "interliga-app.firebasestorage.app",
+  messagingSenderId: "913895237568",
+  appId: "1:913895237568:web:faad95e8af089150e54a25",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let restauranteAtual = null;
+let pedidosListenerUnsub = null;
+let filtroAtual = 'confirmado';
+let todosPedidos = [];
+
+// ── LOGIN ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const erroEl = document.getElementById('login-erro');
+  erroEl.style.display = 'none';
+
+  if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.style.display = 'block'; return; }
+
+  document.getElementById('btn-login').textContent = 'Entrando...';
+  document.getElementById('btn-login').disabled = true;
+  try {
+    await signInWithEmailAndPassword(auth, email, senha);
+  } catch (e) {
+    erroEl.textContent = '❌ E-mail ou senha incorretos';
+    erroEl.style.display = 'block';
+  } finally {
+    document.getElementById('btn-login').textContent = 'Entrar';
+    document.getElementById('btn-login').disabled = false;
+  }
+});
+
+document.getElementById('btn-sair').addEventListener('click', async () => {
+  if (pedidosListenerUnsub) pedidosListenerUnsub();
+  await signOut(auth);
+});
+
+// ── AUTH STATE ──────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    document.getElementById('tela-login').style.display = 'flex';
+    document.getElementById('tela-painel').style.display = 'none';
+    return;
+  }
+
+  // Busca o restaurante vinculado a esse e-mail
+  try {
+    const q = query(collection(db, 'restaurantes_food'), where('emailComerciante', '==', user.email));
+    const snap = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(m => m.getDocs(q));
+
+    if (snap.empty) {
+      // Tenta pelo UID também
+      const q2 = query(collection(db, 'restaurantes_food'), where('comercianteUid', '==', user.uid));
+      const snap2 = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js').then(m => m.getDocs(q2));
+      if (snap2.empty) {
+        alert('⚠️ Nenhum restaurante vinculado ao e-mail: ' + user.email + '\n\nPeça ao administrador para:\n1. Acessar Admin → Comerciantes\n2. Clicar em "Editar" no seu restaurante\n3. Preencher o campo "E-mail do comerciante" com: ' + user.email + '\n4. Salvar');
+        await signOut(auth);
+        return;
+      }
+      restauranteAtual = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+    } else {
+      restauranteAtual = { id: snap.docs[0].id, ...snap.docs[0].data() };
+    }
+
+    document.getElementById('header-rest-nome').textContent = restauranteAtual.nome || 'Meu restaurante';
+    document.getElementById('tela-login').style.display = 'none';
+    document.getElementById('tela-painel').style.display = 'block';
+
+    iniciarListenerPedidos();
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao carregar dados: ' + e.message);
+  }
+});
+
+// ── LISTENER DE PEDIDOS EM TEMPO REAL ──────────────────────────────────────
+function iniciarListenerPedidos() {
+  if (pedidosListenerUnsub) pedidosListenerUnsub();
+
+  const q = query(
+    collection(db, 'pedidos_food'),
+    where('restauranteId', '==', restauranteAtual.id),
+    limit(100)
+  );
+
+  pedidosListenerUnsub = onSnapshot(q, (snap) => {
+    todosPedidos = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.criadoEm?.toMillis ? a.criadoEm.toMillis() : new Date(a.criadoEm||0).getTime();
+        const tb = b.criadoEm?.toMillis ? b.criadoEm.toMillis() : new Date(b.criadoEm||0).getTime();
+        return tb - ta;
+      });
+    atualizarStats();
+    processarNotificacoes(todosPedidos);
+    renderPedidos();
+  }, (e) => {
+    console.error('Erro no listener:', e);
+    document.getElementById('lista-pedidos').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div>${e.message}</div>`;
+  });
+}
+
+// ── FILTROS ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    filtroAtual = tab.dataset.filtro;
+    renderPedidos();
+  });
+});
+
+// ── STATS ──────────────────────────────────────────────────────────────────
+function atualizarStats() {
+  const hoje = new Date().toDateString();
+  document.getElementById('stat-novos').textContent = todosPedidos.filter(p => p.status === 'confirmado').length;
+  document.getElementById('stat-andamento').textContent = todosPedidos.filter(p => ['preparando','entrega'].includes(p.status)).length;
+  document.getElementById('stat-hoje').textContent = todosPedidos.filter(p => {
+    const ms = p.criadoEm?.toMillis ? p.criadoEm.toMillis() : null;
+    return p.status === 'entregue' && ms && new Date(ms).toDateString() === hoje;
+  }).length;
+}
+
+// ── RENDERIZAR PEDIDOS ─────────────────────────────────────────────────────
+const BADGES = {
+  confirmado: '<span class="badge badge-confirmado">🆕 Novo</span>',
+  aguardando_entregador: '<span class="badge badge-preparando">🛵 Aguard. entregador</span>',
+  preparando: '<span class="badge badge-preparando">👨‍🍳 Preparando</span>',
+  entrega: '<span class="badge badge-entrega">🛵 Em entrega</span>',
+  entregue: '<span class="badge badge-entregue">✅ Entregue</span>',
+  devolvido: '<span class="badge badge-cancelado">↩️ Devolvido</span>',
+  devolvido: '<span class="badge badge-cancelado">↩️ Devolvido</span>',
+  cancelado: '<span class="badge badge-cancelado">❌ Cancelado</span>',
+};
+
+function renderPedidos() {
+  const lista = document.getElementById('lista-pedidos');
+  let pedidos = filtroAtual === 'todos' ? todosPedidos : todosPedidos.filter(p => p.status === filtroAtual);
+
+  if (pedidos.length === 0) {
+    lista.innerHTML = `<div class="empty"><div class="empty-icon">🍽️</div>Nenhum pedido nessa categoria</div>`;
+    return;
+  }
+
+  lista.innerHTML = pedidos.map(p => {
+    const ms = p.criadoEm?.toMillis ? p.criadoEm.toMillis() : null;
+    const hora = ms ? new Date(ms).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '—';
+    const itensTexto = (p.itens || []).map(i => `${i.qtd}× ${i.nome}`).join(', ');
+    const tipoEntrega = p.tipoEntrega === 'propria' ? '🏪 Entrega própria' : '🛵 Entregador Interliga';
+
+    let botoes = '';
+    if (p.status === 'confirmado') {
+      botoes = `
+        <button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','preparando')">✅ Aceitar e começar a preparar</button>
+        <button class="btn-status btn-cancelar" onclick="cancelarPedido('${p.id}')">❌ Recusar</button>
+      `;
+    } else if (p.status === 'preparando') {
+      if (p.tipoEntrega === 'propria') {
+        botoes = `<button class="btn-status btn-entregar-proprio" onclick="avancarStatus('${p.id}','entrega')">🏪 Saiu para entrega (entrega própria)</button>`;
+      } else {
+        botoes = `<button class="btn-status btn-entregar" onclick="avancarStatus('${p.id}','aguardando_entregador')">🛵 Pronto — chamar entregador Interliga</button>`;
+      }
+    } else if (p.status === 'entrega') {
+      botoes = `<button class="btn-status btn-aceitar" onclick="avancarStatus('${p.id}','entregue')">✅ Confirmar entrega ao cliente</button>`;
+    } else if (p.status === 'devolvido') {
+      botoes = `
+        <div style="background:rgba(232,0,45,0.1);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;">
+          <b>↩️ Motivo da devolução:</b> ${p.motivoDevolucao || 'Não informado'}
+        </div>
+        <button class="btn-status btn-aceitar" onclick="reenviarPedido('${p.id}')">🔄 Tentar nova entrega</button>
+        <button class="btn-status btn-cancelar" onclick="avancarStatus('${p.id}','cancelado')">❌ Cancelar e reembolsar</button>
+      `;
+    }
+
+    return `
+      <div class="pedido-card">
+        <div class="pedido-header">
+          <div>
+            <div class="pedido-cliente">${p.passageiroNome || 'Cliente'}</div>
+            <div class="pedido-hora">🕐 ${hora} · ${tipoEntrega}</div>
+          </div>
+          ${BADGES[p.status] || ''}
+        </div>
+        <div class="pedido-itens">${itensTexto}</div>
+        <div class="pedido-endereco">📍 ${p.endereco || '—'}</div>
+        <div class="pedido-total">Total: R$ ${Number(p.total||0).toFixed(2).replace('.',',')}</div>
+        ${botoes ? `<div class="pedido-actions">${botoes}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// ── AÇÕES ──────────────────────────────────────────────────────────────────
+// ── NOTIFICAÇÕES ───────────────────────────────────────────────────────────
+let notificacoesLidas = new Set(JSON.parse(localStorage.getItem('notif_lidas') || '[]'));
+let todasNotificacoes = [];
+
+function processarNotificacoes(pedidos) {
+  const novas = [];
+  pedidos.forEach(p => {
+    // Novo pedido
+    if (p.status === 'confirmado') {
+      novas.push({ id: p.id + '_novo', tipo: 'novo', texto: `🆕 Novo pedido de ${p.passageiroNome || 'Cliente'}`, ts: p.criadoEm });
+    }
+    // Devolução
+    if (p.status === 'devolvido') {
+      novas.push({ id: p.id + '_dev', tipo: 'devolucao', texto: `↩️ Pedido devolvido — ${p.motivoDevolucao || 'Não entregue'}`, ts: p.atualizadoEm });
+    }
+  });
+
+  todasNotificacoes = novas.sort((a, b) => {
+    const ta = a.ts?.toMillis ? a.ts.toMillis() : 0;
+    const tb = b.ts?.toMillis ? b.ts.toMillis() : 0;
+    return tb - ta;
+  });
+
+  const naoLidas = todasNotificacoes.filter(n => !notificacoesLidas.has(n.id)).length;
+  const badge = document.getElementById('sino-badge');
+  if (badge) {
+    badge.textContent = naoLidas;
+    badge.style.display = naoLidas > 0 ? 'flex' : 'none';
+  }
+
+  // Toca som se tiver notificação nova não lida
+  if (naoLidas > 0) {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880; gain.gain.value = 0.1;
+      osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+  }
+}
+
+function abrirNotificacoes() {
+  const painel = document.getElementById('painel-notif');
+  painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+
+  const lista = document.getElementById('lista-notif');
+  if (todasNotificacoes.length === 0) {
+    lista.innerHTML = '<div style="text-align:center;color:#9098A8;font-size:13px;padding:16px;">Nenhuma notificação</div>';
+  } else {
+    lista.innerHTML = todasNotificacoes.map(n => {
+      const lida = notificacoesLidas.has(n.id);
+      const cor = n.tipo === 'devolucao' ? '#E8002D' : '#FF6B00';
+      return `<div style="padding:10px 12px;border-radius:10px;background:${lida ? 'transparent' : 'rgba(255,107,0,0.1)'};border-left:3px solid ${lida ? '#2A3142' : cor};cursor:pointer;" onclick="marcarLida('${n.id}')">
+        <div style="font-size:13px;color:#E8EAF0;">${n.texto}</div>
+        ${!lida ? '<div style="font-size:11px;color:#FF6B00;margin-top:4px;">● Nova</div>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Marca todas como lidas ao abrir
+  todasNotificacoes.forEach(n => notificacoesLidas.add(n.id));
+  localStorage.setItem('notif_lidas', JSON.stringify([...notificacoesLidas]));
+  const badge = document.getElementById('sino-badge');
+  if (badge) badge.style.display = 'none';
+}
+
+window.marcarLida = (id) => {
+  notificacoesLidas.add(id);
+  localStorage.setItem('notif_lidas', JSON.stringify([...notificacoesLidas]));
+};
+
+window.avancarStatus = async (pedidoId, novoStatus) => {
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: novoStatus,
+      atualizadoEm: serverTimestamp(),
+    });
+  } catch (e) { alert('Erro: ' + e.message); }
+};
+
+window.reenviarPedido = async (pedidoId) => {
+  if (!confirm('Colocar esse pedido na fila novamente para um novo entregador?')) return;
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: 'aguardando_entregador',
+      entregadorId: null,
+      entregadorNome: null,
+      motivoDevolucao: null,
+      atualizadoEm: serverTimestamp(),
+    });
+    showToast('✅ Pedido enviado para novo entregador!');
+  } catch(e) { alert('Erro: ' + e.message); }
+};
+
+window.abrirSuporte = (pedidoId, passageiroNome, motivo) => {
+  const msg = encodeURIComponent(
+    `Olá! Temos um problema com seu pedido.
+
+Situação: Pedido devolvido
+Motivo: ${motivo || 'Não informado'}
+
+Precisamos verificar o que aconteceu. Como podemos ajudar?`
+  );
+  // Abre WhatsApp do suporte (pode ser substituído pelo número real)
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+};
+
+window.cancelarPedido = async (pedidoId) => {
+  if (!confirm('Recusar esse pedido?')) return;
+  try {
+    await updateDoc(doc(db, 'pedidos_food', pedidoId), {
+      status: 'cancelado',
+      atualizadoEm: serverTimestamp(),
+    });
+  } catch (e) { alert('Erro: ' + e.message); }
+};
+</script>
+</body>
+</html>
