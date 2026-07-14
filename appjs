@@ -90,6 +90,7 @@ async function initFirebase() {
     // Quando não tem (ou deslogou), mostra a tela de login pra quem já escolheu ser passageiro.
     authMod.onAuthStateChanged(authPassageiro, (user) => {
       if (user) {
+        _loginEmAndamento = false; // login confirmado — limpa a flag
         meuPassageiroId = user.uid;
         window.meuPassageiroId = user.uid;
         verificarCadastroPassageiro();
@@ -98,11 +99,10 @@ async function initFirebase() {
         window.meuPassageiroId = null;
         setTimeout(() => {
           if (meuPassageiroId) return; // sessão restaurou, ignora
+          if (_loginEmAndamento) return; // login em andamento, não redireciona
           if (localStorage.getItem('interliga_papel') === 'passageiro') {
             const telaAtual = state.currentScreen;
-            const processandoLogin = document.getElementById('btn-fazer-login-passageiro')?.disabled;
-            if (!processandoLogin &&
-                telaAtual !== 'screen-login-passageiro' &&
+            if (telaAtual !== 'screen-login-passageiro' &&
                 telaAtual !== 'screen-cadastro-passageiro' &&
                 telaAtual !== 'screen-role-choice') {
               go('screen-login-passageiro');
@@ -1659,6 +1659,8 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
 // ─────────────────────────────────────
 // LOGIN (passageiro que já tem cadastro)
 // ─────────────────────────────────────
+let _loginEmAndamento = false;
+
 document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click', async () => {
   const erroEl = document.getElementById('login-pax-erro');
   erroEl.hidden = true;
@@ -1669,10 +1671,13 @@ document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click',
   const btn = document.getElementById('btn-fazer-login-passageiro');
   btn.disabled = true;
   btn.textContent = 'Conectando...';
+  _loginEmAndamento = true;
+
   const pronto = await esperarFirebasePronto();
   if (!pronto) {
     btn.disabled = false;
     btn.textContent = 'Entrar';
+    _loginEmAndamento = false;
     erroEl.textContent = '⚠️ Sem conexão com o servidor — confira sua internet e tenta de novo';
     erroEl.hidden = false;
     return;
@@ -1681,10 +1686,12 @@ document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click',
   try {
     await authModRef.signInWithEmailAndPassword(authPassageiro, email, senha);
     // onAuthStateChanged cuida do resto (verificarCadastroPassageiro)
+    // Mantém _loginEmAndamento = true até o onAuthStateChanged confirmar o login
   } catch (e) {
     console.warn('[passageiro] erro no login:', e.code);
     erroEl.textContent = '❌ E-mail ou senha incorretos';
     erroEl.hidden = false;
+    _loginEmAndamento = false;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Entrar';
