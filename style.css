@@ -34,6 +34,18 @@
   --shadow-sm: 0 2px 8px rgba(20,23,31,0.06);
   --shadow-md: 0 8px 24px rgba(20,23,31,0.12);
   --shadow-lg: 0 16px 40px rgba(20,23,31,0.18);
+
+  /* ESCALA DE Z-INDEX — evita números arbitrários espalhados pelo arquivo.
+     Qualquer camada nova entra em um destes níveis, nunca em valores soltos. */
+  --z-base: 1;
+  --z-search: 5;
+  --z-dropdown: 20;
+  --z-sticky: 50;
+  --z-modal: 200;
+  --z-toast: 900;
+
+  /* App máximo em telas largas (ver seção RESPONSIVO no fim do arquivo) */
+  --app-max-width: 480px;
 }
 
 /* ═══════════════════════════════════════
@@ -47,10 +59,24 @@ html, body {
   font-family: 'Inter', system-ui, sans-serif;
   background: var(--ink);
   -webkit-tap-highlight-color: transparent;
+  /* Respeita o tamanho de fonte configurado pelo usuário no sistema/navegador
+     (acessibilidade) em vez de travar tudo em px absolutos. */
+  font-size: 100%;
 }
 button { font-family: inherit; border: none; background: none; cursor: pointer; }
 input { font-family: inherit; border: none; outline: none; background: none; }
 svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* Foco visível para navegação por teclado/leitor de tela — antes não existia
+   nenhum estado de :focus-visible customizado no arquivo original. */
+button:focus-visible,
+input:focus-visible,
+.category-item:focus-visible,
+.payment-option:focus-visible,
+.cancel-reason:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
 
 /* ═══════════════════════════════════════
    APP SHELL — sempre tela cheia, qualquer dispositivo
@@ -152,7 +178,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .search-bar {
   margin: -22px 20px 0;
   position: relative;
-  z-index: 5;
+  z-index: var(--z-search);
   background: var(--surface);
   border-radius: var(--radius-lg);
   padding: 16px 18px;
@@ -314,7 +340,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   margin-top: 4px;
-  z-index: 20;
+  z-index: var(--z-dropdown);
   overflow: hidden;
   display: none;
 }
@@ -368,6 +394,30 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .payment-select svg { width: 16px; height: 16px; color: var(--text-soft); }
 
 /* ═══════════════════════════════════════
+   CUPOM DE DESCONTO
+═══════════════════════════════════════ */
+.cupom-row { margin: 0 20px 10px; display: flex; gap: 10px; }
+.cupom-row .cadastro-input { flex: 1; border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--text); }
+.btn-aplicar-cupom {
+  padding: 0 18px;
+  background: var(--ink);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.cupom-aplicado-info {
+  margin: 0 20px 14px;
+  padding: 10px 14px;
+  background: var(--green-soft);
+  color: var(--green);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════
    BUTTONS
 ═══════════════════════════════════════ */
 .btn-primary {
@@ -395,7 +445,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 ═══════════════════════════════════════ */
 .tracking-header {
   background: linear-gradient(135deg, #04183A, #1251B5);
-  padding: max(48px, env(safe-area-inset-top)) 16px 20px;
+  padding: max(48px, env(safe-area-inset-top)) 16px 36px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -423,7 +473,6 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
 }
-.tracking-header { padding-bottom: 36px; }
 .route-row { display: flex; align-items: center; gap: 10px; }
 .route-row span:last-child { font-size: 13px; color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .route-line { width: 1px; height: 10px; background: var(--border); margin: 6px 0 6px 4px; }
@@ -519,8 +568,20 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .chat-input-row input { flex: 1; border: 1.5px solid var(--border); border-radius: 24px; padding: 12px 16px; font-size: 15px; min-height: 46px; }
 .chat-input-row button { width: 44px; height: 44px; border-radius: 50%; background: var(--orange); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .chat-input-row button svg { width: 18px; height: 18px; }
-.btn-mic { background: var(--surface) !important; color: var(--text-soft) !important; border: 1.5px solid var(--border); }
-.btn-mic.is-recording { background: var(--red) !important; color: white !important; border-color: var(--red); animation: mic-pulse 1s infinite; }
+
+/* Botão de microfone: antes usava !important para sobrescrever .chat-input-row button.
+   Resolvido aumentando especificidade com o seletor pai em vez de forçar !important. */
+.chat-input-row button.btn-mic {
+  background: var(--surface);
+  color: var(--text-soft);
+  border: 1.5px solid var(--border);
+}
+.chat-input-row button.btn-mic.is-recording {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  animation: mic-pulse 1s infinite;
+}
 @keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 .chat-msg--audio { padding: 6px 8px; }
 .chat-msg--audio audio { width: 200px; height: 32px; display: block; }
@@ -549,7 +610,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .calendar-weekdays span { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-soft); }
 .calendar-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
 .cal-day { text-align: center; padding: 8px 0; font-size: 14px; font-weight: 600; color: var(--text); border-radius: var(--radius-sm); }
-.cal-day.is-other { opacity: 0; pointer-events: none; }
+.cal-day.is-other { visibility: hidden; pointer-events: none; }
 .cal-day.is-past { opacity: 0.3; pointer-events: none; }
 .cal-day.is-today { color: var(--orange); border: 1.5px solid var(--orange); }
 .cal-day.is-selected { background: var(--orange); color: white; }
@@ -573,15 +634,20 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
 .card-carteira { margin: 16px 20px; background: linear-gradient(135deg, var(--orange), #FF8C42); border-radius: 16px; padding: 18px; }
 .carteira-label { color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 600; }
 .carteira-valor { color: white; font-size: 26px; font-weight: 800; margin-top: 4px; }
-/* Botão de avançar parada — exclusivo do motorista, nunca aparece no app do passageiro */
-#btn-avancar-parada { display: none !important; }
+
+/* Botão de avançar parada — exclusivo do motorista, nunca aparece no app do
+   passageiro. Antes usava !important; resolvido dando ao seletor sua própria
+   regra sem conflito de especificidade (não há outra regra .btn-avancar-parada
+   com display definido para este id sobrescrever). */
+#btn-avancar-parada { display: none; }
+
 .btn-sair { display: block; width: calc(100% - 40px); margin: 24px 20px 0; padding: 14px; border-radius: 12px; background: rgba(232,0,45,0.1); color: var(--red); font-weight: 700; font-size: 14px; border: none; }
-.hex-label { background: transparent !important; border: none !important; display: flex; align-items: center; justify-content: center; }
+.hex-label { background: transparent; border: none; display: flex; align-items: center; justify-content: center; }
 
 /* ═══════════════════════════════════════
    MODAIS (pagamento, cancelamento)
 ═══════════════════════════════════════ */
-[hidden] { display: none !important; }
+[hidden] { display: none !important; } /* legítimo: [hidden] deve sempre vencer, é seu propósito */
 
 .modal-overlay {
   position: fixed;
@@ -589,7 +655,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   background: rgba(20,23,31,0.5);
   display: flex;
   align-items: flex-end;
-  z-index: 200;
+  z-index: var(--z-modal);
 }
 .modal-sheet {
   background: var(--surface);
@@ -727,6 +793,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   align-items: center;
   gap: 10px;
   box-shadow: var(--shadow-lg);
+  z-index: var(--z-sticky);
 }
 .cart-bar-count {
   width: 24px; height: 24px;
@@ -799,7 +866,7 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   opacity: 0;
   pointer-events: none;
   transition: all 0.3s ease;
-  z-index: 9999;
+  z-index: var(--z-toast);
   box-shadow: var(--shadow-lg);
   white-space: nowrap;
   max-width: 90%;
@@ -807,3 +874,40 @@ svg.icon, svg { width: 18px; height: 18px; flex-shrink: 0; }
   text-overflow: ellipsis;
 }
 .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════════════
+   RESPONSIVO — telas maiores que mobile
+   (tablet do Miquéias, desktop/PC).
+   Antes: zero media queries no arquivo inteiro,
+   o app ficava esticado/deformado fora de celular.
+═══════════════════════════════════════ */
+@media (min-width: 560px) {
+  /* Centraliza o "app" como um cartão fixo, em vez de esticar
+     os componentes de mobile pela tela toda. */
+  #app {
+    left: 50%;
+    right: auto;
+    width: var(--app-max-width);
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .card-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+@media (min-width: 900px) {
+  /* Em telas bem largas (PC), evita que o cartão de app fique
+     "boiando" sozinho sem nenhum contexto — fundo neutro atrás dele. */
+  html, body { background: var(--ink-soft); }
+}
+
+/* Usuário que aumenta a fonte do sistema/navegador para acessibilidade:
+   os componentes de texto denso (chat, listas) ganham um pouco mais de
+   respiro em vez de quebrar o layout. */
+@media (min-resolution: 1dppx) and (prefers-reduced-motion: no-preference) {
+  .chat-msg, .menu-item-desc, .restaurant-card-meta { line-height: 1.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring, .btn-mic.is-recording, .toast { animation: none; transition: none; }
+}
