@@ -1854,7 +1854,14 @@ function aplicarStatusCadastro(dados) {
       const elSaldo = document.getElementById('saldo-carteira-passageiro');
       if (elSaldo) elSaldo.textContent = 'R$ ' + saldo.toFixed(2).replace('.', ',');
     });
-    go('screen-home');
+    // Só navega pra home se o usuário ainda estiver numa tela "de entrada"
+    // (login, cadastro, splash, aguardando aprovação). Se ele já estiver
+    // usando o app normalmente (avaliando motorista, em corrida, no perfil,
+    // etc.), qualquer escrita no documento do passageiro — saldo, bônus de
+    // indicação, o que for — não deve puxar a navegação de volta pra home.
+    if (TELAS_SEM_HISTORICO_PAX.has(state.currentScreen)) {
+      go('screen-home');
+    }
     configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
     document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
