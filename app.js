@@ -110,7 +110,6 @@ async function initFirebase() {
           }
         }, 800);
       }
-      }
     });
   } catch (e) {
     console.warn('Firebase não disponível — app funciona em modo local:', e);
@@ -1765,13 +1764,13 @@ async function verificarCadastroPassageiro() {
                 statusCorrida === 'aguardando' ? 'Buscando motorista...' : 'Reconectando...';
 
               window._corridaRestoradaJaAceita = statusCorrida !== 'aguardando';
-              escutarAceiteCorrida(dadosCorrida.corridaId);
+              ouvirAceiteCorrida(dadosCorrida.corridaId);
 
               if (statusCorrida !== 'aguardando') {
                 try { iniciarMapaTrackingPassageiro(); } catch(e) {}
                 try { escutarPosicaoMotorista(); } catch(e) {}
                 try { iniciarChatCorrida(); } catch(e) {}
-              }     }
+              }
 
               showToast('🔄 Corrida em andamento retomada!');
               return;
