@@ -138,6 +138,32 @@ async function lancarCarteira(uid, valor, motivo, corridaId = null) {
   }
 }
 
+// Credita cashback ao passageiro: só pra corridas da categoria Interliga X,
+// só se o programa estiver ativo e dentro do período configurado no admin.
+// Calculado sobre o valor que o passageiro realmente pagou (já com desconto
+// de cupom, se teve).
+async function processarCashback(corrida) {
+  if (!firebaseReady || !db || !corrida?.passageiroId) return;
+  if (corrida.categoria !== 'x') return;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, 'config', 'cashback'));
+    if (!snap.exists()) return;
+    const cfg = snap.data();
+    if (cfg.ativo === false) return;
+    if (!cfg.percentual || cfg.percentual <= 0) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (cfg.dataInicio && hoje < cfg.dataInicio) return;
+    if (cfg.dataFim && hoje > cfg.dataFim) return;
+
+    const valorCashback = Number(corrida.preco || 0) * (cfg.percentual / 100);
+    if (valorCashback > 0) {
+      await lancarCarteira(corrida.passageiroId, valorCashback, `Cashback (${cfg.percentual}% · Interliga X)`, corrida.id);
+    }
+  } catch (e) {
+    console.warn('[motorista] erro ao processar cashback:', e);
+  }
+}
+
 async function resolverCodigoIndicacao(codigo) {
   if (!firebaseReady || !db || !codigo) return null;
   try {
@@ -1286,8 +1312,17 @@ function finalizarCorrida() {
   if (corrida.formaPagamento === 'carteira' && corrida.passageiroId) {
     lancarCarteira(corrida.passageiroId, -Number(corrida.preco || 0), 'Pagamento de corrida', corrida.id);
   }
+  // Cupom de desconto: o passageiro pagou menos, mas o motorista recebe o valor
+  // cheio — a diferença vira crédito na carteira do motorista, que é abatida
+  // depois no repasse (a comissão da plataforma nesse valor a mais nunca é cobrada
+  // do motorista, é a plataforma que absorve o custo do cupom).
+  if (Number(corrida.descontoCupomValor || 0) > 0 && meuMotoristaId) {
+    lancarCarteira(meuMotoristaId, Number(corrida.descontoCupomValor), 'Crédito de cupom aplicado pelo passageiro' + (corrida.cupomCodigo ? ` (${corrida.cupomCodigo})` : ''), corrida.id);
+  }
   // Recompensa de indicação (bônus de quem indicou esse passageiro)
   processarRecompensaIndicacao(corrida);
+  // Cashback da corrida (só Interliga X, se o programa estiver ativo)
+  processarCashback(corrida);
 
   state.corridaAtual = null;
   state.corridaAtualId = null;
@@ -1300,7 +1335,7 @@ function finalizarCorrida() {
   sequenciaRotaMotorista = [];
   indiceRotaAtualMotorista = 0;
 
-  showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.preco || 18).toFixed(2).replace('.', ','));
+  showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.precoOriginal || corrida.preco || 18).toFixed(2).replace('.', ','));
   if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
   abrirTelaAvaliarPassageiro(corrida.passageiroId, corrida.passageiroNome, corrida.id);
   atualizarStatsHome();
