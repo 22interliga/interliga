@@ -448,6 +448,20 @@ textarea.inp { resize: vertical; }
               <button class="pbtn" onclick="salvarConfigIndicacao()">Salvar</button>
             </div>
 
+            <div class="card" style="margin-bottom:14px;">
+              <div class="ct" style="margin-bottom:10px;">💸 Cashback (Interliga X)</div>
+              <p style="color:var(--t2);font-size:12px;margin-bottom:12px;">Percentual do valor pago (já com desconto de cupom, se houver) que volta pra Carteira do passageiro em toda corrida da categoria Interliga X, durante o período configurado. O passageiro escolhe quanto desse saldo usar como desconto numa corrida futura.</p>
+              <div class="g2" style="margin-bottom:10px;">
+                <div class="fl"><div class="lbl">PERCENTUAL (%)</div><input class="inp" type="number" id="cashback-percentual" value="0" min="0" max="100" step="0.5"/></div>
+                <div class="fl"><div class="lbl">ATIVO</div><select class="inp" id="cashback-ativo"><option value="true">Sim</option><option value="false">Não</option></select></div>
+              </div>
+              <div class="g2" style="margin-bottom:14px;">
+                <div class="fl"><div class="lbl">VÁLIDO DE</div><input class="inp" type="date" id="cashback-data-inicio"/></div>
+                <div class="fl"><div class="lbl">VÁLIDO ATÉ</div><input class="inp" type="date" id="cashback-data-fim"/></div>
+              </div>
+              <button class="pbtn" onclick="salvarConfigCashback()">Salvar</button>
+            </div>
+
             <div class="card">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
                 <div class="ct">Repasses por Motorista</div>
@@ -759,7 +773,8 @@ textarea.inp { resize: vertical; }
           <div class="section" id="s-cupons">
             <div class="section-header"><div class="section-title">🎁 Cupons</div><button class="pbtn" onclick="addCupom()">+ Novo Cupom</button></div>
             <div class="card" id="form-cupom" style="display:none;margin-bottom:14px;">
-              <div class="ct" style="margin-bottom:14px;">Novo Cupom</div>
+              <div class="ct" style="margin-bottom:14px;" id="form-cupom-titulo">Novo Cupom</div>
+              <input type="hidden" id="cupom-editando-id" value="">
               <div class="g2" style="margin-bottom:10px;">
                 <div class="fl"><div class="lbl">CÓDIGO</div><input class="inp" id="cupom-codigo" placeholder="Ex: PRIMEIRAVIAGEM" style="text-transform:uppercase"/></div>
                 <div class="fl"><div class="lbl">TIPO</div><select class="inp" id="cupom-tipo"><option value="percent">Percentual (%)</option><option value="fixed">Valor fixo (R$)</option><option value="free">Corrida grátis</option></select></div>
@@ -770,11 +785,11 @@ textarea.inp { resize: vertical; }
               </div>
               <div class="g2" style="margin-bottom:14px;">
                 <div class="fl"><div class="lbl">VÁLIDO ATÉ</div><input class="inp" id="cupom-validade" type="date"/></div>
-                <div class="fl"><div class="lbl">DESTINATÁRIO</div><select class="inp"><option>Todos</option><option>Novos usuários</option><option>Passageiros</option></select></div>
+                <div class="fl"><div class="lbl">DESTINATÁRIO</div><select class="inp" id="cupom-destinatario"><option value="todos">Todos</option><option value="novos">Novos usuários</option><option value="passageiros">Passageiros</option></select></div>
               </div>
               <div style="display:flex;gap:8px;">
                 <button class="pbtn" onclick="salvarCupom()">💾 Salvar</button>
-                <button class="pbtn" style="background:var(--s2);color:var(--t2)" onclick="document.getElementById('form-cupom').style.display='none'">Cancelar</button>
+                <button class="pbtn" style="background:var(--s2);color:var(--t2)" onclick="fecharFormCupom()">Cancelar</button>
               </div>
             </div>
             <div class="card">
@@ -782,9 +797,7 @@ textarea.inp { resize: vertical; }
                 <table>
                   <thead><tr><th>CÓDIGO</th><th>DESCONTO</th><th>USOS</th><th>VÁLIDO ATÉ</th><th>STATUS</th><th>AÇÕES</th></tr></thead>
                   <tbody id="cupons-tbody">
-                    <tr><td><b>PRIMEIRAVEZ</b></td><td>100% (grátis)</td><td>847/∞</td><td>31/12/2026</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn" onclick="showToast('✏️ Editando...')">✏️</span> <span class="icon-btn" onclick="showToast('🚫 Desativado!')">🚫</span></td></tr>
-                    <tr><td><b>AMIGO10</b></td><td>10%</td><td>234/500</td><td>30/06/2026</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn">✏️</span> <span class="icon-btn">🚫</span></td></tr>
-                    <tr><td><b>INTERLIGA20</b></td><td>R$ 20,00</td><td>500/500</td><td>01/06/2026</td><td><span class="badge red">Expirado</span></td><td><span class="icon-btn">✏️</span> <span class="icon-btn">🗑️</span></td></tr>
+                    <tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Carregando cupons...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1381,7 +1394,8 @@ function showSection(id,navEl){
     motoristas: carregarMotoristas,
     corridas: carregarCorridas,
     financeiro: carregarFinanceiro,
-    repasses: () => { carregarRepasses(); carregarConfigIndicacao(); },
+    repasses: () => { carregarRepasses(); carregarConfigIndicacao(); carregarConfigCashback(); },
+    cupons: carregarCupons,
     monitor: carregarMonitoramento,
     franqueados: carregarFranqueados,
     'mapa-calor': carregarMapaCalor,
@@ -2651,18 +2665,146 @@ async function alterarSenhaAdmin(){
 }
 
 // Cupons
-function addCupom(){ const f=document.getElementById('form-cupom'); if(f) f.style.display=f.style.display==='none'?'block':'none'; }
-function salvarCupom(){
-  const cod=(document.getElementById('cupom-codigo')?.value||'').trim().toUpperCase();
-  if(!cod){showToast('⚠️ Informe o código!');return;}
-  const tb=document.getElementById('cupons-tbody');
-  if(tb){
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td><b>${cod}</b></td><td>${document.getElementById('cupom-valor')?.value||'—'}</td><td>0/∞</td><td>${document.getElementById('cupom-validade')?.value||'—'}</td><td><span class="badge green">Ativo</span></td><td><span class="icon-btn">✏️</span> <span class="icon-btn" onclick="this.closest('tr').remove()">🗑️</span></td>`;
-    tb.insertBefore(tr,tb.firstChild);
+function addCupom(){
+  document.getElementById('cupom-editando-id').value = '';
+  document.getElementById('form-cupom-titulo').textContent = 'Novo Cupom';
+  document.getElementById('cupom-codigo').value = '';
+  document.getElementById('cupom-tipo').value = 'percent';
+  document.getElementById('cupom-valor').value = '';
+  document.getElementById('cupom-usos').value = '';
+  document.getElementById('cupom-validade').value = '';
+  document.getElementById('cupom-destinatario').value = 'todos';
+  const f=document.getElementById('form-cupom');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function fecharFormCupom(){
+  document.getElementById('form-cupom').style.display = 'none';
+}
+
+async function salvarCupom(){
+  const cod = (document.getElementById('cupom-codigo')?.value || '').trim().toUpperCase();
+  const tipo = document.getElementById('cupom-tipo')?.value || 'percent';
+  const valor = Number(document.getElementById('cupom-valor')?.value) || 0;
+  const usosMaximos = Number(document.getElementById('cupom-usos')?.value) || 0; // 0 = ilimitado
+  const validoAte = document.getElementById('cupom-validade')?.value || '';
+  const destinatario = document.getElementById('cupom-destinatario')?.value || 'todos';
+  const editandoId = document.getElementById('cupom-editando-id')?.value || '';
+
+  if (!cod) { showToast('⚠️ Informe o código!'); return; }
+  if (!dbAdmin) { showToast('⚠️ Sem conexão com o servidor'); return; }
+
+  try {
+    if (editandoId) {
+      await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'cupons', editandoId), {
+        codigo: cod, tipo, valor, usosMaximos, validoAte, destinatario,
+        atualizadoEm: fbAdmin.serverTimestamp(),
+      });
+      showToast('✅ Cupom ' + cod + ' atualizado!');
+    } else {
+      await fbAdmin.addDoc(fbAdmin.collection(dbAdmin, 'cupons'), {
+        codigo: cod, tipo, valor, usosMaximos, validoAte, destinatario,
+        usosAtuais: 0, ativo: true,
+        criadoEm: fbAdmin.serverTimestamp(),
+      });
+      showToast('✅ Cupom ' + cod + ' criado!');
+    }
+    fecharFormCupom();
+    carregarCupons();
+  } catch (e) {
+    console.error('[admin] erro ao salvar cupom:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
   }
-  document.getElementById('form-cupom').style.display='none';
-  showToast('✅ Cupom '+cod+' criado!');
+}
+
+function formatDataBR(dataIso){
+  if (!dataIso) return '—';
+  const [ano, mes, dia] = dataIso.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
+function formatDescontoCupom(c){
+  if (c.tipo === 'free') return 'Corrida grátis';
+  if (c.tipo === 'fixed') return 'R$ ' + Number(c.valor||0).toFixed(2).replace('.', ',');
+  return Number(c.valor||0) + '%';
+}
+
+async function carregarCupons(){
+  if (!dbAdmin) return;
+  const tbody = document.getElementById('cupons-tbody');
+  try {
+    const snap = await fbAdmin.getDocs(fbAdmin.collection(dbAdmin, 'cupons'));
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2);padding:24px;">Nenhum cupom criado ainda</td></tr>';
+      return;
+    }
+    const hoje = new Date().toISOString().slice(0, 10);
+    tbody.innerHTML = snap.docs.map(d => {
+      const c = d.data();
+      const expirado = c.validoAte && c.validoAte < hoje;
+      const statusHtml = expirado
+        ? '<span class="badge red">Expirado</span>'
+        : (c.ativo !== false ? '<span class="badge green">Ativo</span>' : '<span class="badge red">Inativo</span>');
+      const btnToggle = expirado
+        ? ''
+        : `<span class="icon-btn" title="${c.ativo!==false?'Desativar':'Ativar'}" onclick="alternarStatusCupom('${d.id}', ${c.ativo!==false})">${c.ativo!==false?'🚫':'✅'}</span> `;
+      return `<tr>
+        <td><b>${c.codigo}</b></td>
+        <td>${formatDescontoCupom(c)}</td>
+        <td>${c.usosAtuais||0}/${c.usosMaximos>0?c.usosMaximos:'∞'}</td>
+        <td>${formatDataBR(c.validoAte)}</td>
+        <td>${statusHtml}</td>
+        <td><span class="icon-btn" title="Editar" onclick="editarCupom('${d.id}')">✏️</span> ${btnToggle}<span class="icon-btn" title="Excluir" onclick="excluirCupom('${d.id}')">🗑️</span></td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    console.error('[admin] erro ao carregar cupons:', e);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px;">⚠️ Erro ao carregar — ${e.code||e.message}</td></tr>`;
+  }
+}
+
+async function editarCupom(id){
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'cupons', id));
+    if (!snap.exists()) { showToast('⚠️ Cupom não encontrado'); return; }
+    const c = snap.data();
+    document.getElementById('cupom-editando-id').value = id;
+    document.getElementById('form-cupom-titulo').textContent = 'Editar Cupom';
+    document.getElementById('cupom-codigo').value = c.codigo || '';
+    document.getElementById('cupom-tipo').value = c.tipo || 'percent';
+    document.getElementById('cupom-valor').value = c.valor || '';
+    document.getElementById('cupom-usos').value = c.usosMaximos || '';
+    document.getElementById('cupom-validade').value = c.validoAte || '';
+    document.getElementById('cupom-destinatario').value = c.destinatario || 'todos';
+    document.getElementById('form-cupom').style.display = 'block';
+  } catch (e) {
+    console.error('[admin] erro ao abrir cupom para edição:', e);
+    showToast('⚠️ Erro ao carregar cupom — ' + (e.code || e.message));
+  }
+}
+
+async function alternarStatusCupom(id, estaAtivo){
+  try {
+    await fbAdmin.updateDoc(fbAdmin.doc(dbAdmin, 'cupons', id), { ativo: !estaAtivo });
+    showToast(estaAtivo ? '🚫 Cupom desativado' : '✅ Cupom ativado');
+    carregarCupons();
+  } catch (e) {
+    console.error('[admin] erro ao alternar status do cupom:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
+async function excluirCupom(id){
+  if (!confirm('Excluir esse cupom? Essa ação não pode ser desfeita.')) return;
+  try {
+    await fbAdmin.deleteDoc(fbAdmin.doc(dbAdmin, 'cupons', id));
+    showToast('🗑️ Cupom excluído');
+    carregarCupons();
+  } catch (e) {
+    console.error('[admin] erro ao excluir cupom:', e);
+    showToast('⚠️ Erro ao excluir — ' + (e.code || e.message));
+  }
 }
 
 // Anúncios
@@ -3112,6 +3254,36 @@ async function salvarConfigIndicacao(){
   }
 }
 
+async function carregarConfigCashback(){
+  if (!dbAdmin) return;
+  try {
+    const snap = await fbAdmin.getDoc(fbAdmin.doc(dbAdmin, 'config', 'cashback'));
+    const dados = snap.exists() ? snap.data() : { percentual: 0, ativo: true, dataInicio: '', dataFim: '' };
+    document.getElementById('cashback-percentual').value = dados.percentual || 0;
+    document.getElementById('cashback-ativo').value = dados.ativo === false ? 'false' : 'true';
+    document.getElementById('cashback-data-inicio').value = dados.dataInicio || '';
+    document.getElementById('cashback-data-fim').value = dados.dataFim || '';
+  } catch (e) {
+    console.warn('[admin] erro ao carregar config de cashback:', e);
+  }
+}
+
+async function salvarConfigCashback(){
+  const percentual = Number(document.getElementById('cashback-percentual').value) || 0;
+  const ativo = document.getElementById('cashback-ativo').value === 'true';
+  const dataInicio = document.getElementById('cashback-data-inicio').value || '';
+  const dataFim = document.getElementById('cashback-data-fim').value || '';
+  try {
+    await fbAdmin.setDoc(fbAdmin.doc(dbAdmin, 'config', 'cashback'), {
+      percentual, ativo, dataInicio, dataFim, atualizadoEm: fbAdmin.serverTimestamp(),
+    });
+    showToast('✅ Cashback salvo!');
+  } catch (e) {
+    console.error('[admin] erro ao salvar config de cashback:', e);
+    showToast('⚠️ Erro ao salvar — ' + (e.code || e.message));
+  }
+}
+
 async function salvarComissaoPlataforma(){
   const percentual = Number(document.getElementById('rep-comissao-percentual').value);
   if (isNaN(percentual) || percentual < 0 || percentual > 100) { showToast('⚠️ Informe um percentual válido (0 a 100)'); return; }
@@ -3140,6 +3312,8 @@ async function carregarRepasses(){
     const linhas = motoristas.map(m => {
       const corridasMotorista = corridas.filter(c => c.motoristaId === m.id && c.status === 'finalizada');
       // Dinheiro/Pix: o motorista já recebeu direto do passageiro, na hora
+      // (valor JÁ com desconto de cupom aplicado, se houver — é o que o passageiro
+      // realmente pagou em mãos)
       const recebidoDireto = corridasMotorista
         .filter(c => !c.formaPagamento || c.formaPagamento === 'dinheiro' || c.formaPagamento === 'pix')
         .reduce((acc, c) => acc + Number(c.preco || 0), 0);
@@ -3148,20 +3322,32 @@ async function carregarRepasses(){
         .filter(c => c.formaPagamento === 'cartao' || c.formaPagamento === 'carteira')
         .reduce((acc, c) => acc + Number(c.preco || 0), 0);
 
-      const ganhoBruto = recebidoDireto + recebidoPlataforma;
-      const comissao = ganhoBruto * (comissaoPct / 100);
-      // Saldo: positivo = plataforma deve ao motorista (ganhou em cartão, ainda não recebeu);
-      // negativo = motorista deve à plataforma (recebeu em dinheiro/pix, e a comissão sai desse valor)
-      const saldoBruto = recebidoPlataforma - comissao;
+      // Comissão calculada sobre o valor CHEIO da corrida (sem desconto de cupom)
+      // — o motorista nunca "paga" o cupom do próprio bolso, quem absorve é a
+      // plataforma via o crédito abaixo.
+      const ganhoBrutoOriginal = corridasMotorista.reduce((acc, c) => acc + Number(c.precoOriginal || c.preco || 0), 0);
+      const comissao = ganhoBrutoOriginal * (comissaoPct / 100);
+      // Crédito de cupom + cashback: diferença entre o valor cheio e o que o
+      // passageiro realmente pagou, devolvida ao motorista via repasse.
+      const creditoCupom = corridasMotorista.reduce((acc, c) => acc + Number(c.descontoCupomValor || 0) + Number(c.cashbackUsado || 0), 0);
+      // Saldo: positivo = plataforma deve ao motorista; negativo = motorista deve à plataforma.
+      const saldoBruto = recebidoPlataforma - comissao + creditoCupom;
       const ajuste = pagos[m.id] || 0; // valor já acertado (pago ou cobrado), registrado pelo admin
       const saldo = saldoBruto - ajuste;
+
+      const corridasCartao = corridasMotorista.filter(c => c.formaPagamento === 'cartao' || c.formaPagamento === 'carteira').length;
+      const corridasComCupom = corridasMotorista.filter(c => c.cupomCodigo).length;
+      const corridasComCashback = corridasMotorista.filter(c => Number(c.cashbackUsado || 0) > 0).length;
 
       totalRecebidoDiretoGeral += recebidoDireto;
       totalRecebidoPlataformaGeral += recebidoPlataforma;
       totalComissaoGeral += comissao;
       totalAjusteGeral += ajuste;
 
-      return { id: m.id, nome: m.nome || 'Sem nome', recebidoDireto, recebidoPlataforma, comissao, saldo };
+      return {
+        id: m.id, nome: m.nome || 'Sem nome', celular: m.celular, recebidoDireto, recebidoPlataforma, comissao, saldo,
+        totalCorridas: corridasMotorista.length, corridasCartao, corridasComCupom, corridasComCashback, creditoCupom,
+      };
     }).filter(l => (l.recebidoDireto + l.recebidoPlataforma) > 0);
 
     document.getElementById('rep-total-bruto').textContent = formatMoeda(totalRecebidoDiretoGeral + totalRecebidoPlataformaGeral);
@@ -3184,10 +3370,10 @@ async function carregarRepasses(){
         ? '—'
         : `<button class="pbtn" onclick="registrarAcertoRepasse('${l.id}', ${l.saldo})">${l.saldo > 0 ? 'Marcar pago' : 'Marcar cobrado'}</button>`;
       const whatsapp = l.celular
-        ? `<span class="icon-btn" title="Enviar via WhatsApp" onclick="enviarRepasseWhatsApp('${l.nome}','${l.celular}',${l.saldo})">📲</span>`
+        ? `<span class="icon-btn" title="Enviar via WhatsApp" onclick='enviarRepasseWhatsApp(${JSON.stringify(l)})'>📲</span>`
         : '';
       return `<tr>
-        <td><input type="checkbox" class="repasse-check" data-id="${l.id}" data-nome="${l.nome}" data-celular="${l.celular||''}" data-saldo="${l.saldo}"> <b>${l.nome}</b></td>
+        <td><input type="checkbox" class="repasse-check" data-info='${JSON.stringify(l).replace(/'/g, "&apos;")}'> <b>${l.nome}</b></td>
         <td>${formatMoeda(l.recebidoDireto)}</td>
         <td>${formatMoeda(l.recebidoPlataforma)}</td>
         <td style="color:var(--t2);">${formatMoeda(l.comissao)}</td>
@@ -3218,17 +3404,36 @@ async function registrarAcertoRepasse(motoristaId, saldoAtual){
   }
 }
 
-function montarMensagemRepasse(nome, saldo) {
+// Monta o mini-relatório do motorista: quantas corridas, quantas no cartão,
+// quantas com cupom aplicado, quanto de crédito de cupom, e o saldo final.
+function montarMensagemRepasse(l) {
   const data = new Date().toLocaleDateString('pt-BR');
-  if (Math.abs(saldo) < 0.01) return `Olá ${nome}! Seu repasse Interliga está em dia até ${data}. ✅`;
-  if (saldo > 0) return `Olá ${nome}! Seu repasse Interliga de ${formatMoeda(saldo)} está disponível. Entre em contato para combinar a transferência. 💰 (${data})`;
-  return `Olá ${nome}! Há um saldo pendente de ${formatMoeda(Math.abs(saldo))} a acertar com a plataforma Interliga. Entre em contato. (${data})`;
+  const linhas = [`Olá ${l.nome}! Aqui está seu resumo Interliga até ${data}:`, ''];
+  linhas.push(`🚗 Corridas realizadas: ${l.totalCorridas || 0}`);
+  if (l.corridasCartao > 0) linhas.push(`💳 No cartão: ${l.corridasCartao}`);
+  if (l.corridasComCupom > 0 || l.corridasComCashback > 0) {
+    const partes = [];
+    if (l.corridasComCupom > 0) partes.push(`${l.corridasComCupom} com cupom`);
+    if (l.corridasComCashback > 0) partes.push(`${l.corridasComCashback} com cashback`);
+    linhas.push(`🎁 Descontos aplicados: ${partes.join(' · ')} (crédito de ${formatMoeda(l.creditoCupom)} pra você, sem custo nenhum)`);
+  }
+  linhas.push('');
+  if (Math.abs(l.saldo) < 0.01) {
+    linhas.push('✅ Seu repasse está em dia.');
+  } else if (l.saldo > 0) {
+    linhas.push(`💰 Valor a receber: ${formatMoeda(l.saldo)}`);
+    linhas.push('Entre em contato para combinar a transferência.');
+  } else {
+    linhas.push(`⚠️ Saldo pendente a acertar: ${formatMoeda(Math.abs(l.saldo))}`);
+    linhas.push('Entre em contato com a plataforma.');
+  }
+  return linhas.join('\n');
 }
 
-function enviarRepasseWhatsApp(nome, celular, saldo) {
-  const numero = celular.replace(/\D/g, '');
+function enviarRepasseWhatsApp(l) {
+  const numero = String(l.celular || '').replace(/\D/g, '');
   if (!numero || numero.length < 10) { showToast('⚠️ Celular do motorista não cadastrado'); return; }
-  const msg = encodeURIComponent(montarMensagemRepasse(nome, Number(saldo)));
+  const msg = encodeURIComponent(montarMensagemRepasse(l));
   window.open(`https://wa.me/55${numero}?text=${msg}`, '_blank');
 }
 
@@ -3243,8 +3448,8 @@ function enviarRepassesEmMassaWhatsApp() {
   if (selecionados.length === 0) { showToast('⚠️ Marque pelo menos 1 motorista'); return; }
   selecionados.forEach((check, i) => {
     setTimeout(() => {
-      const { nome, celular, saldo } = check.dataset;
-      enviarRepasseWhatsApp(nome, celular, Number(saldo));
+      const l = JSON.parse(check.dataset.info.replace(/&apos;/g, "'"));
+      enviarRepasseWhatsApp(l);
     }, i * 800); // abre uma janela por vez, com intervalo pra não ser bloqueado como popup
   });
 }
