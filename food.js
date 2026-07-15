@@ -340,15 +340,6 @@ function aplicarStatusPedido(pedido) {
     return;
   }
 
-  if (status === 'devolvido') {
-    document.getElementById('food-tracking-title').textContent = '↩️ Pedido devolvido';
-    document.getElementById('food-tracking-sub').textContent = 'O entregador não conseguiu entregar. Entre em contato com o restaurante.';
-    localStorage.removeItem('interliga_pedido_ativo_id');
-    if (pedidoAtivoListenerUnsub) { pedidoAtivoListenerUnsub(); pedidoAtivoListenerUnsub = null; }
-    showToast('↩️ Pedido devolvido — entre em contato com o restaurante');
-    return;
-  }
-
   if (status === 'cancelado') {
     document.getElementById('food-tracking-title').textContent = '🚫 Pedido cancelado';
     document.getElementById('food-tracking-sub').textContent = pedido.restauranteNome || '';
@@ -365,8 +356,6 @@ function aplicarStatusPedido(pedido) {
     entrega: '🛵 Entregador a caminho do restaurante',
     entrega_a_caminho: '🛵 Saiu para entrega!',
     entregue: '🏠 Pedido entregue!',
-    devolvido: '↩️ Pedido devolvido — não foi possível entregar',
-    devolvido: '↩️ Pedido devolvido — contate o suporte',
   };
   document.getElementById('food-tracking-title').textContent = titulos[status] || '';
   document.getElementById('food-tracking-sub').textContent = pedido.restauranteNome || '';
@@ -402,7 +391,12 @@ document.getElementById('btn-call-delivery')?.addEventListener('click', () => {
 const STATUS_LABELS = {
   confirmado: 'Pedido confirmado',
   preparando: 'Preparando seu pedido',
-  entrega: 'Saiu para entrega',
+  aguardando_entregador: 'Procurando entregador',
+  entrega: 'Entregador a caminho do restaurante',
+  entrega_a_caminho: 'Saiu para entrega',
+  entregue: 'Pedido entregue',
+  cancelado: 'Pedido cancelado',
+  devolvido: 'Pedido devolvido',
 };
 
 let bannerPedidoCache = null;
