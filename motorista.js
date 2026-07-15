@@ -2086,6 +2086,13 @@ document.getElementById('btn-sair-motorista')?.addEventListener('click', async (
   }
 });
 
+document.getElementById('btn-trocar-para-passageiro')?.addEventListener('click', () => {
+  // Precisa marcar o papel como 'passageiro' antes de voltar — senão o
+  // index.html detecta 'motorista' salvo e manda de volta pra cá na hora.
+  localStorage.setItem('interliga_papel', 'passageiro');
+  window.location.href = 'index.html';
+});
+
 // ─────────────────────────────────────
 // NOTIFICAÇÕES PUSH — recebe aviso de corrida nova mesmo com o app fechado/
 // em segundo plano (precisa da chave VAPID do Firebase Console, ver abaixo)
