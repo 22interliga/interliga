@@ -1,39 +1,3 @@
-// ═══════════════════════════════════════
-// INTERLIGA — Passageiro
-// app.js — única fonte de verdade, sem duplicação
-// ═══════════════════════════════════════
-
-// ─────────────────────────────────────
-// FIREBASE — carregado dinamicamente, nunca bloqueia o app se falhar
-// ─────────────────────────────────────
-let db = null;
-let firebaseReady = false;
-let fbAppInstancia = null;
-
-// ─────────────────────────────────────
-// LOCALSTORAGE SEGURO — nunca deixa um dado corrompido quebrar a tela
-// ─────────────────────────────────────
-export function getStorageJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw);
-  } catch (e) {
-    console.warn(`[storage] dado corrompido em "${key}", usando valor padrão:`, e);
-    return fallback;
-  }
-}
-
-export function setStorageJSON(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (e) {
-    console.warn(`[storage] falha ao salvar "${key}" (storage cheio?):`, e);
-    return false;
-  }
-}
-let fb = {}; // funções do firestore, preenchidas após carregar
 let meuPassageiroId = null;
 let authPassageiro = null;
 let authModRef = null;
