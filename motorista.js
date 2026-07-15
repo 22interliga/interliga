@@ -2247,6 +2247,12 @@ async function aceitarEntrega(pedidoId) {
     showToast('⚠️ Erro ao aceitar: ' + (e.message || e.code));
   }
 }
+// motorista.js é carregado como <script type="module">, então funções
+// declaradas aqui ficam no escopo do módulo — não em window. O botão dessa
+// tela é criado dinamicamente (innerHTML) com onclick="aceitarEntrega(...)",
+// que roda no escopo global, então precisa dessa exposição explícita pra
+// não dar "aceitarEntrega is not defined" ao clicar.
+window.aceitarEntrega = aceitarEntrega;
 
 document.getElementById('btn-entrega-coletei')?.addEventListener('click', async () => {
   if (!entregaAtualId) return;
