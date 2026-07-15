@@ -2782,6 +2782,10 @@ document.getElementById('btn-sair-passageiro')?.addEventListener('click', async 
   }
 });
 
+document.getElementById('btn-trocar-para-motorista')?.addEventListener('click', () => {
+  window.location.href = 'motorista.html';
+});
+
 // ─────────────────────────────────────
 // NOTIFICAÇÕES PUSH — recebe aviso (ex: "motorista aceitou") mesmo com o
 // app fechado/em segundo plano (precisa da chave VAPID do Firebase Console)
