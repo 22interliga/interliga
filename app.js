@@ -1111,6 +1111,7 @@ function ouvirAceiteCorrida(corridaId) {
         veiculo: data.motoristaVeiculo || '',
         placa: data.motoristaPlaca || '',
         avaliacao: data.motoristaAvaliacao || '4.8',
+        motoristaId: data.motoristaId || null,
       });
       // Guarda o nome do motorista no histórico local assim que aceita (não precisa esperar finalizar)
       atualizarStatusHistoricoLocal('aceita', { motoristaNome: data.motoristaNome || 'Motorista', motoristaVeiculo: data.motoristaVeiculo, motoristaPlaca: data.motoristaPlaca });
@@ -1240,9 +1241,9 @@ async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
   }
 }
 
-function exibirMotoristaEncontrado({ nome, veiculo, placa, avaliacao }) {
+function exibirMotoristaEncontrado({ nome, veiculo, placa, avaliacao, motoristaId }) {
   timestampAceite = Date.now(); // marca o momento do aceite para calcular multa de cancelamento
-  state.motoristaIdDaCorrida = data?.motoristaId || null;
+  state.motoristaIdDaCorrida = motoristaId || null;
   document.getElementById('block-searching').hidden = true;
   const blockDriver = document.getElementById('block-driver');
   blockDriver.hidden = false;
