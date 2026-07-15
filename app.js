@@ -1,3 +1,39 @@
+// ═══════════════════════════════════════
+// INTERLIGA — Passageiro
+// app.js — única fonte de verdade, sem duplicação
+// ═══════════════════════════════════════
+
+// ─────────────────────────────────────
+// FIREBASE — carregado dinamicamente, nunca bloqueia o app se falhar
+// ─────────────────────────────────────
+let db = null;
+let firebaseReady = false;
+let fbAppInstancia = null;
+
+// ─────────────────────────────────────
+// LOCALSTORAGE SEGURO — nunca deixa um dado corrompido quebrar a tela
+// ─────────────────────────────────────
+export function getStorageJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn(`[storage] dado corrompido em "${key}", usando valor padrão:`, e);
+    return fallback;
+  }
+}
+
+export function setStorageJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (e) {
+    console.warn(`[storage] falha ao salvar "${key}" (storage cheio?):`, e);
+    return false;
+  }
+}
+let fb = {}; // funções do firestore, preenchidas após carregar
 let meuPassageiroId = null;
 let authPassageiro = null;
 let authModRef = null;
@@ -92,6 +128,10 @@ const state = {
   categoriaEscolhida: 'x',
   formaPagamento: 'pix',
   precos: { x: null, plus: null, van: null },
+  precosOriginais: { x: null, plus: null, van: null }, // preço cheio, sem desconto de cupom — usado pra repasse do motorista
+  cupomAplicado: null, // { id, codigo, tipo, valor }
+  cashbackDisponivel: 0,
+  cashbackAplicado: 0, // valor em R$ que o passageiro escolheu usar dessa vez
   corridaId: null,
   corridaLocalId: null, // ID fixo do registro no localStorage — nunca muda, mesmo após corridaId virar o ID do Firebase
   corridaListenerUnsub: null,
@@ -407,6 +447,7 @@ function onEnterRide() {
   carregarZonaDemanda(); // sempre recarrega — a demanda muda rápido, diferente dos outros (preço, risco, etc)
   clearInterval(intervalZonaDemanda);
   intervalZonaDemanda = setInterval(carregarZonaDemanda, 20000);
+  carregarSaldoCashbackDisponivel();
 
   if (!inputOrigem._wired) {
     attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
@@ -797,9 +838,11 @@ function calcularPrecos() {
       if (visivel) {
         const priceEl = document.getElementById(`price-${cat}`);
         const etaEl = document.getElementById(`eta-${cat}`);
-        if (priceEl) priceEl.textContent = '🗺️ R$ ' + rotaFixa.preco.toFixed(2).replace('.', ',');
+        const precoComCupom = aplicarDescontoCashback(aplicarDescontoCupom(rotaFixa.preco));
+        if (priceEl) priceEl.textContent = (precoComCupom < rotaFixa.preco ? '🎁 ' : '🗺️ ') + 'R$ ' + precoComCupom.toFixed(2).replace('.', ',');
         if (etaEl) etaEl.textContent = rotaFixa.nome;
-        state.precos[cat] = rotaFixa.preco;
+        state.precos[cat] = precoComCupom;
+        state.precosOriginais[cat] = rotaFixa.preco;
       }
     });
     return; // não calcula mais nada, o preço fixo já está aplicado
@@ -828,20 +871,155 @@ function calcularPrecos() {
     let preco;
     if (semCoordenada) {
       // Sem coordenada — mostra o mínimo de cada categoria individualmente
-      preco = t.minimo;
-      if (priceEl) priceEl.textContent = 'A partir de R$ ' + preco.toFixed(2).replace('.', ',');
+      const minimoOriginal = t.minimo;
+      preco = aplicarDescontoCashback(aplicarDescontoCupom(minimoOriginal));
+      state.precosOriginais[cat] = minimoOriginal;
+      if (priceEl) priceEl.textContent = (preco < minimoOriginal ? '🎁 R$ ' + preco.toFixed(2).replace('.', ',') : 'A partir de R$ ' + preco.toFixed(2).replace('.', ','));
       if (etaEl) etaEl.textContent = 'Combine c/ motorista';
     } else {
       preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
       preco = preco + risco.acrescimo;
       preco = preco * (1 + risco.percentual / 100);
       preco = preco * (1 + percentualHorario / 100);
-      if (priceEl) priceEl.textContent = 'R$ ' + preco.toFixed(2).replace('.', ',');
+      const precoSemCupom = preco;
+      preco = aplicarDescontoCashback(aplicarDescontoCupom(preco));
+      state.precosOriginais[cat] = precoSemCupom;
+      if (priceEl) priceEl.textContent = (preco < precoSemCupom ? '🎁 ' : '') + 'R$ ' + preco.toFixed(2).replace('.', ',');
       if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
     }
     state.precos[cat] = preco;
   }
 }
+
+// Aplica o desconto do cashback escolhido pelo passageiro (valor fixo em R$,
+// nunca deixa o preço ficar negativo).
+function aplicarDescontoCashback(preco) {
+  if (!state.cashbackAplicado) return preco;
+  return Math.max(0, preco - Number(state.cashbackAplicado));
+}
+
+// Aplica o desconto do cupom atualmente aplicado (se houver) sobre um preço-base.
+// Retorna o próprio preço, sem alterações, se não houver cupom válido aplicado.
+function aplicarDescontoCupom(preco) {
+  const c = state.cupomAplicado;
+  if (!c) return preco;
+  if (c.tipo === 'free') return 0;
+  if (c.tipo === 'fixed') return Math.max(0, preco - Number(c.valor || 0));
+  if (c.tipo === 'percent') return Math.max(0, preco * (1 - Number(c.valor || 0) / 100));
+  return preco;
+}
+
+async function handleAplicarCupom() {
+  const input = document.getElementById('input-cupom');
+  const codigo = (input?.value || '').trim().toUpperCase();
+  if (!codigo) { showToast('⚠️ Digite o código do cupom'); return; }
+
+  if (!firebaseReady || !db) { showToast('⚠️ Sem conexão com o servidor, tenta de novo em instantes'); return; }
+
+  try {
+    const snap = await fb.getDocs(fb.query(fb.collection(db, 'cupons'), fb.where('codigo', '==', codigo)));
+    if (snap.empty) { showToast('❌ Cupom não encontrado'); return; }
+
+    const docCupom = snap.docs[0];
+    const c = docCupom.data();
+    const hoje = new Date().toISOString().slice(0, 10);
+
+    if (c.ativo === false) { showToast('❌ Esse cupom não está mais ativo'); return; }
+    if (c.validoAte && c.validoAte < hoje) { showToast('❌ Esse cupom expirou'); return; }
+    if (c.usosMaximos > 0 && (c.usosAtuais || 0) >= c.usosMaximos) { showToast('❌ Esse cupom já atingiu o limite de usos'); return; }
+
+    state.cupomAplicado = { id: docCupom.id, codigo: c.codigo, tipo: c.tipo, valor: c.valor };
+    exibirCupomAplicado();
+    calcularPrecos();
+    showToast('🎁 Cupom ' + c.codigo + ' aplicado!');
+  } catch (e) {
+    console.warn('[passageiro] erro ao validar cupom:', e);
+    showToast('⚠️ Erro ao validar cupom, tenta de novo');
+  }
+}
+
+function removerCupomAplicado() {
+  state.cupomAplicado = null;
+  exibirCupomAplicado();
+  calcularPrecos();
+}
+
+function exibirCupomAplicado() {
+  const info = document.getElementById('cupom-aplicado-info');
+  const input = document.getElementById('input-cupom');
+  const btnAplicar = document.getElementById('btn-aplicar-cupom');
+  if (!info) return;
+  if (state.cupomAplicado) {
+    const c = state.cupomAplicado;
+    const desc = c.tipo === 'free' ? 'corrida grátis' : c.tipo === 'fixed' ? ('R$ ' + Number(c.valor).toFixed(2).replace('.', ',') + ' de desconto') : (Number(c.valor) + '% de desconto');
+    info.innerHTML = `✅ Cupom <b>${c.codigo}</b> aplicado — ${desc} <span style="text-decoration:underline;cursor:pointer;" id="btn-remover-cupom">remover</span>`;
+    info.hidden = false;
+    if (input) input.disabled = true;
+    if (btnAplicar) btnAplicar.hidden = true;
+    document.getElementById('btn-remover-cupom')?.addEventListener('click', removerCupomAplicado);
+  } else {
+    info.hidden = true;
+    if (input) { input.disabled = false; input.value = ''; }
+    if (btnAplicar) btnAplicar.hidden = false;
+  }
+}
+
+document.getElementById('btn-aplicar-cupom')?.addEventListener('click', handleAplicarCupom);
+
+async function carregarSaldoCashbackDisponivel() {
+  if (!meuPassageiroId) return;
+  const saldo = await obterSaldoCarteira(meuPassageiroId);
+  state.cashbackDisponivel = Math.max(0, saldo);
+  const row = document.getElementById('cashback-row');
+  const info = document.getElementById('cashback-saldo-info');
+  if (state.cashbackDisponivel > 0.01) {
+    if (row) row.hidden = false;
+    if (info) {
+      info.hidden = false;
+      info.textContent = '💰 Cashback disponível: R$ ' + state.cashbackDisponivel.toFixed(2).replace('.', ',');
+    }
+  } else {
+    if (row) row.hidden = true;
+    if (info) info.hidden = true;
+  }
+}
+
+function handleAplicarCashback() {
+  const input = document.getElementById('input-cashback-valor');
+  const valor = Number(input?.value || 0);
+  if (!valor || valor <= 0) { showToast('⚠️ Digite quanto do cashback quer usar'); return; }
+  if (valor > state.cashbackDisponivel) { showToast('⚠️ Valor maior que o cashback disponível'); return; }
+  state.cashbackAplicado = valor;
+  exibirCashbackAplicado();
+  calcularPrecos();
+  showToast('💰 Cashback de R$ ' + valor.toFixed(2).replace('.', ',') + ' aplicado!');
+}
+
+function removerCashbackAplicado() {
+  state.cashbackAplicado = 0;
+  exibirCashbackAplicado();
+  calcularPrecos();
+}
+
+function exibirCashbackAplicado() {
+  const info = document.getElementById('cashback-aplicado-info');
+  const input = document.getElementById('input-cashback-valor');
+  const btnAplicar = document.getElementById('btn-aplicar-cashback');
+  if (!info) return;
+  if (state.cashbackAplicado > 0) {
+    info.innerHTML = `✅ Usando <b>R$ ${Number(state.cashbackAplicado).toFixed(2).replace('.', ',')}</b> de cashback <span style="text-decoration:underline;cursor:pointer;" id="btn-remover-cashback">remover</span>`;
+    info.hidden = false;
+    if (input) input.disabled = true;
+    if (btnAplicar) btnAplicar.hidden = true;
+    document.getElementById('btn-remover-cashback')?.addEventListener('click', removerCashbackAplicado);
+  } else {
+    info.hidden = true;
+    if (input) { input.disabled = false; input.value = ''; }
+    if (btnAplicar) btnAplicar.hidden = false;
+  }
+}
+
+document.getElementById('btn-aplicar-cashback')?.addEventListener('click', handleAplicarCashback);
 
 document.getElementById('category-list')?.addEventListener('click', (e) => {
   const item = e.target.closest('.category-item');
@@ -865,6 +1043,8 @@ document.getElementById('btn-confirmar-corrida')?.addEventListener('click', asyn
   // Usa o preço calculado — se for 0 (categoria sem preço configurado), usa o mínimo da tabela
   const precoCalculado = state.precos[state.categoriaEscolhida];
   const preco = (precoCalculado !== undefined && precoCalculado !== null) ? precoCalculado : 10;
+  const precoOriginalCalculado = state.precosOriginais[state.categoriaEscolhida];
+  const precoOriginal = (precoOriginalCalculado !== undefined && precoOriginalCalculado !== null) ? precoOriginalCalculado : preco;
 
   // Ir IMEDIATAMENTE para tracking — nunca bloquear a UI esperando rede
   go('screen-tracking');
@@ -876,21 +1056,31 @@ document.getElementById('btn-confirmar-corrida')?.addEventListener('click', asyn
   document.getElementById('tracking-sub').textContent = 'Aguarde um instante';
 
   // Salvar corrida em background (não bloqueia a navegação)
-  criarCorrida(state.origem, state.destino, preco, state.categoriaEscolhida);
+  criarCorrida(state.origem, state.destino, preco, state.categoriaEscolhida, precoOriginal);
+  state.cupomAplicado = null;
+  exibirCupomAplicado();
+  state.cashbackAplicado = 0;
+  exibirCashbackAplicado();
 });
 
 // ─────────────────────────────────────
 // CRIAR CORRIDA NO FIRESTORE + OUVIR ACEITE
 // ─────────────────────────────────────
-async function criarCorrida(origem, destino, preco, categoria) {
+async function criarCorrida(origem, destino, preco, categoria, precoOriginal) {
   const cidade = (origem.lat && origem.lon)
     ? detectarCidade(origem.lat, origem.lon)
     : (state.passageiroDados?.cidade || 'madre'); // usa cidade do cadastro do passageiro quando sem coordenada
+  const precoCheio = (precoOriginal !== undefined && precoOriginal !== null) ? precoOriginal : preco;
+  const cashbackUsado = Math.min(Number(state.cashbackAplicado || 0), precoCheio);
+  const descontoCupomValor = Math.max(0, precoCheio - preco - cashbackUsado);
   const corridaLocal = {
     origem: origem.texto, destino: destino.texto,
     origemLat: origem.lat, origemLon: origem.lon,
     destinoLat: destino.lat, destinoLon: destino.lon,
-    preco, categoria, cidade,
+    preco, precoOriginal: precoCheio, categoria, cidade,
+    cupomCodigo: state.cupomAplicado?.codigo || null,
+    descontoCupomValor,
+    cashbackUsado,
     formaPagamento: state.formaPagamento || 'pix',
     passageiroId: meuPassageiroId || null,
     passageiroNome: localStorage.getItem('interliga_pax_nome') || 'Passageiro',
@@ -913,6 +1103,19 @@ async function criarCorrida(origem, destino, preco, categoria) {
         criadoEm: fb.serverTimestamp(),
       });
       state.corridaId = docRef.id;
+
+      // Marca o uso do cupom (não bloqueia a criação da corrida se falhar)
+      if (state.cupomAplicado?.id) {
+        fb.updateDoc(fb.doc(db, 'cupons', state.cupomAplicado.id), {
+          usosAtuais: fb.increment(1),
+        }).catch((e) => console.warn('[passageiro] erro ao registrar uso do cupom:', e));
+      }
+
+      // Debita o cashback usado da carteira do passageiro (não bloqueia a corrida se falhar)
+      if (cashbackUsado > 0 && meuPassageiroId) {
+        lancarCarteira(meuPassageiroId, -cashbackUsado, 'Cashback usado numa corrida', docRef.id);
+      }
+
       // Persiste no localStorage — se o app fechar e reabrir, consegue retomar a corrida
       localStorage.setItem('interliga_corrida_ativa', JSON.stringify({
         corridaId: docRef.id,
