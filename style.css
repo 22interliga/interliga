@@ -550,7 +550,7 @@ input:focus-visible,
   box-shadow: var(--shadow-sm);
 }
 .chat-messages {
-  height: 220px;
+  height: 110px;
   overflow-y: auto;
   padding: 10px;
   display: flex;
