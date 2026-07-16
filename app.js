@@ -237,7 +237,7 @@ async function carregarBannersHome() {
     el.innerHTML = snap.docs.map(d => {
       const a = d.data();
       if (a.imagem) {
-        return `<div style="border-radius:12px;overflow:hidden;"><img src="${a.imagem}" style="width:100%;display:block;"></div>`;
+        return `<div class="home-banner-wrap"><img class="home-banner-img" src="${a.imagem}"></div>`;
       }
       return `<div style="background:${a.cor||'#1270C2'};border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
         <span style="font-size:28px;">${a.icone||'🎉'}</span>
