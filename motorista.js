@@ -628,10 +628,17 @@ function iniciarEscutaCorridas() {
             if (!souAlvo) return;
 
             // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila avançou,
-            // mesmo que tenha voltado pro mesmo motorista — por isso usa ofertaExpiraEm, que sempre muda)
+            // mesmo que tenha voltado pro mesmo motorista — por isso usa ofertaExpiraEm, que sempre muda).
+            // Usa um Set (não uma variável única) pra nunca esquecer o que já foi
+            // notificado, mesmo se o listener for reiniciado (ex: ligar/desligar
+            // online) — antes, reiniciar o listener podia re-notificar corridas
+            // antigas que ainda estavam "aguardando" no banco.
             const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.rodadaFila || 0) + ':' + (corrida.ofertaExpiraEm ?? 0);
-            if (state._ultimaOfertaProcessada === chaveOferta) return;
-            state._ultimaOfertaProcessada = chaveOferta;
+            if (!state._ofertasJaNotificadas) state._ofertasJaNotificadas = new Set();
+            if (state._ofertasJaNotificadas.has(chaveOferta)) return;
+            // Nunca notifica de novo uma corrida que já é minha (já aceitei)
+            if (corrida.motoristaId && corrida.motoristaId === meuMotoristaId) return;
+            state._ofertasJaNotificadas.add(chaveOferta);
 
             console.log('[motorista] corrida nova/oferta detectada:', corrida);
             notificarNovaCorrida(corrida);
