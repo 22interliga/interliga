@@ -1,51 +1,22 @@
 // ═══════════════════════════════════════
-// INTERLIGA — Passageiro
-// app.js — única fonte de verdade, sem duplicação
+// INTERLIGA — Motorista
+// motorista.js — única fonte de verdade, isolado do passageiro
 // ═══════════════════════════════════════
 
-// ─────────────────────────────────────
-// FIREBASE — carregado dinamicamente, nunca bloqueia o app se falhar
-// ─────────────────────────────────────
 let db = null;
 let firebaseReady = false;
+let fb = {};
+let authMotorista = null;
+let authModRef = null;
 let fbAppInstancia = null;
 
-// ─────────────────────────────────────
-// LOCALSTORAGE SEGURO — nunca deixa um dado corrompido quebrar a tela
-// ─────────────────────────────────────
-export function getStorageJSON(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw);
-  } catch (e) {
-    console.warn(`[storage] dado corrompido em "${key}", usando valor padrão:`, e);
-    return fallback;
-  }
-}
-
-export function setStorageJSON(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (e) {
-    console.warn(`[storage] falha ao salvar "${key}" (storage cheio?):`, e);
-    return false;
-  }
-}
-let fb = {}; // funções do firestore, preenchidas após carregar
-let meuPassageiroId = null;
-let authPassageiro = null;
-let authModRef = null;
-
 // Espera o Firebase terminar de conectar (até ~8s), em vez de desistir na hora.
-// Cobre o caso de alguém preencher o cadastro rápido demais, antes da conexão terminar.
 function esperarFirebasePronto(timeoutMs = 8000) {
   return new Promise((resolve) => {
-    if (firebaseReady && db && authPassageiro) return resolve(true);
+    if (firebaseReady && db && authMotorista) return resolve(true);
     const inicio = Date.now();
     const intervalo = setInterval(() => {
-      if (firebaseReady && db && authPassageiro) {
+      if (firebaseReady && db && authMotorista) {
         clearInterval(intervalo);
         resolve(true);
       } else if (Date.now() - inicio > timeoutMs) {
@@ -65,42 +36,30 @@ async function initFirebase() {
     const authMod = mockMod;
     fb = firestoreMod;
     authModRef = authMod;
-
     const firebaseConfig = { projectId: 'interliga-demo' };
-
-    const fbApp = initializeApp(firebaseConfig, 'interliga-passageiro-demo');
+    const fbApp = initializeApp(firebaseConfig, 'interliga-motorista-demo');
     fbAppInstancia = fbApp;
     db = fb.getFirestore(fbApp);
-    authPassageiro = authMod.getAuth(fbApp);
+    authMotorista = authMod.getAuth(fbApp);
 
     firebaseReady = true;
-    console.log('✅ [DEMO] Firebase de mentira conectado');
+    console.log('[DEMO] Firebase de mentira conectado (motorista)');
 
-    // Expõe pro food.js usar — são módulos separados (sem import circular entre eles)
-    window.db = db;
-    window.fb = fb;
-    window.firebaseReady = true;
-
-    // Login automático — modo demo pula a senha de verdade, qualquer clique loga
-    authMod.onAuthStateChanged(authPassageiro, (user) => {
+    // Login automático — modo demo pula a senha de verdade
+    authMod.onAuthStateChanged(authMotorista, (user) => {
       if (user) {
-        _loginEmAndamento = false; // login confirmado — limpa a flag
-        meuPassageiroId = user.uid;
-        window.meuPassageiroId = user.uid;
-        verificarCadastroPassageiro();
+        meuMotoristaId = user.uid;
+        verificarCadastroMotorista();
       } else {
-        meuPassageiroId = null;
-        window.meuPassageiroId = null;
+        meuMotoristaId = null;
         setTimeout(() => {
-          if (meuPassageiroId) return; // sessão restaurou, ignora
-          if (_loginEmAndamento) return; // login em andamento, não redireciona
-          if (localStorage.getItem('interliga_papel') === 'passageiro') {
-            const telaAtual = state.currentScreen;
-            if (telaAtual !== 'screen-login-passageiro' &&
-                telaAtual !== 'screen-cadastro-passageiro' &&
-                telaAtual !== 'screen-role-choice') {
-              go('screen-login-passageiro');
-            }
+          if (meuMotoristaId) return;
+          const telaAtual = document.querySelector('.screen[data-active="true"]')?.id;
+          const processandoLogin = document.getElementById('btn-fazer-login-motorista')?.disabled;
+          if (!processandoLogin &&
+              telaAtual !== 'screen-cadastro-motorista' &&
+              telaAtual !== 'screen-login-motorista') {
+            go('screen-login-motorista');
           }
         }, 800);
       }
@@ -111,437 +70,37 @@ async function initFirebase() {
   }
 }
 
-// ─────────────────────────────────────
-// ESTADO GLOBAL DA APLICAÇÃO
-// ─────────────────────────────────────
-const state = {
-  currentScreen: 'screen-splash',
-  origem: null,        // { texto, lat, lon }
-  destino: null,        // { texto, lat, lon }
-  categoriaEscolhida: 'x',
-  formaPagamento: 'pix',
-  precos: { x: null, plus: null, van: null },
-  precosOriginais: { x: null, plus: null, van: null }, // preço cheio, sem desconto de cupom — usado pra repasse do motorista
-  cupomAplicado: null, // { id, codigo, tipo, valor }
-  cashbackDisponivel: 0,
-  cashbackAplicado: 0, // valor em R$ que o passageiro escolheu usar dessa vez
-  corridaId: null,
-  corridaLocalId: null, // ID fixo do registro no localStorage — nunca muda, mesmo após corridaId virar o ID do Firebase
-  corridaListenerUnsub: null,
-  chatListenerUnsub: null,
-};
-let timestampAceite = null; // marcado quando motorista aceita; usado p/ calcular multa de cancelamento
-
-// ─────────────────────────────────────
-// NAVEGAÇÃO — função única, sem duplicação
-// ─────────────────────────────────────
-// Telas que NÃO entram no histórico (não faz sentido "voltar" pra elas)
-const TELAS_SEM_HISTORICO_PAX = new Set([
-  'screen-splash','screen-role-choice','screen-login-passageiro',
-  'screen-cadastro-passageiro','screen-aguardando-aprovacao',
-  'screen-rejeitado','screen-bloqueado',
-]);
-const historicoNavPassageiro = [];
-
-export function go(screenId) {
-  const next = document.getElementById(screenId);
-  if (!next) {
-    console.warn('[go] Tela não encontrada:', screenId);
-    return;
-  }
-  const current = document.querySelector('.screen[data-active="true"]');
-  if (current === next) return;
-
-  // Guarda a tela atual no histórico antes de navegar
-  const telaAtual = state.currentScreen;
-  if (telaAtual && !TELAS_SEM_HISTORICO_PAX.has(telaAtual) && !TELAS_SEM_HISTORICO_PAX.has(screenId)) {
-    historicoNavPassageiro.push(telaAtual);
-    history.pushState({ tela: screenId }, '', '');
-  }
-
-  if (current) current.removeAttribute('data-active');
-  next.setAttribute('data-active', 'true');
-  state.currentScreen = screenId;
-
-  // Efeitos colaterais por tela — todos centralizados aqui, sem espalhar
-  const onEnterHandlers = {
-    'screen-home': onEnterHome,
-    'screen-ride': onEnterRide,
-    'screen-schedule': onEnterSchedule,
-    'screen-food-list': () => { if (typeof window.renderRestaurantList === 'function') window.renderRestaurantList(); },
-    'screen-trips': renderTripsScreen,
-  };
-  if (onEnterHandlers[screenId]) onEnterHandlers[screenId]();
-}
-
-// Delegação de clique central — todo elemento com data-go navega
-document.addEventListener('click', (e) => {
-  const target = e.target.closest('[data-go]');
-  if (target) go(target.dataset.go);
-});
-
-// ─────────────────────────────────────
-// TOAST
-// ─────────────────────────────────────
-let toastTimer = null;
-export function showToast(msg, duration = 2400) {
-  const el = document.getElementById('toast');
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.add('is-visible');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('is-visible'), duration);
-}
-
-// ─────────────────────────────────────
-// SAUDAÇÃO DINÂMICA
-// ─────────────────────────────────────
-function saudacaoPorHorario() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Bom dia';
-  if (h < 18) return 'Boa tarde';
-  return 'Boa noite';
-}
-
-// ─────────────────────────────────────
-// MAPA (Leaflet) — home
-// ─────────────────────────────────────
-let homeMapInstance = null;
-let homeMapInitTries = 0;
-
-function onEnterHome() {
-  const greetEl = document.getElementById('home-greeting');
-  if (greetEl) greetEl.textContent = saudacaoPorHorario();
-  initHomeMap();
-  renderLastRide();
-  if (typeof window.atualizarBannerPedidoAtivo === 'function') window.atualizarBannerPedidoAtivo();
-  carregarBannersHome();
-}
-
-async function carregarBannersHome() {
-  const el = document.getElementById('home-banners');
-  if (!el || !firebaseReady || !db) return;
-  try {
-    const snap = await fb.getDocs(fb.query(
-      fb.collection(db, 'anuncios'),
-      fb.where('ativo', '==', true)
-    ));
-    if (snap.empty) { el.innerHTML = ''; return; }
-    el.innerHTML = snap.docs.map(d => {
-      const a = d.data();
-      if (a.imagem) {
-        return `<div class="home-banner-wrap"><img class="home-banner-img" src="${a.imagem}"></div>`;
-      }
-      return `<div style="background:${a.cor||'#1270C2'};border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
-        <span style="font-size:28px;">${a.icone||'🎉'}</span>
-        <div><div style="font-weight:700;color:white;font-size:14px;">${a.titulo}</div>
-        ${a.descricao ? `<div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:2px;">${a.descricao}</div>` : ''}</div>
-      </div>`;
-    }).join('');
-  } catch (e) {
-    el.innerHTML = '';
-  }
-}
-
-function initHomeMap() {
-  if (homeMapInstance) {
-    setTimeout(() => homeMapInstance && homeMapInstance.invalidateSize(), 100);
-    return;
-  }
-  const el = document.getElementById('map-home');
-  if (!el) return;
-
-  const tryInit = () => {
-    if (typeof L === 'undefined') {
-      homeMapInitTries++;
-      if (homeMapInitTries < 40) { setTimeout(tryInit, 150); return; }
-      console.warn('Leaflet não carregou a tempo.');
-      return;
-    }
-    if (el.offsetWidth < 10 || el.offsetHeight < 10) { setTimeout(tryInit, 150); return; }
-
-    homeMapInstance = L.map('map-home', { zoomControl: false, attributionControl: false })
-      .setView([-12.7375, -38.6285], 14); // Madre de Deus, BA
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(homeMapInstance);
-    L.marker([-12.7375, -38.6285]).addTo(homeMapInstance);
-
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        homeMapInstance.setView([latitude, longitude], 15);
-        L.circleMarker([latitude, longitude], { radius: 8, color: '#FF6B00', fillColor: '#FF6B00', fillOpacity: 0.8 }).addTo(homeMapInstance);
-      },
-      () => {}, // silenciosamente ignora se negar permissão
-      { timeout: 8000, maximumAge: 30000, enableHighAccuracy: false }
-    );
-  };
-  tryInit();
-}
-
-// ─────────────────────────────────────
-// GEOCODING REAL — Nominatim (OpenStreetMap)
-// ─────────────────────────────────────
-let estabelecimentosCache = [];
-let estabelecimentosCarregados = false;
-
-async function carregarEstabelecimentos() {
+// Cadastra/atualiza o perfil deste motorista na coleção permanente 'motoristas' —
+// diferente de 'motoristas_disponiveis', que existe só enquanto ele está online.
+// É essa coleção permanente que o Painel Admin usa pra listar todos os motoristas já cadastrados.
+function registrarPerfilMotorista() {
   if (!firebaseReady || !db) return;
-  try {
-    const snap = await fb.getDocs(fb.collection(db, 'estabelecimentos'));
-    estabelecimentosCache = [];
-    snap.forEach(d => estabelecimentosCache.push({ id: d.id, ...d.data() }));
-    estabelecimentosCarregados = true;
-  } catch (e) {
-    console.warn('[passageiro] erro ao carregar estabelecimentos:', e);
-  }
-}
-
-async function buscarEnderecos(termo) {
-  if (!termo || termo.trim().length < 3) return [];
-  const termoBusca = termo.trim().toLowerCase();
-
-  // Estabelecimentos cadastrados pelo admin (mais confiável que o mapa público
-  // pra cidade pequena) aparecem primeiro, se o nome combinar com o que foi digitado.
-  const estabelecimentosEncontrados = estabelecimentosCache
-    .filter(e => (e.nome || '').toLowerCase().includes(termoBusca))
-    .map(e => ({ texto: `📍 ${e.nome}${e.endereco ? ' — ' + e.endereco : ''}`, lat: e.lat, lon: e.lon }));
-
-  try {
-    // viewbox + bounded=0 = prioriza resultados perto de Madre de Deus, mas sem excluir
-    // endereços de outras cidades (diferente de forçar o nome da cidade na busca, que travava
-    // buscas de qualquer lugar fora daqui).
-    const url = `https://nominatim.openstreetmap.org/search?` +
-      `q=${encodeURIComponent(termo)}` +
-      `&format=json&limit=5&countrycodes=br` +
-      `&viewbox=-39.3,-13.3,-38.2,-12.2&bounded=0`;
-    const resp = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
-    const data = await resp.json();
-    const resultadosMapa = data.map(item => ({
-      texto: item.display_name,
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-    }));
-    return [...estabelecimentosEncontrados, ...resultadosMapa].slice(0, 6);
-  } catch (e) {
-    console.warn('Erro no geocoding:', e);
-    return estabelecimentosEncontrados;
-  }
-}
-
-function debounce(fn, wait) {
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), wait);
-  };
-}
-
-let suggestionsTargetInput = null; // qual input está recebendo a sugestão
-
-export function attachAddressAutocomplete(inputEl, onSelect, suggestionsBoxParam) {
-  const suggestionsBox = suggestionsBoxParam || inputEl.closest('.form-card')?.querySelector('.address-suggestions');
-  if (!suggestionsBox) return;
-
-  // Botão "✕" pra limpar o campo de uma vez, em vez de precisar selecionar o texto manualmente
-  // (não duplica em campos que já têm um botão de remover ao lado, como parada extra)
-  const jaTemBotaoProprio = inputEl.parentElement?.querySelector('.stop-remove');
-  let btnLimpar = null;
-  if (!jaTemBotaoProprio) {
-    btnLimpar = document.createElement('span');
-    btnLimpar.className = 'address-clear-btn';
-    btnLimpar.textContent = '✕';
-    inputEl.insertAdjacentElement('afterend', btnLimpar);
-  }
-
-  function atualizarVisibilidadeLimpar() {
-    if (btnLimpar) btnLimpar.style.display = inputEl.value.trim() ? 'flex' : 'none';
-  }
-  atualizarVisibilidadeLimpar();
-
-  if (btnLimpar) {
-    btnLimpar.addEventListener('click', () => {
-      inputEl.value = '';
-      atualizarVisibilidadeLimpar();
-      suggestionsBox.classList.remove('is-open');
-      onSelect(null); // avisa quem está ouvindo que o campo foi limpo, pra resetar o ponto selecionado
-      inputEl.focus();
-    });
-  }
-
-  const search = debounce(async () => {
-    const termo = inputEl.value;
-    const results = await buscarEnderecos(termo);
-    if (results.length === 0) {
-      suggestionsBox.classList.remove('is-open');
-      suggestionsBox.innerHTML = '';
-      return;
-    }
-    suggestionsBox.innerHTML = results.map((r, i) =>
-      `<div class="suggestion-item" data-idx="${i}">${r.texto}</div>`
-    ).join('');
-    suggestionsBox.classList.add('is-open');
-    suggestionsBox._results = results;
-    suggestionsBox._activeInput = inputEl; // marca qual input está usando essa caixa agora
-  }, 400);
-
-  inputEl.addEventListener('focus', () => { suggestionsBox._activeInput = inputEl; });
-  inputEl.addEventListener('input', () => { search(); atualizarVisibilidadeLimpar(); });
-
-  // Quando o passageiro sai do campo sem ter clicado em sugestão nenhuma,
-  // aceita o texto digitado como endereço livre (sem coordenada) —
-  // o motorista vê exatamente o que foi digitado e confirma com o passageiro pelo chat.
-  inputEl.addEventListener('blur', () => {
-    setTimeout(() => { // pequeno delay pra não conflitar com o clique na sugestão
-      const textoAtual = inputEl.value.trim();
-      if (textoAtual && textoAtual.length >= 3) {
-        const resultAtual = suggestionsBox._results?.find(r => r.texto === textoAtual);
-        if (!resultAtual) {
-          // Não veio de uma sugestão — aceita como texto livre sem coordenada
-          onSelect({ texto: textoAtual, lat: null, lon: null });
-        }
-      }
-      suggestionsBox.classList.remove('is-open');
-    }, 200);
-  });
-
-  suggestionsBox.addEventListener('click', (e) => {
-    const item = e.target.closest('.suggestion-item');
-    if (!item) return;
-    // Só aplica se este input for o que está ativo na caixa de sugestões agora
-    if (suggestionsBox._activeInput !== inputEl) return;
-    const idx = parseInt(item.dataset.idx, 10);
-    const result = suggestionsBox._results[idx];
-    inputEl.value = result.texto;
-    suggestionsBox.classList.remove('is-open');
-    atualizarVisibilidadeLimpar();
-    onSelect(result);
-  });
-
-  // Fechar sugestões ao clicar fora
-  const containerPai = inputEl.closest('.form-card') || inputEl.closest('.address-field') || inputEl.parentElement;
-  document.addEventListener('click', (e) => {
-    if (containerPai && !containerPai.contains(e.target)) suggestionsBox.classList.remove('is-open');
-  });
+  fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
+    nome: state.motorista.nome,
+    veiculo: state.motorista.veiculo,
+    placa: state.motorista.placa,
+    avaliacao: state.motorista.avaliacao,
+    atualizadoEm: fb.serverTimestamp(),
+  }, { merge: true }).catch((e) => console.warn('[motorista] erro ao registrar perfil:', e));
 }
 
 // ─────────────────────────────────────
-// TELA: SOLICITAR CORRIDA
+// IDENTIDADE DO MOTORISTA — fixa por dispositivo, usada na fila de prioridade
 // ─────────────────────────────────────
-function onEnterRide() {
-  const inputOrigem = document.getElementById('input-origem');
-  const inputDestino = document.getElementById('input-destino');
-
-  if (!zonasRiscoCarregadas) carregarZonasRisco();
-  if (!tabelaPrecosCarregada) carregarTabelaPrecos();
-  if (!estabelecimentosCarregados) carregarEstabelecimentos();
-  if (!regrasHorarioCarregadas) carregarRegrasHorario();
-  if (!rotasFixasCarregadas) carregarRotasFixasApp();
-  carregarZonaDemanda(); // sempre recarrega — a demanda muda rápido, diferente dos outros (preço, risco, etc)
-  clearInterval(intervalZonaDemanda);
-  intervalZonaDemanda = setInterval(carregarZonaDemanda, 20000);
-  carregarSaldoCashbackDisponivel();
-
-  if (!inputOrigem._wired) {
-    attachAddressAutocomplete(inputOrigem, (r) => { state.origem = r; calcularPrecos(); });
-    inputOrigem._wired = true;
+// Mantido como reserva: se o Firebase falhar totalmente, ainda gera um ID local
+// pra não quebrar funções que dependem de meuMotoristaId.
+function obterMotoristaIdReserva() {
+  let id = localStorage.getItem('interliga_motorista_id');
+  if (!id) {
+    id = 'mot-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('interliga_motorista_id', id);
   }
-  if (!inputDestino._wired) {
-    attachAddressAutocomplete(inputDestino, (r) => { state.destino = r; calcularPrecos(); });
-    inputDestino._wired = true;
-  }
-
-  // Pré-preencher origem com localização atual, se disponível
-  if (!inputOrigem.value) {
-    navigator.geolocation?.getCurrentPosition(async (pos) => {
-      const { latitude, longitude } = pos.coords;
-      try {
-        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-        const data = await resp.json();
-        if (data?.display_name) {
-          inputOrigem.value = data.display_name;
-          state.origem = { texto: data.display_name, lat: latitude, lon: longitude };
-        }
-      } catch (e) {}
-    }, () => {}, { timeout: 8000, maximumAge: 30000, enableHighAccuracy: false });
-  }
+  return id;
 }
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+let meuMotoristaId = null; // definido de verdade pelo login (UID do Firebase Auth)
 
 // ─────────────────────────────────────
-// CIDADES OPERADAS — usado pra marcar automaticamente em qual cidade cada
-// corrida acontece (pelo ponto mais próximo), pra dar pros franqueados verem
-// só o que é da cidade deles.
-// ─────────────────────────────────────
-const CIDADES_INTERLIGA = [
-  { codigo: 'madre',    nome: 'Madre de Deus',          lat: -12.7440, lon: -38.6170 },
-  { codigo: 'sfc',      nome: 'São Francisco do Conde',  lat: -12.6275, lon: -38.6800 },
-  { codigo: 'candeias', nome: 'Candeias',                lat: -12.6678, lon: -38.5506 },
-  { codigo: 'simoes',   nome: 'Simões Filho',            lat: -12.7870, lon: -38.3990 },
-];
-
-function detectarCidade(lat, lon) {
-  if (typeof lat !== 'number' || typeof lon !== 'number') return 'madre';
-  let maisProxima = CIDADES_INTERLIGA[0];
-  let menorDist = haversineKm(lat, lon, maisProxima.lat, maisProxima.lon);
-  for (const c of CIDADES_INTERLIGA.slice(1)) {
-    const d = haversineKm(lat, lon, c.lat, c.lon);
-    if (d < menorDist) { menorDist = d; maisProxima = c; }
-  }
-  return maisProxima.codigo;
-}
-
-let regrasHorarioCache = [];
-let regrasHorarioCarregadas = false;
-
-async function carregarRegrasHorario() {
-  if (!firebaseReady || !db) return;
-  try {
-    const snap = await fb.getDocs(fb.collection(db, 'regras_horario'));
-    regrasHorarioCache = [];
-    snap.forEach(d => regrasHorarioCache.push({ id: d.id, ...d.data() }));
-    regrasHorarioCarregadas = true;
-  } catch (e) {
-    console.warn('[passageiro] erro ao carregar faixas de horário:', e);
-  }
-}
-
-// Soma o percentual de todas as faixas de horário que batem com o momento atual
-// (dia da semana + horário), considerando faixas que cruzam a meia-noite (ex: 22h-05h).
-function calcularPercentualHorario() {
-  const agora = new Date();
-  const diaSemana = agora.getDay(); // 0=domingo ... 6=sábado
-  const horaAtual = agora.getHours() + agora.getMinutes() / 60;
-  let percentual = 0;
-
-  for (const regra of regrasHorarioCache) {
-    if (Array.isArray(regra.dias) && regra.dias.length > 0 && !regra.dias.includes(diaSemana)) continue;
-    const inicio = Number(regra.horaInicio);
-    const fim = Number(regra.horaFim);
-    if (isNaN(inicio) || isNaN(fim)) continue;
-
-    let bate;
-    if (inicio <= fim) {
-      bate = horaAtual >= inicio && horaAtual < fim;
-    } else {
-      // Faixa cruza a meia-noite (ex: 22h às 5h)
-      bate = horaAtual >= inicio || horaAtual < fim;
-    }
-    if (bate) percentual += Number(regra.percentual || 0);
-  }
-  return percentual;
-}
-
-// ─────────────────────────────────────
-// CARTEIRA — saldo calculado por extrato (cada crédito/débito é um registro
-// separado, nunca um número editado direto — mais seguro e fácil de auditar)
+// CARTEIRA — saldo calculado por extrato (mesmo padrão do app.js)
 // ─────────────────────────────────────
 async function obterSaldoCarteira(uid) {
   if (!firebaseReady || !db || !uid) return 0;
@@ -551,7 +110,7 @@ async function obterSaldoCarteira(uid) {
     snap.forEach(d => { saldo += Number(d.data().valor || 0); });
     return saldo;
   } catch (e) {
-    console.warn('[passageiro] erro ao calcular saldo da carteira:', e);
+    console.warn('[motorista] erro ao calcular saldo da carteira:', e);
     return 0;
   }
 }
@@ -564,11 +123,36 @@ async function lancarCarteira(uid, valor, motivo, corridaId = null) {
       criadoEm: fb.serverTimestamp(),
     });
   } catch (e) {
-    console.warn('[passageiro] erro ao lançar na carteira:', e);
+    console.warn('[motorista] erro ao lançar na carteira:', e);
   }
 }
 
-// Procura quem é o dono de um código de indicação (passageiro ou motorista)
+// Credita cashback ao passageiro: só pra corridas da categoria Interliga X,
+// só se o programa estiver ativo e dentro do período configurado no admin.
+// Calculado sobre o valor que o passageiro realmente pagou (já com desconto
+// de cupom, se teve).
+async function processarCashback(corrida) {
+  if (!firebaseReady || !db || !corrida?.passageiroId) return;
+  if (corrida.categoria !== 'x') return;
+  try {
+    const snap = await fb.getDoc(fb.doc(db, 'config', 'cashback'));
+    if (!snap.exists()) return;
+    const cfg = snap.data();
+    if (cfg.ativo === false) return;
+    if (!cfg.percentual || cfg.percentual <= 0) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (cfg.dataInicio && hoje < cfg.dataInicio) return;
+    if (cfg.dataFim && hoje > cfg.dataFim) return;
+
+    const valorCashback = Number(corrida.preco || 0) * (cfg.percentual / 100);
+    if (valorCashback > 0) {
+      await lancarCarteira(corrida.passageiroId, valorCashback, `Cashback (${cfg.percentual}% · Interliga X)`, corrida.id);
+    }
+  } catch (e) {
+    console.warn('[motorista] erro ao processar cashback:', e);
+  }
+}
+
 async function resolverCodigoIndicacao(codigo) {
   if (!firebaseReady || !db || !codigo) return null;
   try {
@@ -580,164 +164,320 @@ async function resolverCodigoIndicacao(codigo) {
     if (!snapMot.empty) return { uid: snapMot.docs[0].id, tipo: 'motorista' };
     return null;
   } catch (e) {
-    console.warn('[passageiro] erro ao resolver código de indicação:', e);
+    console.warn('[motorista] erro ao resolver código de indicação:', e);
     return null;
   }
 }
-let tabelaPrecosCarregada = false;
-let tabelaPrecosCachePorCidade = {};
-let rotasFixasCache = [];
-let rotasFixasCarregadas = false;
 
-async function carregarRotasFixasApp() {
-  if (!firebaseReady || !db) return;
+// Credita a recompensa de indicação de quem indicou o PASSAGEIRO dessa corrida:
+// R$ fixo (configurável) na primeira corrida do indicado, e % (configurável) nas seguintes, pra sempre.
+async function processarRecompensaIndicacao(corrida) {
+  if (!firebaseReady || !db || !corrida?.passageiroId) return;
   try {
-    const snap = await fb.getDocs(fb.collection(db, 'rotas_fixas'));
-    rotasFixasCache = [];
-    snap.forEach(d => rotasFixasCache.push({ id: d.id, ...d.data() }));
-    rotasFixasCarregadas = true;
-    calcularPrecos(); // recalcula se já tem origem/destino
+    const snapPax = await fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId));
+    if (!snapPax.exists()) return;
+    const pax = snapPax.data();
+    if (!pax.indicadoPor?.uid) return; // esse passageiro não foi indicado por ninguém
+
+    const snapConfig = await fb.getDoc(fb.doc(db, 'config', 'indicacao'));
+    const config = snapConfig.exists() ? snapConfig.data() : { valorPrimeiraCorrida: 0, percentualContinuo: 0 };
+
+    if (!pax.bonusIndicacaoPago) {
+      // Primeira corrida do indicado — credita o valor fixo
+      if (config.valorPrimeiraCorrida > 0) {
+        await lancarCarteira(pax.indicadoPor.uid, config.valorPrimeiraCorrida, 'Bônus: primeira corrida de indicado', corrida.id);
+      }
+      await fb.setDoc(fb.doc(db, 'passageiros', corrida.passageiroId), { bonusIndicacaoPago: true }, { merge: true });
+    } else if (config.percentualContinuo > 0) {
+      // Corridas seguintes — credita o percentual sobre o valor da corrida
+      const valorCredito = Number(corrida.preco || 0) * (config.percentualContinuo / 100);
+      if (valorCredito > 0) {
+        await lancarCarteira(pax.indicadoPor.uid, valorCredito, `Indicação: ${config.percentualContinuo}% de corrida`, corrida.id);
+      }
+    }
   } catch (e) {
-    console.warn('[passageiro] erro ao carregar rotas fixas:', e);
+    console.warn('[motorista] erro ao processar recompensa de indicação:', e);
   }
 }
 
-function verificarRotaFixa(textoOrigem, textoDestino) {
-  if (!rotasFixasCache.length) return null;
-  const orig = (textoOrigem || '').toLowerCase();
-  const dest = (textoDestino || '').toLowerCase();
-  for (const rota of rotasFixasCache) {
-    const palavraOrig = (rota.palavraOrigem || '').toLowerCase();
-    const palavraDest = (rota.palavraDestino || '').toLowerCase();
-    const bateuIda = (!palavraOrig || orig.includes(palavraOrig)) && dest.includes(palavraDest);
-    const bateuVolta = palavraOrig && palavraDest && orig.includes(palavraDest) && dest.includes(palavraOrig);
-    if (bateuIda) return { preco: rota.precoIda, nome: rota.nome, categoriaId: rota.categoriaId || null };
-    if (bateuVolta) return { preco: rota.precoVolta || rota.precoIda, nome: rota.nome, categoriaId: rota.categoriaId || null };
-  }
-  return null;
-}
-
-const TABELA_PRECOS_PADRAO = {
-  x:    { bandeirada: 5,  tarifaKm: 2.40, minimo: 8,  kmFixo: 0, valorFixo: 0, multiplicador: 1.0, ativo: true },
-  plus: { bandeirada: 7,  tarifaKm: 3.36, minimo: 12, kmFixo: 0, valorFixo: 0, multiplicador: 1.4, ativo: true },
-  van:  { bandeirada: 10, tarifaKm: 4.80, minimo: 18, kmFixo: 0, valorFixo: 0, multiplicador: 2.0, ativo: true },
+// ─────────────────────────────────────
+// ESTADO
+// ─────────────────────────────────────
+const state = {
+  online: false,
+  corridaAtualId: null,
+  corridaAtual: null,
+  countdownInterval: null,
+  countdownSegundos: 15,
+  corridasListenerUnsub: null,
+  chatListenerUnsub: null,
+  motorista: { nome: 'Motorista', avaliacao: '4.8', veiculo: 'Honda Civic', placa: 'ABC-1234' },
+  historico: [],
 };
 
-async function carregarTabelaPrecos() {
-  if (!firebaseReady || !db) return;
+// ─────────────────────────────────────
+// NAVEGAÇÃO — função única, isolada deste arquivo
+// ─────────────────────────────────────
+const TELAS_SEM_HISTORICO_MOT = new Set([
+  'screen-splash','screen-login-motorista','screen-cadastro-motorista',
+  'screen-aguardando-aprovacao-motorista','screen-rejeitado-motorista','screen-bloqueado-motorista',
+]);
+const historicoNavMotorista = [];
+
+function go(screenId) {
+  const next = document.getElementById(screenId);
+  if (!next) { console.warn('[go-motorista] Tela nao encontrada:', screenId); return; }
+  const current = document.querySelector('.screen[data-active="true"]');
+  if (current === next) return;
+
+  const telaAtual = current?.id;
+  if (telaAtual && !TELAS_SEM_HISTORICO_MOT.has(telaAtual) && !TELAS_SEM_HISTORICO_MOT.has(screenId)) {
+    historicoNavMotorista.push(telaAtual);
+    history.pushState({ tela: screenId }, '', '');
+  }
+
+  if (current) current.removeAttribute('data-active');
+  next.setAttribute('data-active', 'true');
+
+  const onEnterHandlers = {
+    'screen-home': onEnterHome,
+    'screen-ongoing': onEnterOngoing,
+  };
+  if (onEnterHandlers[screenId]) onEnterHandlers[screenId]();
+}
+
+document.addEventListener('click', (e) => {
+  const target = e.target.closest('[data-go]');
+  if (!target) return;
+  const destino = target.dataset.go;
+  // Enquanto a corrida estiver ativa, não deixa sair pra Home/Perfil/etc — sempre volta pro andamento
+  if (state.emCorridaAtiva && destino !== 'screen-ongoing' && !destino.startsWith('screen-avaliar')) {
+    showToast('🚗 Você está numa corrida em andamento');
+    go('screen-ongoing');
+    return;
+  }
+  go(destino);
+});
+
+// ─────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, duration = 2400) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('is-visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('is-visible'), duration);
+}
+
+// ─────────────────────────────────────
+// SOM DE NOVA CORRIDA
+// ─────────────────────────────────────
+let _audioCtx = null;
+
+function getAudioCtx() {
+  if (!_audioCtx || _audioCtx.state === 'closed') {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+// Inicia o contexto de áudio na primeira interação do usuário
+document.addEventListener('click', () => { try { getAudioCtx(); } catch(e) {} }, { once: false });
+document.addEventListener('touchstart', () => { try { getAudioCtx(); } catch(e) {} }, { once: false });
+
+function tocarSomNovaCorrida() {
   try {
-    // Primeiro carrega as categorias dinâmicas do Firebase
-    const snapCats = await fb.getDocs(fb.collection(db, 'categorias_veiculo'));
-    if (!snapCats.empty) {
-      // Converte as categorias dinâmicas pro formato que calcularPrecos() espera
-      const catsFirebase = {};
-      snapCats.forEach(d => {
-        const c = d.data();
-        const codigo = c.codigo || d.id;
-        catsFirebase[codigo] = {
-          bandeirada: Number(c.bandeirada || 0),
-          tarifaKm: Number(c.tarifakm || c.tarifaKm || 0),
-          minimo: Number(c.minimo || c.precoMinimo || 0),
-          kmFixo: Number(c.kmFixo || c.kmfixo || 0),
-          valorFixo: Number(c.valorFixo || c.valorfixo || 0),
-          kmFixo: Number(c.kmFixo || 0),
-          valorFixo: Number(c.valorFixo || 0),
-          multiplicador: Number(c.multiplicador || 1),
-          ativo: c.ativo !== false,
-          nome: c.nome,
-          icone: c.icone,
-        };
-      });
-      // Aplica pra todas as cidades
-      CIDADES_INTERLIGA.forEach(c => {
-        tabelaPrecosCachePorCidade[c.codigo] = catsFirebase;
-      });
+    const ctx = getAudioCtx();
+    const notas = [880, 1100, 880, 1100, 880];
+    let t = ctx.currentTime;
+    notas.forEach(freq => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.5, t + 0.05);
+      g.gain.linearRampToValueAtTime(0, t + 0.2);
+      o.start(t); o.stop(t + 0.22);
+      t += 0.25;
+    });
+  } catch (e) { console.warn('[som] erro:', e); }
+}
+
+// ─────────────────────────────────────
+// HOME — toggle online/offline
+// ─────────────────────────────────────
+function onEnterHome() {
+  atualizarStatsHome();
+  initHomeMapDriver();
+}
+
+document.getElementById('online-toggle')?.addEventListener('click', () => {
+  state.online = !state.online;
+  const btn = document.getElementById('online-toggle');
+  btn.dataset.online = state.online ? 'true' : 'false';
+  btn.querySelector('.online-label').textContent = state.online ? 'Online' : 'Offline';
+
+  if (state.online) {
+    showToast('🟢 Você está online — buscando corridas...');
+    iniciarEscutaCorridas();
+    iniciarDisponibilidade();
+    atualizarGridDemanda();
+    iniciarListenerEntregas();
+  } else {
+    showToast('🔴 Você está offline');
+    pararEscutaCorridas();
+    pararDisponibilidade();
+  }
+});
+
+async function atualizarStatsHome() {
+  const historico = JSON.parse(localStorage.getItem('interliga_motorista_historico') || '[]');
+  document.getElementById('stat-avaliacao').textContent = state.motorista.avaliacao || '—';
+
+  const hoje = new Date().toDateString();
+  const ganhosHoje = historico
+    .filter(c => new Date(c.data).toDateString() === hoje)
+    .reduce((acc, c) => acc + (c.valor || 0), 0);
+  document.getElementById('earnings-today').textContent = 'R$ ' + ganhosHoje.toFixed(2).replace('.', ',');
+
+  // Busca total de corridas do Firebase pra mostrar número real ao motorista
+  if (firebaseReady && db && meuMotoristaId) {
+    fb.getDocs(fb.query(
+      fb.collection(db, 'corridas'),
+      fb.where('motoristaId', '==', meuMotoristaId),
+      fb.where('status', '==', 'finalizada')
+    )).then(snap => {
+      document.getElementById('stat-corridas').textContent = snap.size || historico.length;
+    }).catch(() => {
+      document.getElementById('stat-corridas').textContent = historico.length;
+    });
+  } else {
+    document.getElementById('stat-corridas').textContent = historico.length;
+  }
+}
+
+// ─────────────────────────────────────
+// DISPONIBILIDADE — publica localização do motorista livre pro Firebase,
+// pra que o passageiro consiga montar a fila por proximidade/avaliação.
+// Só roda enquanto o motorista está Online E sem corrida ativa.
+// ─────────────────────────────────────
+let intervalDisponibilidade = null;
+
+function publicarDisponibilidade() {
+  if (!firebaseReady || !db || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      fb.setDoc(fb.doc(db, 'motoristas_disponiveis', meuMotoristaId), {
+        nome: state.motorista.nome,
+        avaliacao: state.motorista.avaliacao,
+        cidade: state.motorista.cidade || 'madre',
+        categoria: state.motorista.categoria || 'x',
+        categorias: state.motorista.categorias || [state.motorista.categoria || 'x'],
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        atualizadoEm: fb.serverTimestamp(),
+      }).catch((e) => console.warn('[motorista] erro ao publicar disponibilidade:', e));
+    },
+    () => {},
+    { timeout: 5000 }
+  );
+}
+
+function iniciarDisponibilidade() {
+  publicarDisponibilidade();
+  clearInterval(intervalDisponibilidade);
+  intervalDisponibilidade = setInterval(publicarDisponibilidade, 45000); // atualiza a cada 45s (antes era 20s — reduz consumo de escritas no Firebase)
+}
+
+function pararDisponibilidade() {
+  clearInterval(intervalDisponibilidade);
+  intervalDisponibilidade = null;
+  if (firebaseReady && db) {
+    fb.deleteDoc(fb.doc(db, 'motoristas_disponiveis', meuMotoristaId)).catch(() => {});
+  }
+}
+
+// ─────────────────────────────────────
+// MAPA HOME
+// ─────────────────────────────────────
+let homeMapDriver = null;
+let homeMapDriverTentativas = 0;
+const CIDADES_INTERLIGA_MOT = {
+  madre: [-12.7440, -38.6170],
+  sfc: [-12.6275, -38.6800],
+  candeias: [-12.6678, -38.5506],
+  simoes: [-12.7870, -38.3990],
+};
+
+function initHomeMapDriver() {
+  console.log('[mapa-motorista] initHomeMapDriver chamada. homeMapDriver atual:', homeMapDriver);
+
+  if (homeMapDriver) {
+    setTimeout(() => homeMapDriver.invalidateSize(), 100);
+    return;
+  }
+  const el = document.getElementById('map-home-driver');
+  if (!el) { console.warn('[mapa-motorista] elemento #map-home-driver não encontrado'); return; }
+
+  const tryInit = () => {
+    homeMapDriverTentativas++;
+    if (typeof L === 'undefined') {
+      if (homeMapDriverTentativas < 50) { setTimeout(tryInit, 150); return; }
+      console.warn('[mapa-motorista] Leaflet (L) nunca carregou após várias tentativas');
+      return;
+    }
+    if (el.offsetWidth < 10 || el.offsetHeight < 10) {
+      if (homeMapDriverTentativas < 50) { setTimeout(tryInit, 150); return; }
+      console.warn('[mapa-motorista] elemento sem dimensões visíveis após várias tentativas. width:', el.offsetWidth, 'height:', el.offsetHeight);
+      return;
     }
 
-    // Depois carrega preços específicos por cidade (override das categorias gerais)
-    await Promise.all(CIDADES_INTERLIGA.map(async (c) => {
-      const snap = await fb.getDoc(fb.doc(db, 'precos', c.codigo));
-      if (snap.exists()) tabelaPrecosCachePorCidade[c.codigo] = { ...tabelaPrecosCachePorCidade[c.codigo], ...snap.data() };
-    }));
+    console.log('[mapa-motorista] criando mapa Leaflet agora');
+    homeMapDriver = L.map('map-home-driver', { zoomControl: false, attributionControl: false })
+      .setView([-12.7375, -38.6285], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(homeMapDriver);
 
-    tabelaPrecosCarregada = true;
-    calcularPrecos();
-  } catch (e) {
-    console.warn('[passageiro] erro ao carregar tabela de preços, usando padrão:', e);
-  }
+    navigator.geolocation?.getCurrentPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      homeMapDriver.setView([latitude, longitude], 15);
+      L.circleMarker([latitude, longitude], { radius: 8, color: '#1251B5', fillColor: '#1251B5', fillOpacity: 0.8 }).addTo(homeMapDriver);
+    }, () => {}, { timeout: 5000 });
+
+    // Grid de demanda (hexágonos com multiplicador) — atualiza ao abrir e depois de tempos em tempos
+    atualizarGridDemanda();
+    clearInterval(intervalGridDemanda);
+    intervalGridDemanda = setInterval(atualizarGridDemanda, 30000);
+  };
+  tryInit();
 }
 
 // ─────────────────────────────────────
-// ÁREAS DE RISCO — acréscimo de preço definido pelo admin (por raio no mapa
-// ou por nome de rua/bairro). Vale se a ORIGEM OU O DESTINO cair na área.
+// GRID DE DEMANDA (hexágonos) — mostra visualmente onde tem mais corrida pedida
+// do que motorista disponível, com o multiplicador de preço daquela área.
 // ─────────────────────────────────────
-let zonasRiscoCache = [];
-let zonasRiscoCarregadas = false;
-
-async function carregarZonasRisco() {
-  if (!firebaseReady || !db) return;
-  try {
-    const snap = await fb.getDocs(fb.collection(db, 'zonas_risco'));
-    zonasRiscoCache = [];
-    snap.forEach(d => zonasRiscoCache.push({ id: d.id, ...d.data() }));
-    zonasRiscoCarregadas = true;
-  } catch (e) {
-    console.warn('[passageiro] erro ao carregar áreas de risco:', e);
-  }
-}
-
-function pontoNaZonaRisco(ponto, zona) {
-  if (!ponto) return false;
-  if (zona.tipo === 'raio') {
-    if (typeof ponto.lat !== 'number' || typeof zona.lat !== 'number') return false;
-    const distKm = haversineKm(ponto.lat, ponto.lon, zona.lat, zona.lon);
-    return distKm * 1000 <= Number(zona.raioMetros || 0);
-  }
-  if (zona.tipo === 'nome') {
-    const termo = (zona.termoBusca || '').trim().toLowerCase();
-    if (!termo) return false;
-    return (ponto.texto || '').toLowerCase().includes(termo);
-  }
-  return false;
-}
-
-// Soma o acréscimo (R$) e o percentual de todas as zonas de risco que a origem OU o destino tocam
-function calcularAcrescimoRisco(origem, destino) {
-  let acrescimo = 0, percentual = 0;
-  const zonasAtingidas = [];
-  const cidadeCorrida = detectarCidade(origem?.lat, origem?.lon);
-  for (const zona of zonasRiscoCache) {
-    if (zona.cidade && zona.cidade !== cidadeCorrida) continue; // zona é de outra cidade (franqueado diferente)
-    const bateOrigem = pontoNaZonaRisco(origem, zona);
-    const bateDestino = pontoNaZonaRisco(destino, zona);
-    if (bateOrigem || bateDestino) {
-      acrescimo += Number(zona.acrescimo || 0);
-      percentual += Number(zona.percentual || 0);
-      zonasAtingidas.push(zona.nome || 'Área de risco');
-    }
-  }
-  return { acrescimo, percentual, zonasAtingidas };
-}
-
-// Calcula o valor base da corrida — se a categoria tiver "tarifa fixa até X km" configurada,
-// usa esse valor fixo dentro da faixa e só volta a cobrar por km depois que passar dela.
-function calcularPrecoBase(km, t) {
-  if (t.kmFixo > 0 && t.valorFixo > 0) {
-    if (km <= t.kmFixo) return t.valorFixo;
-    return t.valorFixo + (km - t.kmFixo) * t.tarifaKm;
-  }
-  return t.bandeirada + km * t.tarifaKm;
-}
-
-// ─────────────────────────────────────
-// GRID DE DEMANDA (hexágonos) — mesmo grid que o motorista vê no mapa dele,
-// usado aqui só pra saber o multiplicador da zona de origem da corrida.
-// ─────────────────────────────────────
-const HEX_TAMANHO_METROS = 400;
+const HEX_TAMANHO_METROS = 400; // raio de cada hexágono
 const HEX_METROS_POR_GRAU_LAT = 111320;
 function hexMetrosPorGrauLon(latRef) { return 111320 * Math.cos(latRef * Math.PI / 180); }
+
 function hexLatLonParaXY(lat, lon, latRef, lonRef) {
-  return { x: (lon - lonRef) * hexMetrosPorGrauLon(latRef), y: (lat - latRef) * HEX_METROS_POR_GRAU_LAT };
+  return {
+    x: (lon - lonRef) * hexMetrosPorGrauLon(latRef),
+    y: (lat - latRef) * HEX_METROS_POR_GRAU_LAT,
+  };
+}
+function hexXYParaLatLon(x, y, latRef, lonRef) {
+  return {
+    lat: latRef + y / HEX_METROS_POR_GRAU_LAT,
+    lon: lonRef + x / hexMetrosPorGrauLon(latRef),
+  };
 }
 function hexArredondar(q, r) {
   let x = q, z = r, y = -x - z;
@@ -752,6 +492,19 @@ function hexObterCelula(lat, lon, latRef, lonRef) {
   const r = (2 / 3 * y) / HEX_TAMANHO_METROS;
   return hexArredondar(q, r);
 }
+function hexCelulaParaXY(q, r) {
+  return { x: HEX_TAMANHO_METROS * (Math.sqrt(3) * q + Math.sqrt(3) / 2 * r), y: HEX_TAMANHO_METROS * (3 / 2 * r) };
+}
+function hexCantos(centroX, centroY) {
+  const cantos = [];
+  for (let i = 0; i < 6; i++) {
+    const ang = Math.PI / 180 * (60 * i - 30);
+    cantos.push({ x: centroX + HEX_TAMANHO_METROS * Math.cos(ang), y: centroY + HEX_TAMANHO_METROS * Math.sin(ang) });
+  }
+  return cantos;
+}
+
+// Calcula o multiplicador de uma célula a partir da demanda (corridas aguardando) vs oferta (motoristas livres)
 function calcularMultiplicadorZona(demanda, oferta) {
   if (demanda <= 0) return 1.0;
   if (oferta <= 0) return Math.min(2.0, 1.0 + demanda * 0.25);
@@ -760,620 +513,913 @@ function calcularMultiplicadorZona(demanda, oferta) {
   return Math.min(2.0, 1.0 + (proporcao - 1) * 0.4);
 }
 
-let zonaDemandaCache = new Map(); // chave "cidade_q_r" -> { demanda, oferta }
-let zonaDemandaCarregada = false;
-let intervalZonaDemanda = null;
+function corPorMultiplicador(mult) {
+  if (mult >= 1.7) return '#E8002D';
+  if (mult >= 1.4) return '#FF6B00';
+  if (mult >= 1.1) return '#F5A623';
+  return null; // 1.0x não pinta nada (sem demanda extra)
+}
 
-async function carregarZonaDemanda() {
-  if (!firebaseReady || !db) return;
+let hexagonosNoMapa = [];
+let intervalGridDemanda = null;
+
+async function calcularZonasDemanda() {
+  if (!firebaseReady || !db) return new Map();
+  const latRef = state.motorista.cidade ? (CIDADES_INTERLIGA_MOT[state.motorista.cidade] || [-12.7440, -38.6170])[0] : -12.7440;
+  const lonRef = state.motorista.cidade ? (CIDADES_INTERLIGA_MOT[state.motorista.cidade] || [-12.7440, -38.6170])[1] : -38.6170;
+
+  const zonas = new Map(); // chave "q_r" -> { q, r, demanda, oferta }
+  function celula(q, r) {
+    const chave = q + '_' + r;
+    if (!zonas.has(chave)) zonas.set(chave, { q, r, demanda: 0, oferta: 0 });
+    return zonas.get(chave);
+  }
+
   try {
-    const novoCache = new Map();
     const [snapCorridas, snapMotoristas] = await Promise.all([
       fb.getDocs(fb.query(fb.collection(db, 'corridas'), fb.where('status', '==', 'aguardando'))),
       fb.getDocs(fb.collection(db, 'motoristas_disponiveis')),
     ]);
-    function celula(cidade, q, r) {
-      const chave = cidade + '_' + q + '_' + r;
-      if (!novoCache.has(chave)) novoCache.set(chave, { demanda: 0, oferta: 0 });
-      return novoCache.get(chave);
-    }
     snapCorridas.forEach(d => {
       const c = d.data();
       if (typeof c.origemLat !== 'number') return;
-      const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === (c.cidade || 'madre')) || CIDADES_INTERLIGA[0];
-      const { q, r } = hexObterCelula(c.origemLat, c.origemLon, centro.lat, centro.lon);
-      celula(centro.codigo, q, r).demanda++;
+      if (state.motorista.cidade && c.cidade && c.cidade !== state.motorista.cidade) return;
+      const { q, r } = hexObterCelula(c.origemLat, c.origemLon, latRef, lonRef);
+      celula(q, r).demanda++;
     });
     snapMotoristas.forEach(d => {
       const m = d.data();
       if (typeof m.lat !== 'number') return;
-      const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === (m.cidade || 'madre')) || CIDADES_INTERLIGA[0];
-      const { q, r } = hexObterCelula(m.lat, m.lon, centro.lat, centro.lon);
-      celula(centro.codigo, q, r).oferta++;
+      if (state.motorista.cidade && m.cidade && m.cidade !== state.motorista.cidade) return;
+      const { q, r } = hexObterCelula(m.lat, m.lon, latRef, lonRef);
+      celula(q, r).oferta++;
     });
-    zonaDemandaCache = novoCache;
-    zonaDemandaCarregada = true;
-    calcularPrecos(); // recalcula com a demanda atualizada, se já tinha origem/destino escolhidos
   } catch (e) {
-    console.warn('[passageiro] erro ao carregar demanda por zona:', e);
+    console.warn('[motorista] erro ao calcular zonas de demanda:', e);
   }
+  return { zonas, latRef, lonRef };
 }
 
-function obterMultiplicadorZona(lat, lon, cidade) {
-  const centro = CIDADES_INTERLIGA.find(ci => ci.codigo === cidade) || CIDADES_INTERLIGA[0];
-  const { q, r } = hexObterCelula(lat, lon, centro.lat, centro.lon);
-  const chave = cidade + '_' + q + '_' + r;
-  const dados = zonaDemandaCache.get(chave);
-  if (!dados) return 1.0;
-  return calcularMultiplicadorZona(dados.demanda, dados.oferta);
+async function atualizarGridDemanda() {
+  if (!homeMapDriver || typeof L === 'undefined' || !state.online) return;
+  hexagonosNoMapa.forEach(h => homeMapDriver.removeLayer(h));
+  hexagonosNoMapa = [];
+
+  const { zonas, latRef, lonRef } = await calcularZonasDemanda();
+  zonas.forEach(({ q, r, demanda, oferta }) => {
+    const mult = calcularMultiplicadorZona(demanda, oferta);
+    const cor = corPorMultiplicador(mult);
+    if (!cor) return; // não desenha hexágono pra área sem demanda extra (fica "limpo" o mapa)
+
+    const centro = hexCelulaParaXY(q, r);
+    const cantosLatLon = hexCantos(centro.x, centro.y).map(c => hexXYParaLatLon(c.x, c.y, latRef, lonRef)).map(p => [p.lat, p.lon]);
+
+    const poligono = L.polygon(cantosLatLon, { color: cor, weight: 1, fillColor: cor, fillOpacity: 0.35 }).addTo(homeMapDriver);
+    const centroLatLon = hexXYParaLatLon(centro.x, centro.y, latRef, lonRef);
+    const rotulo = L.marker([centroLatLon.lat, centroLatLon.lon], {
+      icon: L.divIcon({ className: 'hex-label', html: `<div style="background:${cor};color:white;font-weight:700;font-size:11px;padding:3px 7px;border-radius:10px;white-space:nowrap;">${mult.toFixed(1)}x</div>`, iconSize: [40, 20] }),
+    }).addTo(homeMapDriver);
+
+    hexagonosNoMapa.push(poligono, rotulo);
+  });
 }
-
-function calcularPrecos() {
-  if (!state.origem || !state.destino) return;
-
-  // Sem coordenada (endereço texto livre) — mostra o preço mínimo como estimativa
-  const semCoordenada = !state.origem.lat || !state.destino.lat;
-  const km = semCoordenada ? 0 : haversineKm(state.origem.lat, state.origem.lon, state.destino.lat, state.destino.lon);
-  const risco = semCoordenada ? { acrescimo: 0, percentual: 0, zonasAtingidas: [] } : calcularAcrescimoRisco(state.origem, state.destino);
-  const percentualHorario = calcularPercentualHorario();
-  const cidade = semCoordenada ? 'madre' : detectarCidade(state.origem.lat, state.origem.lon);
-  const tabela = tabelaPrecosCachePorCidade[cidade] || TABELA_PRECOS_PADRAO;
-  const multiplicadorZona = semCoordenada ? 1.0 : obterMultiplicadorZona(state.origem.lat, state.origem.lon, cidade);
-
-  // Verifica se bate com uma rota fixa — se sim, aplica o preço tabelado diretamente
-  const rotaFixa = verificarRotaFixa(state.origem.texto, state.destino.texto);
-  if (rotaFixa) {
-    document.querySelectorAll('.category-item').forEach(el => {
-      const cat = el.dataset.cat;
-      // Se a rota é pra uma categoria específica, mostra só ela; senão mostra todas
-      const visivel = !rotaFixa.categoriaId || cat === rotaFixa.categoriaId;
-      el.style.display = visivel ? '' : 'none';
-      if (visivel) {
-        const priceEl = document.getElementById(`price-${cat}`);
-        const etaEl = document.getElementById(`eta-${cat}`);
-        const precoComCupom = aplicarDescontoCashback(aplicarDescontoCupom(rotaFixa.preco));
-        if (priceEl) priceEl.textContent = (precoComCupom < rotaFixa.preco ? '🎁 ' : '🗺️ ') + 'R$ ' + precoComCupom.toFixed(2).replace('.', ',');
-        if (etaEl) etaEl.textContent = rotaFixa.nome;
-        state.precos[cat] = precoComCupom;
-        state.precosOriginais[cat] = rotaFixa.preco;
-      }
-    });
-    return; // não calcula mais nada, o preço fixo já está aplicado
-  }
-
-  // Usa as categorias que vieram do Firebase; se não carregou ainda, usa as 3 padrão
-  const categorias = Object.keys(tabela).length > 0
-    ? Object.keys(tabela)
-    : ['x', 'plus', 'van'];
-
-  // Esconde todos os items primeiro e mostra só os que existem no Firebase
-  document.querySelectorAll('.category-item').forEach(el => el.style.display = 'none');
-
-  for (const cat of categorias) {
-    const t = tabela[cat] || TABELA_PRECOS_PADRAO[cat];
-    const priceEl = document.getElementById(`price-${cat}`);
-    const etaEl = document.getElementById(`eta-${cat}`);
-    const itemEl = document.querySelector(`.category-item[data-cat="${cat}"]`);
-
-    if (t.ativo === false) {
-      if (itemEl) itemEl.style.display = 'none';
-      continue;
-    }
-    if (itemEl) itemEl.style.display = '';
-
-    let preco;
-    if (semCoordenada) {
-      // Sem coordenada — mostra o mínimo de cada categoria individualmente
-      const minimoOriginal = t.minimo;
-      preco = aplicarDescontoCashback(aplicarDescontoCupom(minimoOriginal));
-      state.precosOriginais[cat] = minimoOriginal;
-      if (priceEl) priceEl.textContent = (preco < minimoOriginal ? '🎁 R$ ' + preco.toFixed(2).replace('.', ',') : 'A partir de R$ ' + preco.toFixed(2).replace('.', ','));
-      if (etaEl) etaEl.textContent = 'Combine c/ motorista';
-    } else {
-      preco = Math.max(t.minimo, calcularPrecoBase(km, t)) * Number(t.multiplicador || 1) * multiplicadorZona;
-      preco = preco + risco.acrescimo;
-      preco = preco * (1 + risco.percentual / 100);
-      preco = preco * (1 + percentualHorario / 100);
-      const precoSemCupom = preco;
-      preco = aplicarDescontoCashback(aplicarDescontoCupom(preco));
-      state.precosOriginais[cat] = precoSemCupom;
-      if (priceEl) priceEl.textContent = (preco < precoSemCupom ? '🎁 ' : '') + 'R$ ' + preco.toFixed(2).replace('.', ',');
-      if (etaEl) etaEl.textContent = Math.max(3, Math.round(km * 1.8)) + ' min';
-    }
-    state.precos[cat] = preco;
-  }
-}
-
-// Aplica o desconto do cashback escolhido pelo passageiro (valor fixo em R$,
-// nunca deixa o preço ficar negativo).
-function aplicarDescontoCashback(preco) {
-  if (!state.cashbackAplicado) return preco;
-  return Math.max(0, preco - Number(state.cashbackAplicado));
-}
-
-// Aplica o desconto do cupom atualmente aplicado (se houver) sobre um preço-base.
-// Retorna o próprio preço, sem alterações, se não houver cupom válido aplicado.
-function aplicarDescontoCupom(preco) {
-  const c = state.cupomAplicado;
-  if (!c) return preco;
-  if (c.tipo === 'free') return 0;
-  if (c.tipo === 'fixed') return Math.max(0, preco - Number(c.valor || 0));
-  if (c.tipo === 'percent') return Math.max(0, preco * (1 - Number(c.valor || 0) / 100));
-  return preco;
-}
-
-async function handleAplicarCupom() {
-  const input = document.getElementById('input-cupom');
-  const codigo = (input?.value || '').trim().toUpperCase();
-  if (!codigo) { showToast('⚠️ Digite o código do cupom'); return; }
-
-  if (!firebaseReady || !db) { showToast('⚠️ Sem conexão com o servidor, tenta de novo em instantes'); return; }
-
-  try {
-    const snap = await fb.getDocs(fb.query(fb.collection(db, 'cupons'), fb.where('codigo', '==', codigo)));
-    if (snap.empty) { showToast('❌ Cupom não encontrado'); return; }
-
-    const docCupom = snap.docs[0];
-    const c = docCupom.data();
-    const hoje = new Date().toISOString().slice(0, 10);
-
-    if (c.ativo === false) { showToast('❌ Esse cupom não está mais ativo'); return; }
-    if (c.validoAte && c.validoAte < hoje) { showToast('❌ Esse cupom expirou'); return; }
-    if (c.usosMaximos > 0 && (c.usosAtuais || 0) >= c.usosMaximos) { showToast('❌ Esse cupom já atingiu o limite de usos'); return; }
-
-    state.cupomAplicado = { id: docCupom.id, codigo: c.codigo, tipo: c.tipo, valor: c.valor };
-    exibirCupomAplicado();
-    calcularPrecos();
-    showToast('🎁 Cupom ' + c.codigo + ' aplicado!');
-  } catch (e) {
-    console.warn('[passageiro] erro ao validar cupom:', e);
-    showToast('⚠️ Erro ao validar cupom, tenta de novo');
-  }
-}
-
-function removerCupomAplicado() {
-  state.cupomAplicado = null;
-  exibirCupomAplicado();
-  calcularPrecos();
-}
-
-function exibirCupomAplicado() {
-  const info = document.getElementById('cupom-aplicado-info');
-  const input = document.getElementById('input-cupom');
-  const btnAplicar = document.getElementById('btn-aplicar-cupom');
-  if (!info) return;
-  if (state.cupomAplicado) {
-    const c = state.cupomAplicado;
-    const desc = c.tipo === 'free' ? 'corrida grátis' : c.tipo === 'fixed' ? ('R$ ' + Number(c.valor).toFixed(2).replace('.', ',') + ' de desconto') : (Number(c.valor) + '% de desconto');
-    info.innerHTML = `✅ Cupom <b>${c.codigo}</b> aplicado — ${desc} <span style="text-decoration:underline;cursor:pointer;" id="btn-remover-cupom">remover</span>`;
-    info.hidden = false;
-    if (input) input.disabled = true;
-    if (btnAplicar) btnAplicar.hidden = true;
-    document.getElementById('btn-remover-cupom')?.addEventListener('click', removerCupomAplicado);
-  } else {
-    info.hidden = true;
-    if (input) { input.disabled = false; input.value = ''; }
-    if (btnAplicar) btnAplicar.hidden = false;
-  }
-}
-
-document.getElementById('btn-aplicar-cupom')?.addEventListener('click', handleAplicarCupom);
-
-async function carregarSaldoCashbackDisponivel() {
-  if (!meuPassageiroId) return;
-  const saldo = await obterSaldoCarteira(meuPassageiroId);
-  state.cashbackDisponivel = Math.max(0, saldo);
-  const row = document.getElementById('cashback-row');
-  const info = document.getElementById('cashback-saldo-info');
-  if (state.cashbackDisponivel > 0.01) {
-    if (row) row.hidden = false;
-    if (info) {
-      info.hidden = false;
-      info.textContent = '💰 Cashback disponível: R$ ' + state.cashbackDisponivel.toFixed(2).replace('.', ',');
-    }
-  } else {
-    if (row) row.hidden = true;
-    if (info) info.hidden = true;
-  }
-}
-
-function handleAplicarCashback() {
-  const input = document.getElementById('input-cashback-valor');
-  const valor = Number(input?.value || 0);
-  if (!valor || valor <= 0) { showToast('⚠️ Digite quanto do cashback quer usar'); return; }
-  if (valor > state.cashbackDisponivel) { showToast('⚠️ Valor maior que o cashback disponível'); return; }
-  state.cashbackAplicado = valor;
-  exibirCashbackAplicado();
-  calcularPrecos();
-  showToast('💰 Cashback de R$ ' + valor.toFixed(2).replace('.', ',') + ' aplicado!');
-}
-
-function removerCashbackAplicado() {
-  state.cashbackAplicado = 0;
-  exibirCashbackAplicado();
-  calcularPrecos();
-}
-
-function exibirCashbackAplicado() {
-  const info = document.getElementById('cashback-aplicado-info');
-  const input = document.getElementById('input-cashback-valor');
-  const btnAplicar = document.getElementById('btn-aplicar-cashback');
-  if (!info) return;
-  if (state.cashbackAplicado > 0) {
-    info.innerHTML = `✅ Usando <b>R$ ${Number(state.cashbackAplicado).toFixed(2).replace('.', ',')}</b> de cashback <span style="text-decoration:underline;cursor:pointer;" id="btn-remover-cashback">remover</span>`;
-    info.hidden = false;
-    if (input) input.disabled = true;
-    if (btnAplicar) btnAplicar.hidden = true;
-    document.getElementById('btn-remover-cashback')?.addEventListener('click', removerCashbackAplicado);
-  } else {
-    info.hidden = true;
-    if (input) { input.disabled = false; input.value = ''; }
-    if (btnAplicar) btnAplicar.hidden = false;
-  }
-}
-
-document.getElementById('btn-aplicar-cashback')?.addEventListener('click', handleAplicarCashback);
-
-document.getElementById('category-list')?.addEventListener('click', (e) => {
-  const item = e.target.closest('.category-item');
-  if (!item) return;
-  document.querySelectorAll('.category-item').forEach(c => c.classList.remove('is-selected'));
-  item.classList.add('is-selected');
-  state.categoriaEscolhida = item.dataset.cat;
-});
-
-document.getElementById('btn-confirmar-corrida')?.addEventListener('click', async () => {
-  const inputOrigem = document.getElementById('input-origem');
-  const inputDestino = document.getElementById('input-destino');
-
-  if (!inputOrigem.value.trim()) { showToast('⚠️ Informe o endereço de embarque'); inputOrigem.focus(); return; }
-  if (!inputDestino.value.trim()) { showToast('⚠️ Informe o destino'); inputDestino.focus(); return; }
-
-  // Se não geocodificou via autocomplete, usa o texto puro mesmo (sem coordenadas)
-  if (!state.origem) state.origem = { texto: inputOrigem.value.trim(), lat: null, lon: null };
-  if (!state.destino) state.destino = { texto: inputDestino.value.trim(), lat: null, lon: null };
-
-  // Usa o preço calculado — se for 0 (categoria sem preço configurado), usa o mínimo da tabela
-  const precoCalculado = state.precos[state.categoriaEscolhida];
-  const preco = (precoCalculado !== undefined && precoCalculado !== null) ? precoCalculado : 10;
-  const precoOriginalCalculado = state.precosOriginais[state.categoriaEscolhida];
-  const precoOriginal = (precoOriginalCalculado !== undefined && precoOriginalCalculado !== null) ? precoOriginalCalculado : preco;
-
-  // Ir IMEDIATAMENTE para tracking — nunca bloquear a UI esperando rede
-  go('screen-tracking');
-  montarSequenciaInicial();
-  document.getElementById('block-searching').hidden = false;
-  document.getElementById('block-driver').hidden = true;
-  document.getElementById('chat-panel').hidden = true; // garante chat escondido até motorista aceitar
-  document.getElementById('tracking-title').textContent = 'Buscando motorista...';
-  document.getElementById('tracking-sub').textContent = 'Aguarde um instante';
-
-  // Salvar corrida em background (não bloqueia a navegação)
-  criarCorrida(state.origem, state.destino, preco, state.categoriaEscolhida, precoOriginal);
-  state.cupomAplicado = null;
-  exibirCupomAplicado();
-  state.cashbackAplicado = 0;
-  exibirCashbackAplicado();
-});
 
 // ─────────────────────────────────────
-// CRIAR CORRIDA NO FIRESTORE + OUVIR ACEITE
+// ESCUTAR NOVAS CORRIDAS (Firestore)
 // ─────────────────────────────────────
-async function criarCorrida(origem, destino, preco, categoria, precoOriginal) {
-  const cidade = (origem.lat && origem.lon)
-    ? detectarCidade(origem.lat, origem.lon)
-    : (state.passageiroDados?.cidade || 'madre'); // usa cidade do cadastro do passageiro quando sem coordenada
-  const precoCheio = (precoOriginal !== undefined && precoOriginal !== null) ? precoOriginal : preco;
-  const cashbackUsado = Math.min(Number(state.cashbackAplicado || 0), precoCheio);
-  const descontoCupomValor = Math.max(0, precoCheio - preco - cashbackUsado);
-  const corridaLocal = {
-    origem: origem.texto, destino: destino.texto,
-    origemLat: origem.lat, origemLon: origem.lon,
-    destinoLat: destino.lat, destinoLon: destino.lon,
-    preco, precoOriginal: precoCheio, categoria, cidade,
-    cupomCodigo: state.cupomAplicado?.codigo || null,
-    descontoCupomValor,
-    cashbackUsado,
-    formaPagamento: state.formaPagamento || 'pix',
-    passageiroId: meuPassageiroId || null,
-    passageiroNome: localStorage.getItem('interliga_pax_nome') || 'Passageiro',
-    status: 'aguardando',
-    criadoEm: new Date().toISOString(),
-  };
-
-  // Sempre salvar local primeiro (garante histórico mesmo offline)
-  const historico = getStorageJSON('interliga_corridas', []);
-  const localId = 'local-' + Date.now();
-  historico.unshift({ ...corridaLocal, id: localId });
-  setStorageJSON('interliga_corridas', historico.slice(0, 50));
-  state.corridaId = localId;
-  state.corridaLocalId = localId; // fixo — usado pra sempre achar esse registro no histórico, mesmo depois do corridaId virar o ID do Firebase
+function iniciarEscutaCorridas() {
+  if (state.corridasListenerUnsub) return;
 
   if (firebaseReady && db) {
     try {
-      const docRef = await fb.addDoc(fb.collection(db, 'corridas'), {
-        ...corridaLocal,
-        criadoEm: fb.serverTimestamp(),
+      // Query simplificada (sem orderBy) para não exigir índice composto no Firestore
+      const q = fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('status', '==', 'aguardando')
+      );
+      state.corridasListenerUnsub = fb.onSnapshot(q, (snap) => {
+        console.log('[motorista] snapshot de corridas recebido. docs:', snap.docs.length);
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const corrida = { id: change.doc.id, ...change.doc.data() };
+            if (corrida.status !== 'aguardando') return;
+
+            // Ignorar corridas muito antigas (lixo de testes anteriores)
+            const criadoEmMs = corrida.criadoEm?.toMillis ? corrida.criadoEm.toMillis() : null;
+            if (criadoEmMs && (Date.now() - criadoEmMs) > 10 * 60 * 1000) {
+              console.log('[motorista] ignorando corrida antiga:', corrida.id);
+              return;
+            }
+
+            // Fila de prioridade: só notifica quem é a vez (motoristaAlvoAtual).
+            // Sem fila definida (corrida antiga ou sem motoristas disponíveis cadastrados) = modo aberto, notifica todo mundo.
+            const souAlvo = !corrida.motoristaAlvoAtual || corrida.motoristaAlvoAtual === meuMotoristaId;
+            if (!souAlvo) return;
+
+            // Evita notificar de novo pela mesma "rodada" da fila (mas notifica de novo se a fila avançou,
+            // mesmo que tenha voltado pro mesmo motorista — por isso usa ofertaExpiraEm, que sempre muda).
+            // Usa um Set (não uma variável única) pra nunca esquecer o que já foi
+            // notificado, mesmo se o listener for reiniciado (ex: ligar/desligar
+            // online) — antes, reiniciar o listener podia re-notificar corridas
+            // antigas que ainda estavam "aguardando" no banco.
+            const chaveOferta = corrida.id + ':' + (corrida.motoristaAlvoAtual || 'todos') + ':' + (corrida.rodadaFila || 0) + ':' + (corrida.ofertaExpiraEm ?? 0);
+            if (!state._ofertasJaNotificadas) state._ofertasJaNotificadas = new Set();
+            if (state._ofertasJaNotificadas.has(chaveOferta)) return;
+            // Nunca notifica de novo uma corrida que já é minha (já aceitei)
+            if (corrida.motoristaId && corrida.motoristaId === meuMotoristaId) return;
+            state._ofertasJaNotificadas.add(chaveOferta);
+
+            console.log('[motorista] corrida nova/oferta detectada:', corrida);
+            notificarNovaCorrida(corrida);
+          }
+        });
+      }, (erro) => {
+        console.error('[motorista] erro no listener de corridas:', erro);
       });
-      state.corridaId = docRef.id;
-
-      // Marca o uso do cupom (não bloqueia a criação da corrida se falhar)
-      if (state.cupomAplicado?.id) {
-        fb.updateDoc(fb.doc(db, 'cupons', state.cupomAplicado.id), {
-          usosAtuais: fb.increment(1),
-        }).catch((e) => console.warn('[passageiro] erro ao registrar uso do cupom:', e));
-      }
-
-      // Debita o cashback usado da carteira do passageiro (não bloqueia a corrida se falhar)
-      if (cashbackUsado > 0 && meuPassageiroId) {
-        lancarCarteira(meuPassageiroId, -cashbackUsado, 'Cashback usado numa corrida', docRef.id);
-      }
-
-      // Persiste no localStorage — se o app fechar e reabrir, consegue retomar a corrida
-      localStorage.setItem('interliga_corrida_ativa', JSON.stringify({
-        corridaId: docRef.id,
-        origem: origem.texto,
-        destino: destino.texto,
-        preco,
-        categoria,
-        criadoEm: Date.now(),
-      }));
-
-      // Monta a fila de prioridade: motorista mais próximo primeiro (empate decide pela melhor avaliação).
-      // Se ainda não houver motoristas disponíveis cadastrados, fica em modo aberto (oferece pra todo mundo).
-      try {
-        const fila = await montarFilaPrioridade(origem, cidade, categoria);
-        if (fila.length > 0) {
-          await fb.updateDoc(docRef, {
-            filaMotoristas: fila,
-            filaIndiceAtual: 0,
-            motoristaAlvoAtual: fila[0],
-            ofertaExpiraEm: Date.now() + 15000,
-          });
-        }
-      } catch (e) {
-        console.warn('[passageiro] erro ao montar fila de prioridade, seguindo em modo aberto:', e);
-      }
-
-      ouvirAceiteCorrida(docRef.id);
-      iniciarFilaWatchdog(docRef.id);
-      sincronizarRotaNoFirebase(); // garante que paradas pré-definidas já apareçam pro motorista
+      return;
     } catch (e) {
-      console.warn('Erro ao salvar corrida no Firebase, seguindo apenas local:', e);
-      simularBuscaLocal();
+      console.warn('Erro ao escutar corridas:', e);
     }
-  } else {
-    simularBuscaLocal();
   }
+  // Fallback local: olha localStorage periodicamente (útil para teste no mesmo dispositivo)
+  state.corridasListenerUnsub = setInterval(() => {
+    const lst = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
+    const pendente = lst.find(c => c.status === 'aguardando');
+    if (pendente && pendente.id !== state._ultimaNotificada) {
+      state._ultimaNotificada = pendente.id;
+      notificarNovaCorrida(pendente);
+    }
+  }, 3000);
+}
+
+function pararEscutaCorridas() {
+  if (typeof state.corridasListenerUnsub === 'function') state.corridasListenerUnsub();
+  else if (state.corridasListenerUnsub) clearInterval(state.corridasListenerUnsub);
+  state.corridasListenerUnsub = null;
 }
 
 // ─────────────────────────────────────
-// FILA DE PRIORIDADE — monta a ordem de oferta por proximidade (e avaliação em caso de empate)
+// VOZ — avisos falados em voz alta, pro motorista não precisar ficar olhando a tela
 // ─────────────────────────────────────
-async function montarFilaPrioridade(origem, cidade, categoria) {
-  if (!firebaseReady || !db) return [];
+function falarEmVoz(texto) {
   try {
-    const snap = await fb.getDocs(fb.collection(db, 'motoristas_disponiveis'));
-    const agora = Date.now();
-    const candidatos = [];
-    snap.forEach(docSnap => {
-      const d = docSnap.data();
-      const atualizadoMs = d.atualizadoEm?.toMillis ? d.atualizadoEm.toMillis() : null;
-      // Ignora motorista com localização desatualizada há mais de 2 min (provavelmente fechou o app)
-      if (atualizadoMs && (agora - atualizadoMs) > 2 * 60 * 1000) return;
-      if (typeof d.lat !== 'number' || typeof d.lon !== 'number') return;
-      // Motorista é fixo na cidade dele — não entra na fila de corrida de outra cidade
-      if (cidade && d.cidade && d.cidade !== cidade) return;
-      // Só entra na fila se o veículo dele for da categoria pedida (X / Plus / Van)
-      // Só entra na fila se o veículo dele atender a categoria pedida (suporta motorista com mais de uma categoria)
-      const categoriasMotorista = Array.isArray(d.categorias) ? d.categorias : (d.categoria ? [d.categoria] : null);
-      if (categoria && categoriasMotorista && !categoriasMotorista.includes(categoria)) return;
-      const distanciaKm = (origem?.lat && origem?.lon)
-        ? haversineKm(origem.lat, origem.lon, d.lat, d.lon)
-        : 999;
-      candidatos.push({ id: docSnap.id, distanciaKm, avaliacao: Number(d.avaliacao) || 0 });
-    });
-    // Mais próximo primeiro; diferenças pequenas de distância (<300m) são decididas pela melhor avaliação
-    candidatos.sort((a, b) => {
-      if (Math.abs(a.distanciaKm - b.distanciaKm) > 0.3) return a.distanciaKm - b.distanciaKm;
-      return b.avaliacao - a.avaliacao;
-    });
-    return candidatos.map(c => c.id);
-  } catch (e) {
-    console.warn('[passageiro] erro ao consultar motoristas disponíveis:', e);
-    return [];
-  }
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel(); // não deixa acumular falas em fila
+    const utter = new SpeechSynthesisUtterance(texto);
+    utter.lang = 'pt-BR';
+    utter.rate = 1;
+    window.speechSynthesis.speak(utter);
+  } catch (e) { console.warn('[motorista] erro ao falar em voz:', e); }
 }
 
-// Rede de segurança: se o motorista da vez não responder (app fechado, sem internet etc.),
-// avança a fila mesmo sem depender do aparelho dele — assim a corrida nunca fica travada esperando alguém que não vai responder.
-let filaWatchdogInterval = null;
+// ─────────────────────────────────────
+// ESCUTAR CANCELAMENTO DURANTE A OFERTA — se o passageiro cancelar enquanto
+// ainda está chamando este motorista (antes de aceitar), para tudo na hora
+// em vez de continuar tocando/falando até o contador de 15s zerar sozinho.
+// ─────────────────────────────────────
+let ofertaCancelamentoListenerUnsub = null;
 
-function iniciarFilaWatchdog(corridaId) {
-  clearInterval(filaWatchdogInterval);
-  filaWatchdogInterval = setInterval(async () => {
-    if (!db || !corridaId) { clearInterval(filaWatchdogInterval); return; }
-    try {
-      const snap = await fb.getDoc(fb.doc(db, 'corridas', corridaId));
-      const data = snap.data();
-      if (!data || data.status !== 'aguardando') { clearInterval(filaWatchdogInterval); return; }
-      const fila = data.filaMotoristas || [];
-      if (fila.length === 0) return; // modo aberto — nada a avançar
-      const expirou = data.ofertaExpiraEm && Date.now() > data.ofertaExpiraEm + 5000; // 5s de margem
-      if (!expirou) return;
-      let indiceAtual = typeof data.filaIndiceAtual === 'number' ? data.filaIndiceAtual : 0;
-      let proximoIndice = indiceAtual + 1;
-      if (proximoIndice >= fila.length) proximoIndice = 0;
-      const novaExpiracao = Date.now() + 25000; // 25s — tempo maior pra motorista ver/reagir
-      await fb.updateDoc(fb.doc(db, 'corridas', corridaId), {
-        filaIndiceAtual: proximoIndice,
-        motoristaAlvoAtual: fila[proximoIndice],
-        ofertaExpiraEm: novaExpiracao, // sempre muda — garante que o motorista recebe de novo mesmo que já tenha visto
-        rodadaFila: (data.rodadaFila || 0) + 1, // incrementa a rodada pra chave de deduplicação ser única
-      });
-    } catch (e) { console.warn('[passageiro] erro no watchdog da fila:', e); }
-  }, 5000);
-}
-
-function pararFilaWatchdog() {
-  clearInterval(filaWatchdogInterval);
-  filaWatchdogInterval = null;
-}
-
-// Atualiza o status de uma corrida no histórico local (localStorage), sempre pelo ID fixo
-// (state.corridaLocalId), que nunca muda — diferente de state.corridaId, que é sobrescrito
-// pelo ID do Firebase assim que a corrida é sincronizada.
-function atualizarStatusHistoricoLocal(novoStatus, extra = {}) {
-  if (!state.corridaLocalId) return;
-  try {
-    const historico = getStorageJSON('interliga_corridas', []);
-    const idx = historico.findIndex(c => c.id === state.corridaLocalId);
-    if (idx >= 0) {
-      historico[idx].status = novoStatus;
-      Object.assign(historico[idx], extra);
-      setStorageJSON('interliga_corridas', historico);
-    }
-  } catch (e) { console.warn('[historico local] erro ao atualizar status:', e); }
-}
-
-// Fallback sem Firebase: simula encontrar motorista para não travar a demo
-function simularBuscaLocal() {
-  setTimeout(() => {
-    exibirMotoristaEncontrado({
-      nome: 'Motorista',
-      veiculo: 'Aguardando conexão',
-      placa: '—',
-      avaliacao: '—',
-    });
-  }, 4000);
-}
-
-function ouvirAceiteCorrida(corridaId) {
-  console.log('[passageiro] iniciando listener de aceite para corrida:', corridaId);
-  if (!db) { console.warn('[passageiro] db não disponível'); return; }
-  if (state.corridaListenerUnsub) state.corridaListenerUnsub();
-
-  // Se a corrida já está aceita/em andamento (restauração após fechar app),
-  // marca a flag pra não tentar mostrar a tela de "motorista encontrado" de novo
-  let jaExibiuMotoristaEncontrado = window._corridaRestoradaJaAceita || false;
-  window._corridaRestoradaJaAceita = false; // limpa a flag global
-
-  state.corridaListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', corridaId), (snap) => {
+function escutarCancelamentoOferta(corridaId) {
+  if (!firebaseReady || !db) return;
+  pararEscutaOferta();
+  ofertaCancelamentoListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', corridaId), (snap) => {
     const data = snap.data();
-    console.log('[passageiro] snapshot recebido. status:', data?.status);
+    if (!data || state.corridaAtualId !== corridaId) return;
+    if (data.status === 'cancelada') {
+      pararEscutaOferta();
+      clearInterval(state.countdownInterval);
+      clearInterval(state.somRepeticaoInterval);
+      try { window.speechSynthesis?.cancel(); } catch (e) {}
+      document.getElementById('request-card').hidden = true;
+      document.getElementById('request-empty').hidden = false;
+      document.getElementById('new-ride-banner').hidden = true;
+      state.corridaAtual = null;
+      state.corridaAtualId = null;
+      state.emCorridaAtiva = false;
+      showToast('❌ O passageiro cancelou essa corrida');
+      go('screen-home');
+    }
+  }, (erro) => console.error('[motorista] erro no listener de cancelamento da oferta:', erro));
+}
+
+function pararEscutaOferta() {
+  if (ofertaCancelamentoListenerUnsub) { ofertaCancelamentoListenerUnsub(); ofertaCancelamentoListenerUnsub = null; }
+}
+
+function notificarNovaCorrida(corrida) {
+  console.log('[motorista] Nova corrida recebida:', corrida);
+  state.corridaAtual = corrida;
+  state.corridaAtualId = corrida.id;
+
+  tocarSomNovaCorrida();
+  falarEmVoz('Nova corrida disponível!');
+  escutarCancelamentoOferta(corrida.id);
+
+  // Banner na home
+  const banner = document.getElementById('new-ride-banner');
+  const detail = document.getElementById('new-ride-detail');
+  if (banner) {
+    banner.hidden = false;
+    if (detail) detail.textContent = `${corrida.origem} → ${corrida.destino}`;
+  }
+
+  showToast('🔔 Nova corrida disponível!');
+}
+
+// ─────────────────────────────────────
+// TELA: CORRIDA RECEBIDA (aceitar/recusar)
+// ─────────────────────────────────────
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-go="screen-request"]') && state.corridaAtual) {
+    exibirCorridaRecebida(state.corridaAtual);
+  }
+});
+
+function exibirCorridaRecebida(corrida) {
+  document.getElementById('request-empty').hidden = true;
+  document.getElementById('request-card').hidden = false;
+
+  document.getElementById('request-origem').textContent = corrida.origem;
+  document.getElementById('request-destino').textContent = corrida.destino;
+  document.getElementById('request-valor').textContent = 'R$ ' + Number(corrida.preco || 18).toFixed(2).replace('.', ',');
+
+  if (corrida.origemLat && corrida.destinoLat) {
+    const km = haversineKm(corrida.origemLat, corrida.origemLon, corrida.destinoLat, corrida.destinoLon);
+    document.getElementById('request-distancia').textContent = km.toFixed(1) + ' km';
+  } else {
+    document.getElementById('request-distancia').textContent = '-- km';
+  }
+
+  // Mostra info do passageiro no card de oferta
+  const nomePax = corrida.passageiroNome || 'Passageiro';
+  const elPaxNome = document.getElementById('request-pax-nome');
+  const elPaxAvatar = document.getElementById('request-pax-avatar');
+  const elPaxStats = document.getElementById('request-pax-stats');
+  if (elPaxNome) elPaxNome.textContent = nomePax;
+  if (elPaxAvatar) elPaxAvatar.textContent = nomePax.slice(0, 2).toUpperCase();
+  if (elPaxStats) elPaxStats.textContent = 'Carregando...';
+
+  if (corrida.passageiroId && firebaseReady && db) {
+    Promise.all([
+      fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)),
+      fb.getDocs(fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('passageiroId', '==', corrida.passageiroId),
+        fb.where('status', '==', 'finalizada')
+      )),
+    ]).then(([snapPax, snapCorridas]) => {
+      const avaliacao = snapPax.exists() ? snapPax.data().avaliacao : null;
+      const total = snapCorridas.size;
+      if (elPaxStats) {
+        const estrelas = avaliacao ? `⭐ ${avaliacao}` : '';
+        const corridas = total === 0 ? '🆕 Primeira corrida!' : `🚗 ${total} corrida${total > 1 ? 's' : ''}`;
+        elPaxStats.textContent = [estrelas, corridas].filter(Boolean).join(' · ');
+      }
+    }).catch(() => {
+      if (elPaxStats) elPaxStats.textContent = '—';
+    });
+  }
+
+  iniciarCountdown();
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function iniciarCountdown() {
+  state.countdownSegundos = 15;
+  const numEl = document.getElementById('countdown-num');
+  const fgEl = document.getElementById('countdown-fg');
+  if (numEl) numEl.textContent = state.countdownSegundos;
+  if (fgEl) fgEl.style.strokeDashoffset = 0;
+
+  // Toca o som de chamada repetidamente enquanto aguarda resposta (como uma campainha)
+  tocarSomNovaCorrida();
+  clearInterval(state.somRepeticaoInterval);
+  state.somRepeticaoInterval = setInterval(() => tocarSomNovaCorrida(), 2000);
+
+  clearInterval(state.countdownInterval);
+  state.countdownInterval = setInterval(() => {
+    state.countdownSegundos--;
+    if (numEl) numEl.textContent = state.countdownSegundos;
+    if (fgEl) fgEl.style.strokeDashoffset = (15 - state.countdownSegundos) * (100.5 / 15);
+    if (state.countdownSegundos <= 0) {
+      clearInterval(state.countdownInterval);
+      clearInterval(state.somRepeticaoInterval);
+      recusarCorrida();
+      showToast('⏰ Tempo esgotado — corrida expirou');
+    }
+  }, 1000);
+}
+
+document.getElementById('btn-recusar')?.addEventListener('click', recusarCorrida);
+// Avança a corrida pro próximo motorista da fila de prioridade. Se já passou
+// por todo mundo, volta pro primeiro da lista (reoferece pra todo mundo de novo),
+// em vez de matar a corrida — segue tentando até alguém aceitar.
+async function avancarFilaOuReabrir(corridaId, corrida) {
+  const fila = corrida.filaMotoristas || [];
+  if (fila.length === 0) return; // modo aberto (sem fila) — nada a avançar, segue 'aguardando' pra todo mundo
+
+  let indiceAtual = typeof corrida.filaIndiceAtual === 'number' ? corrida.filaIndiceAtual : 0;
+  let proximoIndice = indiceAtual + 1;
+  if (proximoIndice >= fila.length) proximoIndice = 0; // deu a volta — avisa todo mundo de novo
+
+  const recusantes = Array.isArray(corrida.recusantes) ? [...corrida.recusantes] : [];
+  if (!recusantes.includes(meuMotoristaId)) recusantes.push(meuMotoristaId);
+
+  await fb.updateDoc(fb.doc(db, 'corridas', corridaId), {
+    filaIndiceAtual: proximoIndice,
+    motoristaAlvoAtual: fila[proximoIndice],
+    ofertaExpiraEm: Date.now() + 15000,
+    recusantes,
+  });
+}
+
+function recusarCorrida() {
+  clearInterval(state.countdownInterval);
+  clearInterval(state.somRepeticaoInterval);
+  pararEscutaOferta();
+
+  const corridaId = state.corridaAtualId;
+  const corrida = state.corridaAtual;
+  if (firebaseReady && db && corridaId && !String(corridaId).startsWith('local-') && corrida) {
+    avancarFilaOuReabrir(corridaId, corrida).catch((e) =>
+      console.error('[motorista] erro ao avançar fila na recusa:', e)
+    );
+  }
+
+  document.getElementById('request-card').hidden = true;
+  document.getElementById('request-empty').hidden = false;
+  document.getElementById('new-ride-banner').hidden = true;
+  state.corridaAtual = null;
+  state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
+
+  // Volta a escutar novas corridas após recusar
+  if (state.online) {
+    setTimeout(() => iniciarEscutaCorridas(), 1000);
+  }
+
+  go('screen-home');
+}
+
+document.getElementById('btn-aceitar')?.addEventListener('click', aceitarCorrida);
+async function aceitarCorrida() {
+  clearInterval(state.countdownInterval);
+  clearInterval(state.somRepeticaoInterval);
+  pararEscutaOferta();
+  const corrida = state.corridaAtual;
+  if (!corrida) {
+    showToast('⚠️ Esta corrida já não está disponível');
+    document.getElementById('request-card').hidden = true;
+    document.getElementById('request-empty').hidden = false;
+    document.getElementById('new-ride-banner').hidden = true;
+    go('screen-home');
+    return;
+  }
+
+  // Atualizar status no Firebase — usando transação, pra garantir que só o
+  // primeiro motorista a clicar "aceitar" consiga, mesmo se dois clicarem juntos
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    try {
+      const conseguiu = await fb.runTransaction(db, async (tx) => {
+        const ref = fb.doc(db, 'corridas', state.corridaAtualId);
+        const snap = await tx.get(ref);
+        const data = snap.data();
+        if (!data || data.status !== 'aguardando') return false; // outro motorista já pegou, ou foi cancelada
+        tx.update(ref, {
+          status: 'aceita',
+          motoristaId: meuMotoristaId,
+          motoristaNome: state.motorista.nome,
+          motoristaVeiculo: state.motorista.veiculo,
+          motoristaPlaca: state.motorista.placa,
+          motoristaAvaliacao: state.motorista.avaliacao,
+        });
+        return true;
+      });
+      if (!conseguiu) {
+        showToast('⚠️ Essa corrida já foi aceita por outro motorista');
+        document.getElementById('request-card').hidden = true;
+        document.getElementById('request-empty').hidden = false;
+        document.getElementById('new-ride-banner').hidden = true;
+        state.corridaAtual = null;
+        state.corridaAtualId = null;
+        state.emCorridaAtiva = false;
+        go('screen-home');
+        return;
+      }
+    } catch (e) {
+      console.error('[motorista] Falha ao atualizar Firebase:', e);
+    }
+  }
+
+  pararDisponibilidade(); // fico fora da fila de novas ofertas enquanto rodo essa corrida
+  pararEscutaCorridas(); // e paro de escutar/notificar novas corridas também, até finalizar ou cancelar essa
+
+  // Salva corrida ativa no localStorage para restaurar se o app fechar
+  try {
+    localStorage.setItem('interliga_mot_corrida_ativa', JSON.stringify({
+      corridaId: corrida.id,
+      origem: corrida.origem,
+      destino: corrida.destino,
+      passageiroId: corrida.passageiroId,
+      passageiroNome: corrida.passageiroNome,
+      preco: corrida.preco,
+      criadoEm: Date.now(),
+    }));
+  } catch(e) {}
+
+  // Também atualizar localStorage (mesmo dispositivo / fallback)
+  try {
+    const lst = JSON.parse(localStorage.getItem('interliga_corridas') || '[]');
+    const idx = lst.findIndex(c => c.id === corrida.id);
+    if (idx >= 0) lst[idx].status = 'aceita';
+    localStorage.setItem('interliga_corridas', JSON.stringify(lst));
+  } catch (e) {}
+
+  // Persiste a corrida ativa — se o app fechar e reabrir, retoma automaticamente
+  localStorage.setItem('interliga_mot_corrida_ativa', JSON.stringify({
+    corridaId: corrida.id,
+    origem: corrida.origem,
+    destino: corrida.destino,
+    preco: corrida.preco,
+    passageiroNome: corrida.passageiroNome,
+    aceitoEm: Date.now(),
+  }));
+
+  document.getElementById('new-ride-banner').hidden = true;
+  showToast('✓ Corrida aceita! Indo ao passageiro.');
+
+  try {
+    go('screen-ongoing');
+  } catch (e) {
+    console.error('[motorista] ERRO CRÍTICO ao navegar para screen-ongoing:', e);
+  }
+}
+
+// ─────────────────────────────────────
+// TELA: CORRIDA EM ANDAMENTO
+// ─────────────────────────────────────
+let mapOngoing = null;
+let chegouAoCliente = false;
+
+function onEnterOngoing() {
+  const corrida = state.corridaAtual;
+  if (!corrida) { console.warn('[onEnterOngoing] sem corrida atual'); return; }
+  state.emCorridaAtiva = true;
+
+  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  setText('ongoing-origem', corrida.origem);
+  setText('ongoing-destino', corrida.destino);
+  setText('passenger-name', corrida.passageiroNome || 'Passageiro');
+  setText('passenger-avatar', (corrida.passageiroNome || 'PS').slice(0, 2).toUpperCase());
+  setText('passenger-rating', '⭐ —');
+  setText('passenger-corridas', '');
+
+  if (corrida.passageiroId && firebaseReady && db) {
+    // Busca avaliação e total de corridas do passageiro ao mesmo tempo
+    Promise.all([
+      fb.getDoc(fb.doc(db, 'passageiros', corrida.passageiroId)),
+      fb.getDocs(fb.query(
+        fb.collection(db, 'corridas'),
+        fb.where('passageiroId', '==', corrida.passageiroId),
+        fb.where('status', '==', 'finalizada')
+      )),
+    ]).then(([snapPax, snapCorridas]) => {
+      if (snapPax.exists() && snapPax.data().avaliacao) {
+        setText('passenger-rating', '⭐ ' + snapPax.data().avaliacao);
+      }
+      const totalCorridas = snapCorridas.size;
+      const elCorridas = document.getElementById('passenger-corridas');
+      if (elCorridas) {
+        if (totalCorridas === 0) {
+          elCorridas.textContent = '🆕 Primeiro pedido!';
+          elCorridas.style.color = '#f59e0b';
+        } else {
+          elCorridas.textContent = `🚗 ${totalCorridas} corrida${totalCorridas > 1 ? 's' : ''} realizad${totalCorridas > 1 ? 'as' : 'a'}`;
+          elCorridas.style.color = 'var(--text-soft)';
+        }
+      }
+    }).catch(() => {});
+  }
+
+  chegouAoCliente = false;
+  sequenciaRotaMotorista = [];
+  indiceRotaAtualMotorista = 0;
+
+  // Monta a rota imediatamente com os dados que já temos (não espera o listener)
+  if (corrida.sequenciaRota && corrida.sequenciaRota.length > 0) {
+    sequenciaRotaMotorista = corrida.sequenciaRota;
+    indiceRotaAtualMotorista = corrida.indiceRotaAtual || 0;
+  } else {
+    sequenciaRotaMotorista = [
+      { texto: corrida.origem || 'Origem', tipo: 'origem' },
+      { texto: corrida.destino || 'Destino', tipo: 'destino' },
+    ];
+  }
+  renderRotaMotorista();
+
+  const btnCheguei = document.getElementById('btn-cheguei');
+  const btnFinalizar = document.getElementById('btn-finalizar-corrida');
+  const btnSeguir = document.getElementById('btn-seguir-viagem');
+  if (btnCheguei) btnCheguei.hidden = false;
+  if (btnFinalizar) btnFinalizar.hidden = true;
+  if (btnSeguir) btnSeguir.hidden = true;
+
+  try { initMapOngoing(corrida); } catch (e) { console.error('[motorista] erro ao iniciar mapa ongoing:', e); }
+  try { iniciarChatMotorista(); } catch (e) { console.error('[motorista] erro ao iniciar chat:', e); }
+  try { escutarCancelamentoCorrida(); } catch (e) { console.error('[motorista] erro ao escutar cancelamento:', e); }
+  try { escutarMudancasRota(); } catch (e) { console.error('[motorista] erro ao escutar rota:', e); }
+
+  // Atrasa o pedido de geolocalização para depois da tela já estar renderizada,
+  // evitando que o prompt de permissão pareça travar a navegação
+  setTimeout(() => {
+    try { iniciarBroadcastPosicao(); } catch (e) { console.error('[motorista] erro ao iniciar broadcast posição:', e); }
+  }, 500);
+}
+
+// ─────────────────────────────────────
+// ESCUTAR MUDANÇAS NA ROTA (paradas adicionadas pelo passageiro)
+// ─────────────────────────────────────
+let rotaListenerUnsub = null;
+let sequenciaRotaMotorista = [];
+let indiceRotaAtualMotorista = 0;
+
+function escutarMudancasRota() {
+  if (!firebaseReady || !db || !state.corridaAtualId || rotaListenerUnsub) return;
+  if (String(state.corridaAtualId).startsWith('local-')) return;
+
+  rotaListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', state.corridaAtualId), (snap) => {
+    const data = snap.data();
     if (!data) return;
-    if (data.status === 'aceita' && !jaExibiuMotoristaEncontrado) {
-      jaExibiuMotoristaEncontrado = true;
-      console.log('[passageiro] motorista aceitou! Exibindo tela de motorista encontrado.');
-      pararFilaWatchdog();
-      exibirMotoristaEncontrado({
-        nome: data.motoristaNome || 'Motorista',
-        veiculo: data.motoristaVeiculo || '',
-        placa: data.motoristaPlaca || '',
-        avaliacao: data.motoristaAvaliacao || '4.8',
-        motoristaId: data.motoristaId || null,
-      });
-      // Guarda o nome do motorista no histórico local assim que aceita (não precisa esperar finalizar)
-      atualizarStatusHistoricoLocal('aceita', { motoristaNome: data.motoristaNome || 'Motorista', motoristaVeiculo: data.motoristaVeiculo, motoristaPlaca: data.motoristaPlaca });
+
+    if (data.sequenciaRota && data.sequenciaRota.length > 0) {
+      // Corrida com rota estruturada (paradas cadastradas)
+      sequenciaRotaMotorista = data.sequenciaRota;
+      indiceRotaAtualMotorista = data.indiceRotaAtual || 0;
+    } else if (sequenciaRotaMotorista.length === 0) {
+      // Corrida simples (só origem → destino) — monta a rota mínima
+      sequenciaRotaMotorista = [
+        { texto: data.origem || 'Origem', tipo: 'origem' },
+        { texto: data.destino || 'Destino', tipo: 'destino' },
+      ];
+      indiceRotaAtualMotorista = 0;
     }
-    if (data.status === 'finalizada') {
-      console.log('[passageiro] corrida finalizada pelo motorista.');
-      if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
-      if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
-      pararEscutaPosicaoMotorista();
-      localStorage.removeItem('interliga_corrida_ativa');
+    renderRotaMotorista();
+  }, (erro) => console.error('[motorista] erro no listener de rota:', erro));
+}
 
-      atualizarStatusHistoricoLocal('finalizada', {
-        preco: data.preco,
-        motoristaNome: data.motoristaNome || 'Motorista',
-        motoristaVeiculo: data.motoristaVeiculo,
-        motoristaPlaca: data.motoristaPlaca,
-      });
+function pararEscutaRota() {
+  if (rotaListenerUnsub) { rotaListenerUnsub(); rotaListenerUnsub = null; }
+}
 
-      // Verifica e aplica multa pendente do passageiro na carteira do motorista
-      verificarEAplicarMulta(data.passageiroId, data.motoristaId, data.preco);
+function renderRotaMotorista() {
+  if (sequenciaRotaMotorista.length === 0) return;
+  const pontoAtual = sequenciaRotaMotorista[indiceRotaAtualMotorista];
+  const proximoPonto = sequenciaRotaMotorista[indiceRotaAtualMotorista + 1];
 
-      showToast('✅ Corrida finalizada! Obrigado por viajar com a Interliga.');
-      // Sempre vai pra avaliação — com delay pra garantir que o toast aparece antes
-      setTimeout(() => abrirTelaAvaliarMotorista(data.motoristaId, data.motoristaNome), 500);
+  const origemEl = document.getElementById('ongoing-origem');
+  const destinoEl = document.getElementById('ongoing-destino');
+  if (origemEl) origemEl.textContent = pontoAtual?.texto || '—';
+  if (destinoEl) destinoEl.textContent = proximoPonto?.texto || '—';
+
+  const restantes = sequenciaRotaMotorista.slice(indiceRotaAtualMotorista + 2);
+  const elRestantes = document.getElementById('ongoing-proximas-paradas');
+  if (elRestantes) {
+    elRestantes.innerHTML = restantes.length > 0
+      ? 'Depois: ' + restantes.map(p => p.texto).join(' → ')
+      : '';
+  }
+}
+
+// ─────────────────────────────────────
+// NAVEGAÇÃO EXTERNA — Waze / Google Maps até o próximo ponto da rota
+// (este app não tem GPS de navegação próprio; abre o app externo de verdade)
+// ─────────────────────────────────────
+function obterProximoPontoNavegacao() {
+  if (sequenciaRotaMotorista.length > 0) {
+    const proximo = sequenciaRotaMotorista[indiceRotaAtualMotorista + 1];
+    if (proximo && typeof proximo.lat === 'number' && typeof proximo.lon === 'number') return proximo;
+  }
+  const corrida = state.corridaAtual;
+  if (corrida && typeof corrida.destinoLat === 'number') {
+    return { lat: corrida.destinoLat, lon: corrida.destinoLon, texto: corrida.destino };
+  }
+  return null;
+}
+
+document.getElementById('btn-nav-waze')?.addEventListener('click', () => {
+  const p = obterProximoPontoNavegacao();
+  if (!p) { showToast('⚠️ Sem coordenadas pra navegar ainda'); return; }
+  window.open(`https://waze.com/ul?ll=${p.lat},${p.lon}&navigate=yes`, '_blank');
+});
+document.getElementById('btn-nav-gmaps')?.addEventListener('click', () => {
+  const p = obterProximoPontoNavegacao();
+  if (!p) { showToast('⚠️ Sem coordenadas pra navegar ainda'); return; }
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}&travelmode=driving`, '_blank');
+});
+
+// ─────────────────────────────────────
+// ESCUTAR CANCELAMENTO — se o passageiro cancelar, motorista é avisado
+// ─────────────────────────────────────
+let cancelamentoListenerUnsub = null;
+
+function escutarCancelamentoCorrida() {
+  if (!firebaseReady || !db || !state.corridaAtualId || cancelamentoListenerUnsub) return;
+  if (String(state.corridaAtualId).startsWith('local-')) return;
+
+  cancelamentoListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', state.corridaAtualId), (snap) => {
+    const data = snap.data();
+    if (!data) return;
+    if (data.status === 'cancelada') {
+      pararEscutaCancelamento();
+      pararEscutaChat();
+      pararEscutaRota();
+      pararBroadcastPosicao();
+      marcadorMotoristaMap = null;
+      sequenciaRotaMotorista = [];
+      indiceRotaAtualMotorista = 0;
+      state.corridaAtual = null;
+      state.corridaAtualId = null;
+      state.emCorridaAtiva = false;
+      falarEmVoz('Atenção! O passageiro cancelou a corrida.');
+      showToast('❌ Passageiro cancelou a corrida');
+      if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
+      go('screen-home');
     }
-  }, (erro) => {
-    console.error('[passageiro] erro no listener de aceite:', erro);
+  }, (erro) => console.error('[motorista] erro no listener de cancelamento:', erro));
+}
+
+function pararEscutaCancelamento() {
+  if (cancelamentoListenerUnsub) { cancelamentoListenerUnsub(); cancelamentoListenerUnsub = null; }
+}
+
+// ─────────────────────────────────────
+// BROADCAST DE POSIÇÃO EM TEMPO REAL (motorista → Firebase → passageiro)
+// ─────────────────────────────────────
+let watchPositionId = null;
+let marcadorMotoristaMap = null;
+
+function iniciarBroadcastPosicao() {
+  pararBroadcastPosicao();
+  const badge = document.getElementById('ongoing-eta-badge');
+
+  if (!navigator.geolocation) {
+    if (badge) badge.textContent = '⚠️ Geolocalização não suportada';
+    return;
+  }
+
+  if (badge) badge.textContent = '📡 Obtendo localização...';
+
+  watchPositionId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      if (badge) badge.textContent = '🟢 Localização ativa';
+      atualizarPosicaoNoMapa(latitude, longitude);
+
+      if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+        fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+          motoristaLat: latitude,
+          motoristaLon: longitude,
+          motoristaAtualizadoEm: Date.now(),
+        }).catch((e) => console.error('[motorista] erro ao salvar posição no Firebase:', e));
+      }
+    },
+    (erro) => {
+      console.warn('[motorista] erro ao obter posição:', erro);
+      if (badge) {
+        const motivos = { 1: 'Permissão negada', 2: 'Posição indisponível', 3: 'Tempo esgotado' };
+        badge.textContent = '⚠️ ' + (motivos[erro.code] || 'Erro de localização');
+      }
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+function pararBroadcastPosicao() {
+  if (watchPositionId !== null) {
+    navigator.geolocation.clearWatch(watchPositionId);
+    watchPositionId = null;
+  }
+}
+
+function atualizarPosicaoNoMapa(lat, lon) {
+  if (!mapOngoing) return;
+  if (!marcadorMotoristaMap) {
+    marcadorMotoristaMap = L.marker([lat, lon], {
+      icon: L.divIcon({ className: '', html: '<div style="font-size:24px;">🚗</div>', iconSize: [30,30] })
+    }).addTo(mapOngoing);
+  } else {
+    marcadorMotoristaMap.setLatLng([lat, lon]);
+  }
+  mapOngoing.panTo([lat, lon]);
+}
+
+function initMapOngoing(corrida) {
+  const el = document.getElementById('map-ongoing');
+  if (!el) return;
+
+  const tryInit = () => {
+    if (typeof L === 'undefined') { setTimeout(tryInit, 150); return; }
+    if (el.offsetWidth < 10 || el.offsetHeight < 10) { setTimeout(tryInit, 150); return; }
+
+    if (mapOngoing) { mapOngoing.remove(); mapOngoing = null; }
+
+    const lat = corrida.origemLat || -12.7375;
+    const lon = corrida.origemLon || -38.6285;
+    mapOngoing = L.map('map-ongoing', { zoomControl: false, attributionControl: false }).setView([lat, lon], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapOngoing);
+    L.marker([lat, lon]).addTo(mapOngoing);
+  };
+  tryInit();
+}
+
+document.getElementById('btn-cheguei')?.addEventListener('click', () => {
+  console.log('[motorista] btn-cheguei clicado. sequenciaRotaMotorista:', sequenciaRotaMotorista, 'indiceRotaAtualMotorista:', indiceRotaAtualMotorista);
+
+  const totalPontos = sequenciaRotaMotorista.length;
+  const temParadaPendente = totalPontos > 2 && indiceRotaAtualMotorista < totalPontos - 2;
+
+  console.log('[motorista] totalPontos:', totalPontos, 'temParadaPendente:', temParadaPendente);
+
+  if (temParadaPendente) {
+    // Chegou numa parada intermediária — mostra botão para seguir viagem
+    document.getElementById('btn-cheguei').hidden = true;
+    document.getElementById('btn-seguir-viagem').hidden = false;
+    document.getElementById('ongoing-eta-badge').textContent = '🟢 Chegou na parada ' + (indiceRotaAtualMotorista + 1);
+    showToast('🔔 Parada registrada');
+    enviarMsgChatMotorista('🚗 Motorista chegou na parada! Aguardando para seguir viagem.', true);
+  } else {
+    // Chegou no destino final — libera finalizar corrida
+    chegouAoCliente = true;
+    document.getElementById('btn-cheguei').hidden = true;
+    document.getElementById('btn-finalizar-corrida').hidden = false;
+    document.getElementById('ongoing-eta-badge').textContent = '🟢 Você chegou!';
+    showToast('🔔 Passageiro avisado que você chegou');
+    enviarMsgChatMotorista('🚗 Motorista chegou ao seu local!', true);
+  }
+});
+
+document.getElementById('btn-seguir-viagem')?.addEventListener('click', () => {
+  indiceRotaAtualMotorista++;
+  renderRotaMotorista();
+
+  // Sincroniza com o Firebase para o passageiro também ver a rota atualizada
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+      indiceRotaAtual: indiceRotaAtualMotorista,
+    }).catch((e) => console.error('[motorista] erro ao sincronizar avanço de rota:', e));
+  }
+
+  document.getElementById('btn-seguir-viagem').hidden = true;
+  document.getElementById('btn-cheguei').hidden = false;
+  document.getElementById('ongoing-eta-badge').textContent = '🕒 -- até o próximo destino';
+  showToast('▶ Seguindo para: ' + (sequenciaRotaMotorista[indiceRotaAtualMotorista + 1]?.texto || 'destino'));
+  enviarMsgChatMotorista('🚗 Motorista seguiu viagem!', true);
+});
+
+document.getElementById('btn-finalizar-corrida')?.addEventListener('click', finalizarCorrida);
+
+document.getElementById('link-cancelar-corrida-motorista')?.addEventListener('click', cancelarCorridaMotorista);
+async function cancelarCorridaMotorista() {
+  const corrida = state.corridaAtual;
+  if (!corrida) { go('screen-home'); return; }
+  if (!confirm('Cancelar essa corrida? O passageiro será avisado.')) return;
+
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    try {
+      await fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+        status: 'cancelada',
+        canceladoPor: 'motorista',
+      });
+    } catch (e) {
+      console.error('[motorista] erro ao cancelar corrida:', e);
+      showToast('⚠️ Erro ao cancelar — tenta de novo');
+      return;
+    }
+  }
+
+  state.corridaAtual = null;
+  state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
+  pararEscutaChat();
+  pararEscutaCancelamento();
+  pararEscutaRota();
+  pararBroadcastPosicao();
+  marcadorMotoristaMap = null;
+  sequenciaRotaMotorista = [];
+  indiceRotaAtualMotorista = 0;
+
+  showToast('❌ Corrida cancelada');
+  if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
+  go('screen-home');
+}
+
+function finalizarCorrida() {
+  const corrida = state.corridaAtual;
+  if (!corrida) { go('screen-home'); return; }
+
+  const km = (corrida.origemLat && corrida.destinoLat)
+    ? haversineKm(corrida.origemLat, corrida.origemLon, corrida.destinoLat, corrida.destinoLon)
+    : 0;
+
+  const historico = JSON.parse(localStorage.getItem('interliga_motorista_historico') || '[]');
+  historico.unshift({
+    origem: corrida.origem, destino: corrida.destino,
+    valor: Number(corrida.preco || 18), km,
+    data: new Date().toISOString(),
   });
+  localStorage.setItem('interliga_motorista_historico', JSON.stringify(historico.slice(0, 100)));
+
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), { status: 'finalizada' }).catch(() => {});
+  }
+  localStorage.removeItem('interliga_mot_corrida_ativa'); // limpa corrida ativa
+
+  // Débito automático se o passageiro escolheu pagar pela Carteira do app
+  if (corrida.formaPagamento === 'carteira' && corrida.passageiroId) {
+    lancarCarteira(corrida.passageiroId, -Number(corrida.preco || 0), 'Pagamento de corrida', corrida.id);
+  }
+  // Cupom de desconto: o passageiro pagou menos, mas o motorista recebe o valor
+  // cheio — a diferença vira crédito na carteira do motorista, que é abatida
+  // depois no repasse (a comissão da plataforma nesse valor a mais nunca é cobrada
+  // do motorista, é a plataforma que absorve o custo do cupom).
+  if (Number(corrida.descontoCupomValor || 0) > 0 && meuMotoristaId) {
+    lancarCarteira(meuMotoristaId, Number(corrida.descontoCupomValor), 'Crédito de cupom aplicado pelo passageiro' + (corrida.cupomCodigo ? ` (${corrida.cupomCodigo})` : ''), corrida.id);
+  }
+  // Recompensa de indicação (bônus de quem indicou esse passageiro)
+  processarRecompensaIndicacao(corrida);
+  // Cashback da corrida (só Interliga X, se o programa estiver ativo)
+  processarCashback(corrida);
+
+  state.corridaAtual = null;
+  state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
+  pararEscutaChat();
+  pararEscutaCancelamento();
+  pararEscutaRota();
+  pararBroadcastPosicao();
+  marcadorMotoristaMap = null;
+  sequenciaRotaMotorista = [];
+  indiceRotaAtualMotorista = 0;
+
+  showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.precoOriginal || corrida.preco || 18).toFixed(2).replace('.', ','));
+  if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
+  abrirTelaAvaliarPassageiro(corrida.passageiroId, corrida.passageiroNome, corrida.id);
+  atualizarStatsHome();
 }
 
 // ─────────────────────────────────────
-// AVALIAÇÃO MÚTUA — passageiro avalia motorista depois da corrida
+// AVALIAÇÃO MÚTUA — motorista avalia passageiro depois da corrida
 // ─────────────────────────────────────
-let notaSelecionadaMotorista = 0;
-let avaliarMotoristaId = null;
-let avaliarCorridaIdAtual = null;
+let notaSelecionadaPassageiro = 0;
+let avaliarPassageiroId = null;
+let avaliarCorridaIdMotorista = null;
 
-function abrirTelaAvaliarMotorista(motoristaId, motoristaNome) {
-  avaliarMotoristaId = motoristaId || null;
-  avaliarCorridaIdAtual = state.corridaId || null;
-  notaSelecionadaMotorista = 0;
-  renderEstrelasMotorista();
-  document.getElementById('avaliar-mot-nome').textContent = motoristaNome || 'o motorista';
-  document.getElementById('avaliar-mot-comentario').value = '';
-  if (!avaliarMotoristaId) { go('screen-home'); return; } // corrida antiga sem motoristaId — não tem quem avaliar
-  go('screen-avaliar-motorista');
+function abrirTelaAvaliarPassageiro(passageiroId, passageiroNome, corridaId) {
+  avaliarPassageiroId = passageiroId || null;
+  avaliarCorridaIdMotorista = corridaId || null;
+  notaSelecionadaPassageiro = 0;
+  renderEstrelasPassageiro();
+  document.getElementById('avaliar-pax-nome').textContent = passageiroNome || 'o passageiro';
+  document.getElementById('avaliar-pax-comentario').value = '';
+  if (!avaliarPassageiroId) { go('screen-home'); return; } // corrida antiga sem passageiroId — não tem quem avaliar
+  go('screen-avaliar-passageiro');
 }
 
-function renderEstrelasMotorista() {
-  document.querySelectorAll('#avaliar-mot-estrelas span').forEach(el => {
+function renderEstrelasPassageiro() {
+  document.querySelectorAll('#avaliar-pax-estrelas span').forEach(el => {
     const n = Number(el.dataset.nota);
-    el.textContent = n <= notaSelecionadaMotorista ? '★' : '☆';
-    el.style.color = n <= notaSelecionadaMotorista ? 'var(--orange)' : 'var(--text-soft)';
+    el.textContent = n <= notaSelecionadaPassageiro ? '★' : '☆';
+    el.style.color = n <= notaSelecionadaPassageiro ? 'var(--orange)' : 'var(--text-soft)';
   });
 }
 
-document.querySelectorAll('#avaliar-mot-estrelas span').forEach(el => {
+document.querySelectorAll('#avaliar-pax-estrelas span').forEach(el => {
   el.style.cursor = 'pointer';
   el.addEventListener('click', () => {
-    notaSelecionadaMotorista = Number(el.dataset.nota);
-    renderEstrelasMotorista();
+    notaSelecionadaPassageiro = Number(el.dataset.nota);
+    renderEstrelasPassageiro();
   });
 });
 
-document.getElementById('btn-enviar-avaliacao-motorista')?.addEventListener('click', async () => {
-  if (notaSelecionadaMotorista === 0) { showToast('⚠️ Toca numa estrela pra dar a nota'); return; }
-  const comentario = document.getElementById('avaliar-mot-comentario').value.trim();
-  await enviarAvaliacao('motorista', avaliarMotoristaId, notaSelecionadaMotorista, comentario, avaliarCorridaIdAtual);
-  showToast('✅ Avaliação enviada, obrigado!');
+document.getElementById('btn-enviar-avaliacao-passageiro')?.addEventListener('click', async () => {
+  if (notaSelecionadaPassageiro === 0) { showToast('⚠️ Toca numa estrela pra dar a nota'); return; }
+  const comentario = document.getElementById('avaliar-pax-comentario').value.trim();
+  await enviarAvaliacao('passageiro', avaliarPassageiroId, notaSelecionadaPassageiro, comentario, avaliarCorridaIdMotorista);
+  showToast('✅ Avaliação enviada!');
   go('screen-home');
 });
 
-document.getElementById('link-pular-avaliacao-motorista')?.addEventListener('click', () => go('screen-home'));
+document.getElementById('link-pular-avaliacao-passageiro')?.addEventListener('click', () => go('screen-home'));
 
-document.getElementById('btn-reportar-motorista')?.addEventListener('click', async () => {
-  const motoristaId = state.motoristaIdParaAvaliar;
-  const motoristaNome = document.getElementById('avaliar-mot-nome')?.textContent || 'o motorista';
-
-  const motivo = prompt(`Qual o motivo do reporte de "${motoristaNome}"?\n\n1 - Comportamento inadequado\n2 - Veículo diferente do cadastrado\n3 - Não seguiu a rota\n4 - Cobrou valor diferente\n5 - Outro\n\nDigite o número ou descreva:`);
-  if (!motivo) return;
-
-  try {
-    if (firebaseReady && db && meuPassageiroId) {
-      await fb.addDoc(fb.collection(db, 'reportes_motoristas'), {
-        motoristaId,
-        motoristaNome,
-        passageiroId: meuPassageiroId,
-        motivo,
-        criadoEm: fb.serverTimestamp(),
-        corridaId: state.corridaId || null,
-      });
-    }
-    showToast('✅ Reporte enviado ao administrador');
-    go('screen-home');
-  } catch(e) {
-    console.error('[passageiro] erro ao reportar motorista:', e);
-    showToast('⚠️ Erro ao enviar reporte');
-  }
-});
-
-// Atualiza a média de avaliação de um motorista ou passageiro, de forma segura mesmo
-// com várias avaliações chegando ao mesmo tempo (usa transação do Firebase).
+// Atualiza a média de avaliação de forma segura mesmo com várias avaliações
+// chegando ao mesmo tempo (usa transação do Firebase).
 async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
   if (!firebaseReady || !db || !paraId) return;
   const colecao = tipo === 'motorista' ? 'motoristas' : 'passageiros';
@@ -1397,127 +1443,57 @@ async function enviarAvaliacao(tipo, paraId, nota, comentario, corridaId) {
       });
     });
   } catch (e) {
-    console.warn('[passageiro] erro ao enviar avaliação:', e);
+    console.warn('[motorista] erro ao enviar avaliação:', e);
   }
 }
 
-function exibirMotoristaEncontrado({ nome, veiculo, placa, avaliacao, motoristaId }) {
-  timestampAceite = Date.now(); // marca o momento do aceite para calcular multa de cancelamento
-  state.motoristaIdDaCorrida = motoristaId || null;
-  document.getElementById('block-searching').hidden = true;
-  const blockDriver = document.getElementById('block-driver');
-  blockDriver.hidden = false;
-
-  document.getElementById('tracking-title').textContent = 'Motorista encontrado!';
-  document.getElementById('tracking-sub').textContent = 'A caminho do seu local';
-  document.getElementById('tracking-eta').textContent = '4 min';
-
-  document.getElementById('driver-avatar').textContent = nome.slice(0, 2).toUpperCase();
-  document.getElementById('driver-name').textContent = nome;
-  document.getElementById('driver-detail').textContent = `⭐ ${avaliacao} · ${veiculo} · ${placa}`;
-  document.getElementById('driver-status').textContent = '🟢 A caminho';
-  document.getElementById('driver-price').textContent = 'R$ ' + (state.precos[state.categoriaEscolhida] || 18).toFixed(2).replace('.', ',');
-
-  showToast(`✅ ${nome} aceitou sua corrida!`);
-
-  try { iniciarChatCorrida(); } catch (e) { console.error('[passageiro] erro ao iniciar chat:', e); }
-  try { iniciarMapaTrackingPassageiro(); } catch (e) { console.error('[passageiro] erro ao iniciar mapa tracking:', e); }
-  try { escutarPosicaoMotorista(); } catch (e) { console.error('[passageiro] erro ao escutar posição motorista:', e); }
-}
-
 // ─────────────────────────────────────
-// MAPA EM TEMPO REAL — passageiro vê o motorista se movendo
+// CHAT — motorista ↔ passageiro
 // ─────────────────────────────────────
-let mapTrackingPassageiro = null;
-let marcadorMotoristaTracking = null;
-let posicaoMotoristaListenerUnsub = null;
-
-function iniciarMapaTrackingPassageiro() {
-  const el = document.getElementById('map-tracking');
-  if (!el) return;
-
-  const tryInit = () => {
-    if (typeof L === 'undefined') { setTimeout(tryInit, 150); return; }
-    if (el.offsetWidth < 10 || el.offsetHeight < 10) { setTimeout(tryInit, 150); return; }
-    if (mapTrackingPassageiro) { mapTrackingPassageiro.invalidateSize(); return; }
-
-    const lat = state.origem?.lat || -12.7375;
-    const lon = state.origem?.lon || -38.6285;
-    mapTrackingPassageiro = L.map('map-tracking', { zoomControl: false, attributionControl: false }).setView([lat, lon], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapTrackingPassageiro);
-    L.marker([lat, lon]).addTo(mapTrackingPassageiro); // ponto de embarque fixo
-  };
-  tryInit();
-}
-
-function escutarPosicaoMotorista() {
-  if (!firebaseReady || !db || !state.corridaId || posicaoMotoristaListenerUnsub) return;
-
-  posicaoMotoristaListenerUnsub = fb.onSnapshot(fb.doc(db, 'corridas', state.corridaId), (snap) => {
-    const data = snap.data();
-    console.log('[passageiro] verificando posição do motorista. motoristaLat:', data?.motoristaLat, 'motoristaLon:', data?.motoristaLon);
-    if (!data || !data.motoristaLat || !data.motoristaLon) return;
-    if (!mapTrackingPassageiro) { console.warn('[passageiro] mapTrackingPassageiro ainda não está pronto'); return; }
-
-    const posicao = [data.motoristaLat, data.motoristaLon];
-    if (!marcadorMotoristaTracking) {
-      marcadorMotoristaTracking = L.marker(posicao, {
-        icon: L.divIcon({ className: '', html: '<div style="font-size:24px;">🚗</div>', iconSize: [30, 30] })
-      }).addTo(mapTrackingPassageiro);
-    } else {
-      marcadorMotoristaTracking.setLatLng(posicao);
-    }
-    mapTrackingPassageiro.panTo(posicao);
-
-    // Calcular ETA ao vivo baseado na distância real até o ponto de embarque/destino atual
-    atualizarEtaAoVivo(data.motoristaLat, data.motoristaLon);
-  }, (erro) => console.error('[passageiro] erro no listener de posição:', erro));
-}
-
-function atualizarEtaAoVivo(motoristaLat, motoristaLon) {
-  const pontoDestinoAtual = obterPontoAtualDaRota();
-  if (!pontoDestinoAtual || !pontoDestinoAtual.lat) return;
-
-  const km = haversineKm(motoristaLat, motoristaLon, pontoDestinoAtual.lat, pontoDestinoAtual.lon);
-  const minutosEstimados = Math.max(1, Math.round(km * 2.5)); // ~2.5 min por km em trânsito urbano
-
-  const etaEl = document.getElementById('tracking-eta');
-  if (etaEl) etaEl.textContent = minutosEstimados + ' min';
-}
-
-function pararEscutaPosicaoMotorista() {
-  if (posicaoMotoristaListenerUnsub) { posicaoMotoristaListenerUnsub(); posicaoMotoristaListenerUnsub = null; }
-  marcadorMotoristaTracking = null;
-}
-
-// ─────────────────────────────────────
-// CHAT — passageiro ↔ motorista via Firestore
-// ─────────────────────────────────────
-function iniciarChatCorrida() {
-  document.getElementById('chat-panel').hidden = false;
-  if (!firebaseReady || !db || !state.corridaId) return;
+function iniciarChatMotorista() {
+  document.getElementById('chat-panel-driver').hidden = false;
+  if (!firebaseReady || !db || !state.corridaAtualId) return;
   if (state.chatListenerUnsub) return;
 
   const q = fb.query(
-    fb.collection(db, 'corridas', state.corridaId, 'mensagens'),
+    fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'),
     fb.orderBy('ts', 'asc'), fb.limit(50)
   );
+
+  let primeiraCaraga = true;
+
   state.chatListenerUnsub = fb.onSnapshot(q, (snap) => {
+    const container = document.getElementById('chat-messages-driver');
+    if (!container) return;
+
+    if (primeiraCaraga) {
+      // Na primeira carga, renderiza todas as mensagens do zero
+      primeiraCaraga = false;
+      container.innerHTML = '';
+      snap.docs.forEach(doc => {
+        const msg = doc.data();
+        const tipo = msg.de === 'motorista' ? 'me' : msg.de === 'sistema' ? 'sys' : 'them';
+        renderChatMessageMotorista(msg.texto, tipo, msg.audioData || null);
+      });
+      return;
+    }
+
+    // Após primeira carga, só adiciona as novas
     snap.docChanges().forEach(change => {
       if (change.type === 'added') {
         const msg = change.doc.data();
-        // Só renderiza mensagens DO MOTORISTA — as do passageiro já foram
-        // renderizadas por enviarMensagemChat() antes de ir pro Firebase
-        // (evita duplicação)
-        if (msg.de === 'passageiro') return;
-        if (msg.tipo === 'audio') {
-          renderChatMessage(null, 'them', msg.audioData);
-        } else {
-          renderChatMessage(msg.texto, 'them');
-        }
+        if (change.doc.metadata.hasPendingWrites) return;
+        const tipo = msg.de === 'motorista' ? 'me' : msg.de === 'sistema' ? 'sys' : 'them';
+        renderChatMessageMotorista(msg.texto, tipo, msg.audioData || null);
       }
     });
+  }, (e) => {
+    console.warn('[motorista] erro no chat listener:', e);
   });
+}
+
+function pararEscutaChat() {
+  if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
 }
 
 function tocarSomNotificacaoChat() {
@@ -1535,8 +1511,9 @@ function tocarSomNotificacaoChat() {
   } catch (e) {}
 }
 
-function renderChatMessage(texto, tipo, audioDataUrl = null) {
-  const container = document.getElementById('chat-messages');
+function renderChatMessageMotorista(texto, tipo, audioDataUrl = null) {
+  const container = document.getElementById('chat-messages-driver');
+  if (!container) return;
   const div = document.createElement('div');
   div.className = `chat-msg chat-msg--${tipo}` + (audioDataUrl ? ' chat-msg--audio' : '');
   if (audioDataUrl) {
@@ -1549,53 +1526,55 @@ function renderChatMessage(texto, tipo, audioDataUrl = null) {
   }
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
-  if (tipo === 'them' || tipo === 'sys') tocarSomNotificacaoChat();
+  if (tipo === 'them') tocarSomNotificacaoChat();
 }
 
-async function enviarMensagemChat(texto) {
+async function enviarMsgChatMotorista(texto, isSystem = false) {
   if (!texto.trim()) return;
-  renderChatMessage(texto, 'me');
-  if (firebaseReady && db && state.corridaId) {
+  renderChatMessageMotorista(texto, isSystem ? 'sys' : 'me');
+  if (firebaseReady && db && state.corridaAtualId) {
     try {
-      await fb.addDoc(fb.collection(db, 'corridas', state.corridaId, 'mensagens'), {
-        texto, de: 'passageiro', ts: fb.serverTimestamp(),
+      await fb.addDoc(fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'), {
+        texto, de: isSystem ? 'sistema' : 'motorista', ts: fb.serverTimestamp(),
       });
     } catch (e) { console.warn('Erro ao enviar mensagem:', e); }
   }
 }
 
-async function enviarAudioChat(audioDataUrl) {
-  renderChatMessage(null, 'me', audioDataUrl);
-  if (firebaseReady && db && state.corridaId) {
+async function enviarAudioChatMotorista(audioDataUrl) {
+  renderChatMessageMotorista(null, 'me', audioDataUrl);
+  if (firebaseReady && db && state.corridaAtualId) {
     try {
-      await fb.addDoc(fb.collection(db, 'corridas', state.corridaId, 'mensagens'), {
-        tipo: 'audio', audioData: audioDataUrl, de: 'passageiro', ts: fb.serverTimestamp(),
+      await fb.addDoc(fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'), {
+        tipo: 'audio', audioData: audioDataUrl, de: 'motorista', ts: fb.serverTimestamp(),
       });
     } catch (e) {
       console.warn('Erro ao enviar áudio:', e);
       showToast('⚠️ Falha ao enviar o áudio — tente de novo');
     }
   } else {
-    showToast('⚠️ Sem conexão — áudio não foi enviado ao motorista');
+    showToast('⚠️ Sem conexão — áudio não foi enviado ao passageiro');
   }
 }
 
-document.getElementById('btn-send-chat')?.addEventListener('click', () => {
-  const input = document.getElementById('chat-input');
-  enviarMensagemChat(input.value);
+document.getElementById('btn-send-chat-driver')?.addEventListener('click', () => {
+  const input = document.getElementById('chat-input-driver');
+  enviarMsgChatMotorista(input.value);
   input.value = '';
 });
-document.getElementById('chat-input')?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('btn-send-chat').click();
+document.getElementById('chat-input-driver')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btn-send-chat-driver').click();
 });
-document.querySelectorAll('.chat-quick-btn').forEach(btn => {
-  btn.addEventListener('click', () => enviarMensagemChat(btn.dataset.msg));
+
+document.getElementById('btn-chat-driver')?.addEventListener('click', () => {
+  document.getElementById('chat-panel-driver').hidden = false;
+  document.getElementById('chat-input-driver')?.focus();
 });
 
 // ─────────────────────────────────────
 // MENSAGEM DE VOZ NO CHAT (gravação pelo microfone)
 // ─────────────────────────────────────
-function blobParaBase64(blob) {
+function blobParaBase64Motorista(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result);
@@ -1604,15 +1583,15 @@ function blobParaBase64(blob) {
   });
 }
 
-let gravadorAudioChat = null;
-let pedacosAudioChat = [];
-let gravandoAudioChat = false;
-let timeoutGravacaoChat = null;
+let gravadorAudioChatMotorista = null;
+let pedacosAudioChatMotorista = [];
+let gravandoAudioChatMotorista = false;
+let timeoutGravacaoChatMotorista = null;
 
-async function alternarGravacaoAudioChat() {
-  const btnMic = document.getElementById('btn-mic-chat');
-  if (gravandoAudioChat) {
-    gravadorAudioChat?.stop();
+async function alternarGravacaoAudioChatMotorista() {
+  const btnMic = document.getElementById('btn-mic-chat-driver');
+  if (gravandoAudioChatMotorista) {
+    gravadorAudioChatMotorista?.stop();
     return;
   }
   try {
@@ -1621,54 +1600,82 @@ async function alternarGravacaoAudioChat() {
     if (window.MediaRecorder?.isTypeSupported?.('audio/webm;codecs=opus')) {
       opcoes.mimeType = 'audio/webm;codecs=opus';
     }
-    gravadorAudioChat = new MediaRecorder(stream, opcoes);
-    pedacosAudioChat = [];
-    gravadorAudioChat.ondataavailable = (e) => { if (e.data && e.data.size > 0) pedacosAudioChat.push(e.data); };
-    gravadorAudioChat.onstop = async () => {
+    gravadorAudioChatMotorista = new MediaRecorder(stream, opcoes);
+    pedacosAudioChatMotorista = [];
+    gravadorAudioChatMotorista.ondataavailable = (e) => { if (e.data && e.data.size > 0) pedacosAudioChatMotorista.push(e.data); };
+    gravadorAudioChatMotorista.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
-      clearTimeout(timeoutGravacaoChat);
-      gravandoAudioChat = false;
+      clearTimeout(timeoutGravacaoChatMotorista);
+      gravandoAudioChatMotorista = false;
       btnMic?.classList.remove('is-recording');
-      if (pedacosAudioChat.length === 0) {
+      if (pedacosAudioChatMotorista.length === 0) {
         showToast('⚠️ Gravação muito curta, nada foi enviado');
         return;
       }
-      const blob = new Blob(pedacosAudioChat, { type: gravadorAudioChat.mimeType || 'audio/webm' });
+      const blob = new Blob(pedacosAudioChatMotorista, { type: gravadorAudioChatMotorista.mimeType || 'audio/webm' });
       if (blob.size > 0) {
-        const base64 = await blobParaBase64(blob);
-        enviarAudioChat(base64);
+        const base64 = await blobParaBase64Motorista(blob);
+        enviarAudioChatMotorista(base64);
       } else {
         showToast('⚠️ Gravação vazia, nada foi enviado');
       }
     };
-    gravadorAudioChat.start();
-    gravandoAudioChat = true;
+    gravadorAudioChatMotorista.start();
+    gravandoAudioChatMotorista = true;
     btnMic?.classList.add('is-recording');
     showToast('🎙️ Gravando... toque de novo para enviar');
-    clearTimeout(timeoutGravacaoChat);
-    timeoutGravacaoChat = setTimeout(() => { if (gravandoAudioChat) gravadorAudioChat?.stop(); }, 30000); // limite de 30s
+    clearTimeout(timeoutGravacaoChatMotorista);
+    timeoutGravacaoChatMotorista = setTimeout(() => { if (gravandoAudioChatMotorista) gravadorAudioChatMotorista?.stop(); }, 30000);
   } catch (e) {
-    console.error('[passageiro] erro ao gravar áudio:', e);
+    console.error('[motorista] erro ao gravar áudio:', e);
     showToast('⚠️ Não foi possível acessar o microfone');
   }
 }
 
-document.getElementById('btn-mic-chat')?.addEventListener('click', alternarGravacaoAudioChat);
+document.getElementById('btn-mic-chat-driver')?.addEventListener('click', alternarGravacaoAudioChatMotorista);
+
+// Número do bot Interliga (Railway/Baileys) — faz a ponte anônima entre motorista e passageiro
+const BOT_NUMERO = '5571981899571';
+
+document.getElementById('btn-call-passenger')?.addEventListener('click', () => {
+  const corridaInfo = state.corridaAtualId || 'atual';
+  const msg = encodeURIComponent(
+    `📞 [Interliga] Motorista solicita ligação · Corrida #${corridaInfo}\nPor favor ligue para o motorista via bot.`
+  );
+  window.open('https://wa.me/' + BOT_NUMERO + '?text=' + msg, '_blank');
+  showToast('📞 Solicitação enviada — passageiro vai ligar via bot');
+});
 
 // ─────────────────────────────────────
-// ESCOLHA DE PAPEL (motorista / passageiro) — primeira tela que todo mundo vê
+// GANHOS — histórico
 // ─────────────────────────────────────
-document.getElementById('btn-sou-motorista')?.addEventListener('click', () => {
-  localStorage.setItem('interliga_papel', 'motorista');
-  window.location.href = 'motorista.html';
-});
-document.getElementById('btn-sou-passageiro')?.addEventListener('click', () => {
-  localStorage.setItem('interliga_papel', 'passageiro');
-  go('screen-login-passageiro');
-});
+function renderHistoricoGanhos() {
+  const historico = JSON.parse(localStorage.getItem('interliga_motorista_historico') || '[]');
+  const total = historico.reduce((acc, c) => acc + c.valor, 0);
+  document.getElementById('earnings-total').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+
+  const listEl = document.getElementById('earnings-list');
+  if (!listEl) return;
+  if (historico.length === 0) return; // mantém o empty-state do HTML
+
+  listEl.innerHTML = historico.map(c => `
+    <div class="trip-card">
+      <div class="trip-card-top">
+        <span>${new Date(c.data).toLocaleDateString('pt-BR')}</span>
+        <span class="trip-card-price">R$ ${c.valor.toFixed(2).replace('.', ',')}</span>
+      </div>
+      <div class="trip-card-route">${c.origem} → ${c.destino}</div>
+    </div>
+  `).join('');
+}
+
+document.querySelector('[data-go="screen-earnings"]')?.addEventListener('click', renderHistoricoGanhos);
 
 // ─────────────────────────────────────
-// VALIDAÇÃO DE CPF — algoritmo padrão dos 2 dígitos verificadores (sem precisar de API)
+// INICIALIZAÇÃO
+// ─────────────────────────────────────
+// ─────────────────────────────────────
+// VALIDAÇÃO DE CPF — mesmo algoritmo padrão dos 2 dígitos verificadores
 // ─────────────────────────────────────
 function validarCPF(cpf) {
   cpf = (cpf || '').replace(/\D/g, '');
@@ -1685,7 +1692,7 @@ function validarCPF(cpf) {
   return resto === parseInt(cpf[10]);
 }
 
-document.getElementById('cad-pax-cpf')?.addEventListener('input', (e) => {
+document.getElementById('cad-mot-cpf')?.addEventListener('input', (e) => {
   let v = e.target.value.replace(/\D/g, '').slice(0, 11);
   if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
   else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
@@ -1694,10 +1701,9 @@ document.getElementById('cad-pax-cpf')?.addEventListener('input', (e) => {
 });
 
 // ─────────────────────────────────────
-// SELFIE — captura via câmera do celular e compressão antes de salvar
-// (uma foto direto da câmera pode ter vários MB; comprimida fica bem menor)
+// FOTOS (selfie + documentos) — comprimidas antes de salvar, pra não pesar no Firestore
 // ─────────────────────────────────────
-function comprimirImagemArquivo(file, maxLado = 600, qualidade = 0.6) {
+function comprimirImagemArquivo(file, maxLado = 700, qualidade = 0.6) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1719,35 +1725,44 @@ function comprimirImagemArquivo(file, maxLado = 600, qualidade = 0.6) {
   });
 }
 
-let selfiePassageiroBase64 = null;
-document.getElementById('cad-pax-selfie-input')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    selfiePassageiroBase64 = await comprimirImagemArquivo(file);
-    const preview = document.getElementById('cad-pax-selfie-preview');
-    preview.innerHTML = `<img src="${selfiePassageiroBase64}">`;
-  } catch (err) {
-    showToast('⚠️ Não foi possível processar a foto, tenta de novo');
-  }
-});
+const fotosCadastroMotorista = { selfie: null, cnh: null, crlv: null, comprovante: null };
+
+function ligarUploadFoto(inputId, previewId, chave, emoji) {
+  document.getElementById(inputId)?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const base64 = await comprimirImagemArquivo(file);
+      fotosCadastroMotorista[chave] = base64;
+      document.getElementById(previewId).innerHTML = `<img src="${base64}">`;
+    } catch (err) {
+      showToast('⚠️ Não foi possível processar a foto, tenta de novo');
+    }
+  });
+}
+ligarUploadFoto('cad-mot-selfie-input', 'cad-mot-selfie-preview', 'selfie');
+ligarUploadFoto('cad-mot-cnh-input', 'cad-mot-cnh-preview', 'cnh');
+ligarUploadFoto('cad-mot-crlv-input', 'cad-mot-crlv-preview', 'crlv');
+ligarUploadFoto('cad-mot-comprovante-input', 'cad-mot-comprovante-preview', 'comprovante');
 
 // ─────────────────────────────────────
 // ENVIO DO CADASTRO
 // ─────────────────────────────────────
-document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('click', async () => {
-  const erroEl = document.getElementById('cad-pax-erro');
+document.getElementById('btn-enviar-cadastro-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('cad-mot-erro');
   erroEl.hidden = true;
-
-  const nome = document.getElementById('cad-pax-nome').value.trim();
-  const celular = document.getElementById('cad-pax-celular').value.trim();
-  const email = document.getElementById('cad-pax-email').value.trim();
-  const cpf = document.getElementById('cad-pax-cpf').value.replace(/\D/g, '');
-  const confirma = document.getElementById('cad-pax-cpf-confirma').value.trim();
-  const senha = document.getElementById('cad-pax-senha').value;
-  const senhaConfirma = document.getElementById('cad-pax-senha-confirma').value;
-
   function mostrarErro(msg) { erroEl.textContent = '⚠️ ' + msg; erroEl.hidden = false; }
+
+  const nome = document.getElementById('cad-mot-nome').value.trim();
+  const celular = document.getElementById('cad-mot-celular').value.trim();
+  const email = document.getElementById('cad-mot-email').value.trim();
+  const cpf = document.getElementById('cad-mot-cpf').value.replace(/\D/g, '');
+  const confirma = document.getElementById('cad-mot-cpf-confirma').value.trim();
+  const senha = document.getElementById('cad-mot-senha').value;
+  const senhaConfirma = document.getElementById('cad-mot-senha-confirma').value;
+  const veiculo = document.getElementById('cad-mot-veiculo').value.trim();
+  const placa = document.getElementById('cad-mot-placa').value.trim().toUpperCase();
+  const cidade = document.getElementById('cad-mot-cidade').value;
 
   if (!nome || nome.split(' ').length < 2) return mostrarErro('Informe seu nome completo');
   if (celular.replace(/\D/g, '').length < 10) return mostrarErro('Informe um celular válido com DDD');
@@ -1756,9 +1771,14 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
   if (confirma !== cpf.slice(-2)) return mostrarErro('Os 2 últimos dígitos não confirmam o CPF informado');
   if (senha.length < 6) return mostrarErro('A senha precisa ter pelo menos 6 caracteres');
   if (senha !== senhaConfirma) return mostrarErro('As senhas não são iguais');
-  if (!selfiePassageiroBase64) return mostrarErro('Tire uma selfie pra concluir o cadastro');
+  if (!veiculo) return mostrarErro('Informe o modelo do veículo');
+  if (!placa) return mostrarErro('Informe a placa do veículo');
+  if (!fotosCadastroMotorista.selfie) return mostrarErro('Tire uma selfie pra concluir o cadastro');
+  if (!fotosCadastroMotorista.cnh) return mostrarErro('Envie a foto da CNH');
+  if (!fotosCadastroMotorista.crlv) return mostrarErro('Envie a foto do CRLV (documento do veículo)');
+  if (!fotosCadastroMotorista.comprovante) return mostrarErro('Envie a foto do comprovante de residência');
 
-  const btn = document.getElementById('btn-enviar-cadastro-passageiro');
+  const btn = document.getElementById('btn-enviar-cadastro-motorista');
   btn.disabled = true;
   btn.textContent = 'Conectando...';
 
@@ -1769,7 +1789,6 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
     return mostrarErro('Sem conexão com o servidor — confira sua internet e tenta de novo');
   }
 
-  // Verifica CPF duplicado (passageiro ou motorista já cadastrado com esse CPF)
   btn.textContent = 'Verificando CPF...';
   try {
     const [snapPax, snapMot] = await Promise.all([
@@ -1781,33 +1800,40 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
       btn.textContent = 'Enviar cadastro';
       return mostrarErro('⚠️ Já existe uma conta com esse CPF. Use "Entrar" se já tem cadastro.');
     }
-  } catch (e) { console.warn('[cadastro] erro ao verificar CPF:', e); }
+  } catch (e) { console.warn('[motorista] erro ao verificar CPF:', e); }
 
   btn.textContent = 'Enviando...';
 
   try {
-    if (!meuPassageiroId) {
-      const cred = await authModRef.createUserWithEmailAndPassword(authPassageiro, email, senha);
-      meuPassageiroId = cred.user.uid;
+    if (!meuMotoristaId) {
+      const cred = await authModRef.createUserWithEmailAndPassword(authMotorista, email, senha);
+      meuMotoristaId = cred.user.uid;
     }
 
-    const codigoDigitado = document.getElementById('cad-pax-codigo-indicacao').value.trim().toUpperCase();
+    const codigoDigitado = document.getElementById('cad-mot-codigo-indicacao').value.trim().toUpperCase();
     const indicadoPor = codigoDigitado ? await resolverCodigoIndicacao(codigoDigitado) : null;
 
-    await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), {
-      nome, celular, email, cpf,
-      cidade: document.getElementById('cad-pax-cidade').value,
-      selfie: selfiePassageiroBase64,
-      verificacao: 'aprovado', // passageiro não passa por aprovação manual — só fica sujeito a bloqueio se necessário
-      codigoIndicacao: meuPassageiroId.slice(-7).toUpperCase(),
+    await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), {
+      nome, celular, email, cpf, veiculo, placa, cidade,
+      avaliacao: state.motorista.avaliacao || '5.0',
+      selfie: fotosCadastroMotorista.selfie,
+      docCnh: fotosCadastroMotorista.cnh,
+      docCrlv: fotosCadastroMotorista.crlv,
+      docComprovante: fotosCadastroMotorista.comprovante,
+      verificacao: 'pendente',
+      codigoIndicacao: meuMotoristaId.slice(-7).toUpperCase(),
       indicadoPor: indicadoPor || null,
       bonusIndicacaoPago: false,
-      criadoEm: fb.serverTimestamp(),
-    });
-    localStorage.setItem('interliga_pax_nome', nome);
-    aplicarStatusCadastro({ verificacao: 'aprovado' });
+      atualizadoEm: fb.serverTimestamp(),
+    }, { merge: true });
+
+    state.motorista.nome = nome;
+    state.motorista.veiculo = veiculo;
+    state.motorista.placa = placa;
+    state.motorista.cidade = cidade;
+    mostrarTelaAguardandoAprovacaoMotorista();
   } catch (e) {
-    console.error('[passageiro] erro ao enviar cadastro:', e);
+    console.error('[motorista] erro ao enviar cadastro:', e);
     if (e.code === 'auth/email-already-in-use') mostrarErro('Esse e-mail já tem cadastro — tenta Entrar em vez de cadastrar');
     else mostrarErro('Erro ao enviar — confira sua internet e tente de novo');
   } finally {
@@ -1817,55 +1843,48 @@ document.getElementById('btn-enviar-cadastro-passageiro')?.addEventListener('cli
 });
 
 // ─────────────────────────────────────
-// LOGIN (passageiro que já tem cadastro)
+// LOGIN (motorista que já tem cadastro)
 // ─────────────────────────────────────
-let _loginEmAndamento = false;
-
-document.getElementById('btn-fazer-login-passageiro')?.addEventListener('click', async () => {
-  const erroEl = document.getElementById('login-pax-erro');
+document.getElementById('btn-fazer-login-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('login-mot-erro');
   erroEl.hidden = true;
-  const email = document.getElementById('login-pax-email').value.trim();
-  const senha = document.getElementById('login-pax-senha').value;
+  const email = document.getElementById('login-mot-email').value.trim();
+  const senha = document.getElementById('login-mot-senha').value;
   if (!email || !senha) { erroEl.textContent = '⚠️ Preencha e-mail e senha'; erroEl.hidden = false; return; }
 
-  const btn = document.getElementById('btn-fazer-login-passageiro');
+  const btn = document.getElementById('btn-fazer-login-motorista');
   btn.disabled = true;
   btn.textContent = 'Conectando...';
-  _loginEmAndamento = true;
-
   const pronto = await esperarFirebasePronto();
   if (!pronto) {
     btn.disabled = false;
     btn.textContent = 'Entrar';
-    _loginEmAndamento = false;
     erroEl.textContent = '⚠️ Sem conexão com o servidor — confira sua internet e tenta de novo';
     erroEl.hidden = false;
     return;
   }
   btn.textContent = 'Entrando...';
   try {
-    await authModRef.signInWithEmailAndPassword(authPassageiro, email, senha);
-    // onAuthStateChanged cuida do resto (verificarCadastroPassageiro)
-    // Mantém _loginEmAndamento = true até o onAuthStateChanged confirmar o login
+    await authModRef.signInWithEmailAndPassword(authMotorista, email, senha);
+    // onAuthStateChanged cuida do resto (verificarCadastroMotorista)
   } catch (e) {
-    console.warn('[passageiro] erro no login:', e.code);
+    console.warn('[motorista] erro no login:', e.code);
     erroEl.textContent = '❌ E-mail ou senha incorretos';
     erroEl.hidden = false;
-    _loginEmAndamento = false;
   } finally {
     btn.disabled = false;
     btn.textContent = 'Entrar';
   }
 });
 
-document.getElementById('link-ir-pro-cadastro')?.addEventListener('click', () => go('screen-cadastro-passageiro'));
-document.getElementById('link-ir-pro-login')?.addEventListener('click', () => go('screen-login-passageiro'));
-document.getElementById('link-esqueci-senha-pax')?.addEventListener('click', async () => {
-  const email = document.getElementById('login-pax-email').value.trim();
+document.getElementById('link-ir-pro-cadastro-mot')?.addEventListener('click', () => go('screen-cadastro-motorista'));
+document.getElementById('link-ir-pro-login-mot')?.addEventListener('click', () => go('screen-login-motorista'));
+document.getElementById('link-esqueci-senha-mot')?.addEventListener('click', async () => {
+  const email = document.getElementById('login-mot-email').value.trim();
   if (!email) { showToast('⚠️ Digite seu e-mail no campo acima primeiro'); return; }
-  if (!authPassageiro) return;
+  if (!authMotorista) return;
   try {
-    await authModRef.sendPasswordResetEmail(authPassageiro, email);
+    await authModRef.sendPasswordResetEmail(authMotorista, email);
     showToast('📧 Enviamos um link pra redefinir sua senha');
   } catch (e) {
     showToast('⚠️ Não foi possível enviar — confira o e-mail digitado');
@@ -1873,882 +1892,204 @@ document.getElementById('link-esqueci-senha-pax')?.addEventListener('click', asy
 });
 
 // ─────────────────────────────────────
-// VERIFICAÇÃO DO STATUS DO CADASTRO — decide qual tela mostrar, e fica
-// escutando em tempo real enquanto está pendente (libera sozinho quando aprovar)
+// VERIFICAÇÃO DO STATUS DO CADASTRO
 // ─────────────────────────────────────
-let cadastroPassageiroListenerUnsub = null;
+let cadastroMotoristaListenerUnsub = null;
 
-async function verificarCadastroPassageiro() {
-  if (localStorage.getItem('interliga_papel') !== 'passageiro') return;
-  if (!firebaseReady || !db || !meuPassageiroId) return;
+async function verificarCadastroMotorista() {
+  if (!firebaseReady || !db) return;
   try {
-    const snap = await fb.getDoc(fb.doc(db, 'passageiros', meuPassageiroId));
-    if (!snap.exists()) {
-      go('screen-cadastro-passageiro');
+    const snap = await fb.getDoc(fb.doc(db, 'motoristas', meuMotoristaId));
+    if (!snap.exists() || !snap.data().verificacao) {
+      go('screen-cadastro-motorista');
       return;
     }
-    aplicarStatusCadastro(snap.data());
-    if (snap.data().verificacao === 'pendente') {
-      escutarStatusCadastro();
-      return;
-    }
-
-    // Verifica se havia uma corrida ativa antes de fechar o app
-    const corridaAtiva = localStorage.getItem('interliga_corrida_ativa');
-    if (corridaAtiva) {
-      try {
-        const dadosCorrida = JSON.parse(corridaAtiva);
-        const idadeMs = Date.now() - (dadosCorrida.criadoEm || 0);
-        // Só retoma se foi criada há menos de 2 horas
-        if (idadeMs < 2 * 60 * 60 * 1000 && dadosCorrida.corridaId) {
-          const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
-          if (snapCorrida.exists()) {
-            const statusCorrida = snapCorrida.data().status;
-            const dadosFirebase = snapCorrida.data();
-
-            if (['aguardando', 'aceita', 'em_andamento'].includes(statusCorrida)) {
-              state.corridaId = dadosCorrida.corridaId;
-              state.corridaLocalId = dadosCorrida.corridaId;
-              state.origem = { texto: dadosFirebase.origem || dadosCorrida.origem };
-              state.destino = { texto: dadosFirebase.destino || dadosCorrida.destino };
-              state.categoriaEscolhida = dadosCorrida.categoria;
-              state.precos = { [dadosCorrida.categoria]: dadosCorrida.preco };
-
-              go('screen-tracking');
-              montarSequenciaInicial();
-
-              // Sempre começa em "buscando" e deixa o listener atualizar com o status real
-              document.getElementById('block-searching').hidden = false;
-              document.getElementById('block-driver').hidden = true;
-              document.getElementById('chat-panel').hidden = true;
-              document.getElementById('tracking-title').textContent =
-                statusCorrida === 'aguardando' ? 'Buscando motorista...' : 'Reconectando...';
-
-              window._corridaRestoradaJaAceita = statusCorrida !== 'aguardando';
-              ouvirAceiteCorrida(dadosCorrida.corridaId);
-
-              if (statusCorrida !== 'aguardando') {
-                try { iniciarMapaTrackingPassageiro(); } catch(e) {}
-                try { escutarPosicaoMotorista(); } catch(e) {}
-                try { iniciarChatCorrida(); } catch(e) {}
-              }
-
-              showToast('🔄 Corrida em andamento retomada!');
-              return;
-            } else {
-              // Corrida já terminou — limpa
-              localStorage.removeItem('interliga_corrida_ativa');
-            }
-          }
-        } else {
-          localStorage.removeItem('interliga_corrida_ativa');
-        }
-      } catch(e) {
-        console.warn('[passageiro] erro ao retomar corrida:', e);
-        localStorage.removeItem('interliga_corrida_ativa');
+    const dados = snap.data();
+    if (dados.nome) state.motorista.nome = dados.nome;
+    if (dados.veiculo) state.motorista.veiculo = dados.veiculo;
+    if (dados.placa) state.motorista.placa = dados.placa;
+    if (dados.celular) state.motorista.celular = dados.celular;
+    if (dados.cidade) state.motorista.cidade = dados.cidade;
+    if (dados.cpf) state.motorista.cpf = dados.cpf;
+    if (dados.email) state.motorista.email = dados.email;
+    state.motorista.categoria = dados.categoria || 'x';
+    state.motorista.categorias = Array.isArray(dados.categorias) ? dados.categorias : [state.motorista.categoria];
+    const nomesCategoria = { x: 'Interliga X', plus: 'Interliga Plus', van: 'Interliga Van' };
+    const nomesCidade = { madre: 'Madre de Deus', sfc: 'São Francisco do Conde', candeias: 'Candeias', simoes: 'Simões Filho' };
+    const elVeiculo = document.getElementById('profile-driver-vehicle');
+    const nomesCategoriasTexto = (state.motorista.categorias || [state.motorista.categoria]).map(c => nomesCategoria[c] || c).join(' + ');
+    if (elVeiculo) elVeiculo.textContent = `${state.motorista.veiculo || '—'} · ${state.motorista.placa || '—'} · ${nomesCategoriasTexto}`;
+    const elNome = document.getElementById('profile-driver-name');
+    if (elNome) elNome.textContent = state.motorista.nome || 'Motorista';
+    const elTelefone = document.getElementById('profile-driver-phone');
+    if (elTelefone) elTelefone.textContent = state.motorista.celular || '—';
+    const elAvatar = document.getElementById('profile-driver-avatar');
+    if (elAvatar) {
+      if (dados.selfie) {
+        elAvatar.innerHTML = `<img src="${dados.selfie}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      } else {
+        elAvatar.textContent = (state.motorista.nome || 'M').trim().charAt(0).toUpperCase();
       }
     }
-
+    const inputFotoMot = document.getElementById('input-trocar-foto-mot');
+    if (inputFotoMot && !inputFotoMot._wiredPerfil) {
+      inputFotoMot._wiredPerfil = true;
+      inputFotoMot.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file || !firebaseReady || !db || !meuMotoristaId) return;
+        try {
+          showToast('📷 Atualizando foto...');
+          const novaFoto = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = ev => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const max = 400;
+                const ratio = Math.min(max/img.width, max/img.height, 1);
+                canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
+              };
+              img.onerror = reject; img.src = ev.target.result;
+            };
+            reader.onerror = reject; reader.readAsDataURL(file);
+          });
+          await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { selfie: novaFoto }, { merge: true });
+          if (elAvatar) elAvatar.innerHTML = `<img src="${novaFoto}" alt="Foto" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+          showToast('✅ Foto atualizada!');
+        } catch (err) { showToast('⚠️ Erro ao atualizar foto'); }
+      });
+    }
+    const elCpf = document.getElementById('perfil-mot-cpf');
+    if (elCpf && state.motorista.cpf) elCpf.textContent = state.motorista.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    const elEmail = document.getElementById('perfil-mot-email');
+    if (elEmail) elEmail.textContent = state.motorista.email || '—';
+    const elCidade = document.getElementById('perfil-mot-cidade');
+    if (elCidade) elCidade.textContent = nomesCidade[state.motorista.cidade] || '—';
+    const elCodigo = document.getElementById('perfil-mot-codigo');
+    if (elCodigo && meuMotoristaId) elCodigo.textContent = meuMotoristaId.slice(-7).toUpperCase();
+    obterSaldoCarteira(meuMotoristaId).then((saldo) => {
+      const elSaldo = document.getElementById('saldo-carteira-motorista');
+      if (elSaldo) elSaldo.textContent = 'R$ ' + saldo.toFixed(2).replace('.', ',');
+    });
+    aplicarStatusCadastroMotorista(dados);
   } catch (e) {
-    console.warn('[passageiro] erro ao verificar cadastro, liberando o app pra não travar o usuário:', e);
+    console.warn('[motorista] erro ao verificar cadastro, liberando Home pra não travar:', e);
     go('screen-home');
   }
 }
 
-function aplicarStatusCadastro(dados) {
-  state.passageiroDados = dados;
-
-  // Foto de perfil real
-  const avatarInner = document.getElementById('profile-avatar-inner');
-  if (avatarInner && dados.selfie) {
-    avatarInner.innerHTML = `<img src="${dados.selfie}" alt="Foto">`;
-  } else if (avatarInner && dados.nome) {
-    avatarInner.textContent = dados.nome.trim().charAt(0).toUpperCase();
-  }
-
-  // Troca de foto pelo perfil
-  const inputFoto = document.getElementById('input-trocar-foto-pax');
-  if (inputFoto && !inputFoto._wiredPerfil) {
-    inputFoto._wiredPerfil = true;
-    inputFoto.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file || !firebaseReady || !db || !meuPassageiroId) return;
-      try {
-        showToast('📷 Atualizando foto...');
-        const novaFoto = await comprimirImagemArquivo(file);
-        await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { selfie: novaFoto }, { merge: true });
-        if (avatarInner) avatarInner.innerHTML = `<img src="${novaFoto}" alt="Foto">`;
-        showToast('✅ Foto atualizada!');
-      } catch (err) {
-        showToast('⚠️ Erro ao atualizar foto');
-      }
-    });
-  }
-
+async function aplicarStatusCadastroMotorista(dados) {
   if (dados.bloqueado === true) {
-    document.getElementById('bloqueio-motivo-texto').textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
-    go('screen-bloqueado');
+    // Força offline na hora — não pode continuar recebendo corridas se foi bloqueado
+    state.online = false;
+    pararEscutaCorridas();
+    pararDisponibilidade();
+    const btnOnline = document.getElementById('online-toggle');
+    if (btnOnline) { btnOnline.dataset.online = 'false'; btnOnline.querySelector('.online-label').textContent = 'Offline'; }
+    const elMotivo = document.getElementById('bloqueio-mot-motivo-texto');
+    if (elMotivo) elMotivo.textContent = dados.motivoBloqueio || 'Sua conta foi bloqueada. Entre em contato com o suporte.';
+    go('screen-bloqueado-motorista');
+    escutarStatusCadastroMotorista();
     return;
   }
   if (dados.verificacao === 'aprovado') {
-    if (dados.nome) {
-      const elNome = document.getElementById('profile-name');
-      if (elNome) elNome.textContent = dados.nome;
-      const elAvatar = document.querySelector('.profile-avatar');
-      if (elAvatar) elAvatar.textContent = dados.nome.trim().charAt(0).toUpperCase();
-      const elHomeAvatar = document.getElementById('home-avatar');
-      if (elHomeAvatar) elHomeAvatar.textContent = dados.nome.trim().charAt(0).toUpperCase();
+    // Verifica se havia corrida ativa antes de fechar o app
+    const corridaAtiva = localStorage.getItem('interliga_mot_corrida_ativa');
+    if (corridaAtiva) {
+      try {
+        const dadosCorrida = JSON.parse(corridaAtiva);
+        const idadeMs = Date.now() - (dadosCorrida.aceitoEm || 0);
+        if (idadeMs < 2 * 60 * 60 * 1000 && dadosCorrida.corridaId) {
+          const snapCorrida = await fb.getDoc(fb.doc(db, 'corridas', dadosCorrida.corridaId));
+          if (snapCorrida.exists() && ['aceita', 'em_andamento'].includes(snapCorrida.data().status)) {
+            state.corridaAtualId = dadosCorrida.corridaId;
+            state.corridaAtual = { id: dadosCorrida.corridaId, ...snapCorrida.data() };
+            state.emCorridaAtiva = true;
+            showToast('🔄 Corrida em andamento retomada!');
+            go('screen-ongoing');
+            onEnterOngoing();
+            return;
+          } else {
+            localStorage.removeItem('interliga_mot_corrida_ativa');
+          }
+        } else {
+          localStorage.removeItem('interliga_mot_corrida_ativa');
+        }
+      } catch(e) {
+        console.warn('[motorista] erro ao retomar corrida:', e);
+        localStorage.removeItem('interliga_mot_corrida_ativa');
+      }
     }
-    if (dados.celular) {
-      const elTelefone = document.getElementById('profile-phone');
-      if (elTelefone) elTelefone.textContent = dados.celular;
-    }
-    state.passageiro = dados;
-    const elCpf = document.getElementById('perfil-pax-cpf');
-    if (elCpf && dados.cpf) elCpf.textContent = dados.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    const elEmail = document.getElementById('perfil-pax-email');
-    if (elEmail) elEmail.textContent = dados.email || '—';
-    const elCodigo = document.getElementById('perfil-pax-codigo');
-    if (elCodigo) elCodigo.textContent = dados.codigoIndicacao || (meuPassageiroId ? meuPassageiroId.slice(-7).toUpperCase() : '—');
-    obterSaldoCarteira(meuPassageiroId).then((saldo) => {
-      const elSaldo = document.getElementById('saldo-carteira-passageiro');
-      if (elSaldo) elSaldo.textContent = 'R$ ' + saldo.toFixed(2).replace('.', ',');
-    });
-    // Só navega pra home se o usuário ainda estiver numa tela "de entrada"
-    // (login, cadastro, splash, aguardando aprovação). Se ele já estiver
-    // usando o app normalmente (avaliando motorista, em corrida, no perfil,
-    // etc.), qualquer escrita no documento do passageiro — saldo, bônus de
-    // indicação, o que for — não deve puxar a navegação de volta pra home.
-    if (TELAS_SEM_HISTORICO_PAX.has(state.currentScreen)) {
-      go('screen-home');
-    }
+    go('screen-home');
     configurarNotificacoesPush();
   } else if (dados.verificacao === 'rejeitado') {
-    document.getElementById('rejeicao-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados. Tente cadastrar de novo, com calma.';
-    go('screen-rejeitado');
+    document.getElementById('rejeicao-mot-motivo-texto').textContent = dados.motivoRejeicao || 'Houve um problema com seus dados ou documentos. Tente cadastrar de novo, com calma.';
+    go('screen-rejeitado-motorista');
   } else {
-    go('screen-aguardando-aprovacao');
+    go('screen-aguardando-aprovacao-motorista');
   }
   // Mantém o listener vivo mesmo depois de aprovado, pra detectar um bloqueio que aconteça depois
-  escutarStatusCadastro();
+  escutarStatusCadastroMotorista();
 }
 
-function mostrarTelaAguardandoAprovacao() {
-  go('screen-aguardando-aprovacao');
-  escutarStatusCadastro();
-}
-
-function escutarStatusCadastro() {
-  if (cadastroPassageiroListenerUnsub || !firebaseReady || !db || !meuPassageiroId) return;
-  cadastroPassageiroListenerUnsub = fb.onSnapshot(fb.doc(db, 'passageiros', meuPassageiroId), (snap) => {
+function escutarStatusCadastroMotorista() {
+  if (cadastroMotoristaListenerUnsub || !firebaseReady || !db) return;
+  cadastroMotoristaListenerUnsub = fb.onSnapshot(fb.doc(db, 'motoristas', meuMotoristaId), (snap) => {
     if (!snap.exists()) return;
-    aplicarStatusCadastro(snap.data());
+    aplicarStatusCadastroMotorista(snap.data());
   });
 }
 
-document.getElementById('btn-tentar-cadastro-novamente')?.addEventListener('click', () => {
-  go('screen-cadastro-passageiro');
-});
-
-document.getElementById('btn-open-chat')?.addEventListener('click', () => {
-  document.getElementById('chat-panel').hidden = false;
-  document.getElementById('chat-input')?.focus();
-});
-
-// Número do bot Interliga (Railway/Baileys) — faz a ponte anônima entre passageiro e motorista
-const BOT_NUMERO = '5571981899571';
-
-document.getElementById('btn-share-ride')?.addEventListener('click', () => {
-  const corridaId = state.corridaId;
-  if (!corridaId) { showToast('⚠️ Nenhuma corrida ativa pra compartilhar'); return; }
-
-  // Página dedicada de acompanhamento — não abre o app, só mostra o mapa
-  const base = location.origin + location.pathname.replace('index.html', '').replace(/\/$/, '');
-  const url = `${base}/acompanhar.html?id=${corridaId}`;
-  const texto = `🚗 Estou numa corrida com a Interliga!\nAcompanhe em tempo real onde estou:\n${url}`;
-
-  if (navigator.share) {
-    navigator.share({ title: 'Minha corrida Interliga', text: texto, url })
-      .catch(() => {});
-  } else {
-    navigator.clipboard?.writeText(texto).then(() => {
-      showToast('📋 Link copiado! Cole no WhatsApp pra compartilhar.');
-    }).catch(() => {
-      showToast('🔗 Link copiado!');
-    });
-  }
-});
-
-document.getElementById('btn-call-driver')?.addEventListener('click', () => {
-  const corridaInfo = state.corridaId || 'atual';
-  const msg = encodeURIComponent(
-    `📞 [Interliga] Passageiro solicita ligação · Corrida #${corridaInfo}\nPor favor ligue para o passageiro via bot.`
-  );
-  window.open('https://wa.me/' + BOT_NUMERO + '?text=' + msg, '_blank');
-  showToast('📞 Solicitação enviada — motorista vai ligar via bot');
-});
-
-// ─────────────────────────────────────
-// CANCELAMENTO — com motivo + multa após 3 min do aceite
-// ─────────────────────────────────────
-const TEMPO_GRACA_CANCEL_MS = 3 * 60 * 1000; // 3 minutos
-let motivoCancelamentoSelecionado = null;
-
-document.getElementById('btn-cancelar-corrida')?.addEventListener('click', () => {
-  const modal = document.getElementById('cancel-modal');
-  const warning = document.getElementById('cancel-warning');
-  const temMulta = timestampAceite && (Date.now() - timestampAceite) >= TEMPO_GRACA_CANCEL_MS;
-  if (warning) warning.hidden = !temMulta;
-  if (modal) modal.hidden = false;
-});
-
-document.getElementById('cancel-modal-close')?.addEventListener('click', () => {
-  document.getElementById('cancel-modal').hidden = true;
-});
-
-document.querySelectorAll('.cancel-reason').forEach(btn => {
-  btn.addEventListener('click', () => {
-    motivoCancelamentoSelecionado = btn.dataset.reason;
-    confirmarCancelamento();
-  });
-});
-
-// ─────────────────────────────────────
-// CANCELAR DURANTE A BUSCA (antes de motorista aceitar — sem multa, sem motivo)
-// ─────────────────────────────────────
-function cancelarBuscaCorrida() {
-  if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
-  pararFilaWatchdog();
-  if (firebaseReady && db && state.corridaId && !String(state.corridaId).startsWith('local-')) {
-    fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), { status: 'cancelada' }).catch(() => {});
-  }
-  atualizarStatusHistoricoLocal('cancelada');
-  showToast('Solicitação cancelada');
-  go('screen-home');
-}
-
-document.getElementById('btn-cancelar-busca')?.addEventListener('click', cancelarBuscaCorrida);
-
-// Se o usuário voltar para a Home enquanto ainda procurava motorista (sem motorista aceito),
-// cancela automaticamente a solicitação para não deixá-la "pendurada" no Firebase
-document.querySelector('#screen-tracking .back-btn')?.addEventListener('click', () => {
-  const aindaBuscando = !document.getElementById('block-searching').hidden;
-  if (aindaBuscando && state.corridaId) {
-    cancelarBuscaCorrida();
-  }
-});
-
-function confirmarCancelamento() {
-  document.getElementById('cancel-modal').hidden = true;
-
-  const temMulta = timestampAceite && (Date.now() - timestampAceite) >= TEMPO_GRACA_CANCEL_MS;
-
-  if (state.corridaListenerUnsub) { state.corridaListenerUnsub(); state.corridaListenerUnsub = null; }
-  if (state.chatListenerUnsub) { state.chatListenerUnsub(); state.chatListenerUnsub = null; }
-  pararEscutaPosicaoMotorista(); // essencial: sem isso, o rastreio ao vivo trava na próxima corrida
-  if (firebaseReady && db && state.corridaId && !state.corridaId.startsWith('local-')) {
-    fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), {
-      status: 'cancelada',
-      motivoCancelamento: motivoCancelamentoSelecionado,
-      multaCobrada: temMulta,
-    }).catch(() => {});
-  }
-  atualizarStatusHistoricoLocal('cancelada', { multaCobrada: temMulta });
-
-  if (temMulta) {
-    showToast('❌ Corrida cancelada · Multa de R$ 5,00 cobrada');
-    // Registra a multa pendente vinculada ao passageiro
-    // O motorista recebe quando o passageiro pagar na próxima corrida
-    if (firebaseReady && db && state.corridaId) {
-      const motoristaId = state.motoristaIdDaCorrida || null;
-      if (motoristaId) {
-        fb.addDoc(fb.collection(db, 'multas_pendentes'), {
-          passageiroId: meuPassageiroId || null,
-          motoristaId,
-          corridaId: state.corridaId,
-          valor: 5.00,
-          status: 'pendente',
-          criadoEm: fb.serverTimestamp(),
-        }).catch(() => {});
-      }
-    }
-  } else {
-    showToast('Corrida cancelada · Sem multa');
-  }
-
-  timestampAceite = null;
-  motivoCancelamentoSelecionado = null;
-  go('screen-home');
-}
-
-// ─────────────────────────────────────
-// PAGAMENTO — seleção de forma
-// ─────────────────────────────────────
-document.getElementById('payment-select')?.addEventListener('click', () => {
-  document.getElementById('payment-modal').hidden = false;
-});
-document.getElementById('payment-modal-close')?.addEventListener('click', () => {
-  document.getElementById('payment-modal').hidden = true;
-});
-document.querySelectorAll('.payment-option').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const metodo = btn.dataset.payment;
-    if (metodo === 'carteira') {
-      const saldo = await obterSaldoCarteira(meuPassageiroId);
-      const precoEstimado = Math.max(...Object.values(state.precos || {}).filter(v => typeof v === 'number'), 0);
-      if (saldo < precoEstimado) {
-        showToast('⚠️ Saldo insuficiente na carteira (R$ ' + saldo.toFixed(2).replace('.', ',') + ')');
-        return;
-      }
-    }
-    document.querySelectorAll('.payment-option').forEach(b => b.classList.remove('is-selected'));
-    btn.classList.add('is-selected');
-    document.getElementById('payment-select-label').textContent = btn.dataset.label;
-    state.formaPagamento = metodo;
-    document.getElementById('payment-modal').hidden = true;
-  });
-});
-
-// ─────────────────────────────────────
-// PARADAS EXTRAS
-// ─────────────────────────────────────
-let paradasExtras = [];
-
-document.getElementById('btn-add-stop-pre')?.addEventListener('click', () => {
-  const idx = paradasExtras.length;
-  paradasExtras.push({ texto: '', lat: null, lon: null });
-  renderParadas();
-});
-
-function renderParadas() {
-  const container = document.getElementById('stops-list-pre');
-  if (!container) return;
-  container.innerHTML = paradasExtras.map((p, i) => `
-    <div class="address-field" style="padding:8px 16px;position:relative;">
-      <span class="address-dot" style="background:#9098A8;"></span>
-      <input type="text" class="stop-input" data-stop-idx="${i}" placeholder="Endereço da parada ${i+1}" value="${p.texto}" autocomplete="off">
-      <button class="stop-remove" data-remove-stop="${i}">✕</button>
-      <div class="address-suggestions stop-suggestions" data-suggestions-idx="${i}"></div>
-    </div>
-  `).join('');
-
-  // Conectar autocomplete real em cada input de parada recém-criado
-  container.querySelectorAll('.stop-input').forEach((input) => {
-    if (input._wired) return;
-    const idx = parseInt(input.dataset.stopIdx, 10);
-    const suggestionsBox = container.querySelector(`.stop-suggestions[data-suggestions-idx="${idx}"]`);
-    attachAddressAutocomplete(input, (r) => {
-      paradasExtras[idx].texto = r ? r.texto : '';
-      paradasExtras[idx].lat = r ? r.lat : null;
-      paradasExtras[idx].lon = r ? r.lon : null;
-    }, suggestionsBox);
-    input._wired = true;
+function mostrarTelaAguardandoAprovacaoMotorista() {
+  go('screen-aguardando-aprovacao-motorista');
+  if (cadastroMotoristaListenerUnsub || !firebaseReady || !db) return;
+  cadastroMotoristaListenerUnsub = fb.onSnapshot(fb.doc(db, 'motoristas', meuMotoristaId), (snap) => {
+    if (!snap.exists()) return;
+    aplicarStatusCadastroMotorista(snap.data());
   });
 }
 
-document.getElementById('stops-list-pre')?.addEventListener('input', (e) => {
-  const input = e.target.closest('.stop-input');
-  if (!input) return;
-  const idx = parseInt(input.dataset.stopIdx, 10);
-  paradasExtras[idx].texto = input.value;
+document.getElementById('btn-tentar-cadastro-mot-novamente')?.addEventListener('click', () => {
+  go('screen-cadastro-motorista');
 });
 
-document.getElementById('stops-list-pre')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-remove-stop]');
-  if (!btn) return;
-  const idx = parseInt(btn.dataset.removeStop, 10);
-  paradasExtras.splice(idx, 1);
-  renderParadas();
+document.getElementById('btn-editar-perfil-motorista')?.addEventListener('click', () => {
+  document.getElementById('ed-mot-nome').value = state.motorista.nome || '';
+  document.getElementById('ed-mot-celular').value = state.motorista.celular || '';
+  document.getElementById('ed-mot-veiculo').value = state.motorista.veiculo || '';
+  document.getElementById('ed-mot-placa').value = state.motorista.placa || '';
+  go('screen-editar-perfil-motorista');
 });
 
-// ─────────────────────────────────────
-// SEQUÊNCIA DE ROTA (origem → paradas → destino final)
-// ─────────────────────────────────────
-let sequenciaRota = []; // [{ texto, lat, lon, tipo: 'origem'|'parada'|'destino' }]
-let indiceRotaAtual = 0;
-
-function montarSequenciaInicial() {
-  sequenciaRota = [
-    { texto: state.origem?.texto || 'Origem', lat: state.origem?.lat, lon: state.origem?.lon, tipo: 'origem' },
-    // Paradas adicionadas antes de solicitar a corrida entram aqui, no meio da rota
-    ...paradasExtras.filter(p => p.texto.trim()).map(p => ({ texto: p.texto, lat: p.lat, lon: p.lon, tipo: 'parada' })),
-    { texto: state.destino?.texto || 'Destino', lat: state.destino?.lat, lon: state.destino?.lon, tipo: 'destino' },
-  ];
-  indiceRotaAtual = 0;
-  renderRotaAtual();
-}
-
-function renderRotaAtual() {
-  const origemEl = document.getElementById('tracking-origem');
-  const destinoEl = document.getElementById('tracking-destino');
-  if (!origemEl || !destinoEl) return;
-
-  const pontoAtual = sequenciaRota[indiceRotaAtual];
-  const proximoPonto = sequenciaRota[indiceRotaAtual + 1];
-
-  origemEl.textContent = pontoAtual ? pontoAtual.texto : '—';
-  destinoEl.textContent = proximoPonto ? proximoPonto.texto : '—';
-
-  // Mostra o resto da fila (pontos depois do próximo), pra deixar claro que nada foi substituído —
-  // só empurrado pra depois da nova parada
-  const restantes = sequenciaRota.slice(indiceRotaAtual + 2);
-  const elRestantes = document.getElementById('tracking-proximas-paradas');
-  if (elRestantes) {
-    elRestantes.innerHTML = restantes.length > 0
-      ? 'Depois: ' + restantes.map(p => p.texto).join(' → ')
-      : '';
-  }
-
-  // O botão de avançar parada é controlado pelo MOTORISTA, não pelo passageiro.
-  // O passageiro só acompanha — esconde o botão sempre no lado dele.
-  const btnAvancar = document.getElementById('btn-avancar-parada');
-  if (btnAvancar) btnAvancar.hidden = true;
-}
-
-function obterPontoAtualDaRota() {
-  // Ponto que o motorista está buscando agora (o próximo na sequência)
-  return sequenciaRota[indiceRotaAtual + 1] || sequenciaRota[indiceRotaAtual] || null;
-}
-
-function avancarParaProximaParada() {
-  if (indiceRotaAtual < sequenciaRota.length - 2) {
-    indiceRotaAtual++;
-    renderRotaAtual();
-    sincronizarRotaNoFirebase();
-    showToast('📍 A caminho de: ' + sequenciaRota[indiceRotaAtual + 1]?.texto);
-  }
-}
-
-// O controle de avanço de parada é exclusivo do MOTORISTA.
-// O passageiro só acompanha — o botão existe no HTML mas nunca deve aparecer nem funcionar.
-const btnAvancarPassageiro = document.getElementById('btn-avancar-parada');
-if (btnAvancarPassageiro) {
-  btnAvancarPassageiro.hidden = true;
-  btnAvancarPassageiro.style.display = 'none'; // garante que não aparece mesmo se hidden for sobrescrito
-}
-
-let paradaSelecionadaModal = null;
-
-document.getElementById('btn-add-stop-ongoing')?.addEventListener('click', () => {
-  document.getElementById('add-stop-modal').hidden = false;
-  const input = document.getElementById('add-stop-input');
-  if (input && !input._wired) {
-    attachAddressAutocomplete(input, (r) => { paradaSelecionadaModal = r; }, document.getElementById('add-stop-suggestions'));
-    input._wired = true;
-  }
-  setTimeout(() => input?.focus(), 100);
-});
-
-document.getElementById('add-stop-modal-close')?.addEventListener('click', () => {
-  document.getElementById('add-stop-modal').hidden = true;
-});
-
-document.getElementById('btn-confirmar-parada')?.addEventListener('click', () => {
-  const input = document.getElementById('add-stop-input');
-  const texto = input.value.trim();
-  if (!texto) { showToast('⚠️ Informe o endereço da parada'); return; }
-
-  const novaParada = {
-    texto,
-    lat: paradaSelecionadaModal?.lat || null,
-    lon: paradaSelecionadaModal?.lon || null,
-    tipo: 'parada',
-  };
-
-  // Insere a nova parada antes do destino final (penúltima posição)
-  sequenciaRota.splice(sequenciaRota.length - 1, 0, novaParada);
-  renderRotaAtual();
-
-  // Sincroniza a rota completa no Firebase para o motorista também ver
-  sincronizarRotaNoFirebase();
-
-  showToast('📍 Parada adicionada: ' + texto + ' (+R$ 5,00)');
-  enviarMensagemChat('📍 Parada adicional solicitada: ' + texto);
-
-  input.value = '';
-  paradaSelecionadaModal = null;
-  document.getElementById('add-stop-modal').hidden = true;
-});
-
-function sincronizarRotaNoFirebase() {
-  if (!firebaseReady || !db || !state.corridaId || String(state.corridaId).startsWith('local-')) return;
-  fb.updateDoc(fb.doc(db, 'corridas', state.corridaId), {
-    sequenciaRota: sequenciaRota,
-    indiceRotaAtual: indiceRotaAtual,
-  }).catch((e) => console.error('[passageiro] erro ao sincronizar rota:', e));
-}
-
-// ─────────────────────────────────────
-// ÚLTIMA CORRIDA (Home)
-// ─────────────────────────────────────
-function renderLastRide() {
-  const historico = getStorageJSON('interliga_corridas', []);
-  if (historico.length === 0) return;
-  const ultima = historico[0];
-  document.getElementById('last-ride-title').textContent = ultima.destino;
-  document.getElementById('last-ride-sub').textContent = new Date(ultima.criadoEm).toLocaleDateString('pt-BR');
-  document.getElementById('last-ride-price').textContent = 'R$ ' + Number(ultima.preco).toFixed(2).replace('.', ',');
-}
-
-async function renderTripsScreen() {
-  const listEl = document.getElementById('trips-list');
-  if (!listEl) return;
-  listEl.innerHTML = '<div style="text-align:center;color:var(--text-soft);padding:20px;">Carregando...</div>';
-
-  let corridas = [];
-
-  // Busca do Firebase (corridas reais finalizadas)
-  if (firebaseReady && db && meuPassageiroId) {
-    try {
-      const snap = await fb.getDocs(fb.query(
-        fb.collection(db, 'corridas'),
-        fb.where('passageiroId', '==', meuPassageiroId),
-        fb.where('status', '==', 'finalizada'),
-        fb.orderBy('criadoEm', 'desc'),
-        fb.limit(50)
-      ));
-      snap.forEach(d => corridas.push({ id: d.id, ...d.data(), _origem: 'firebase' }));
-    } catch (e) {
-      // Se falhar (sem índice), usa o histórico local como fallback
-      corridas = getStorageJSON('interliga_corridas', []);
-      console.warn('[trips] usando histórico local:', e.message);
-    }
-  }
-
-  if (corridas.length === 0) corridas = getStorageJSON('interliga_corridas', []);
-
-  if (corridas.length === 0) {
-    listEl.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🧳</div>
-        <div class="empty-title">Nenhuma viagem ainda</div>
-        <div class="empty-sub">Suas corridas vão aparecer aqui</div>
-      </div>`;
-    return;
-  }
-
-  listEl.innerHTML = corridas.map(c => {
-    const data = c.criadoEm?.toDate ? c.criadoEm.toDate() : new Date(c.criadoEm);
-    const dataFmt = data.toLocaleDateString('pt-BR') + ' · ' + data.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-    const motorista = c.motoristaNome
-      ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--text-soft);">
-          <span>🚗 ${c.motoristaNome}</span>
-          ${c.motoristaVeiculo ? `<span>· ${c.motoristaVeiculo}</span>` : ''}
-          ${c.motoristaPlaca ? `<span>· ${c.motoristaPlaca}</span>` : ''}
-          ${c.motoristaAvaliacao ? `<span style="color:var(--orange);">· ⭐ ${c.motoristaAvaliacao}</span>` : ''}
-        </div>` : '';
-    return `
-      <div class="trip-card">
-        <div class="trip-card-top">
-          <span>${dataFmt}</span>
-          <span class="trip-card-price">R$ ${Number(c.preco||0).toFixed(2).replace('.', ',')}</span>
-        </div>
-        <div class="trip-card-route">📍 ${c.origem || '—'} → 🏁 ${c.destino || '—'}</div>
-        ${motorista}
-      </div>`;
-  }).join('');
-}
-
-// ─────────────────────────────────────
-// AGENDAMENTO — calendário
-// ─────────────────────────────────────
-let calYear = new Date().getFullYear();
-let calMonth = new Date().getMonth();
-let selectedDay = null;
-let selectedSlot = null;
-const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const HORARIOS = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
-
-let schedOrigemSelecionada = null;
-let schedDestinoSelecionada = null;
-
-function onEnterSchedule() {
-  buildCalendar();
-  buildSlots();
-  renderAgendamentos();
-
-  const inputOrigem = document.getElementById('sched-origem');
-  const inputDestino = document.getElementById('sched-destino');
-  const caixaSugestoesAgendamento = document.getElementById('sched-suggestions');
-  if (inputOrigem && !inputOrigem._wired) {
-    attachAddressAutocomplete(inputOrigem, (r) => { schedOrigemSelecionada = r; }, caixaSugestoesAgendamento);
-    inputOrigem._wired = true;
-  }
-  if (inputDestino && !inputDestino._wired) {
-    attachAddressAutocomplete(inputDestino, (r) => { schedDestinoSelecionada = r; }, caixaSugestoesAgendamento);
-    inputDestino._wired = true;
-  }
-}
-
-function renderAgendamentos() {
-  const agendamentos = getStorageJSON('interliga_agendamentos', []);
-  const listEl = document.getElementById('scheduled-list');
-  const emptyEl = document.getElementById('scheduled-empty');
-  if (!listEl) return;
-
-  if (agendamentos.length === 0) {
-    if (emptyEl) emptyEl.style.display = 'flex';
-    return;
-  }
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  listEl.innerHTML = agendamentos.map((a, i) => `
-    <div class="trip-card">
-      <div class="trip-card-top">
-        <span>📅 ${a.data} · ${a.hora}</span>
-        <button class="cancel-link" style="margin:0;padding:0;font-size:12px;" data-cancel-sched="${i}">Cancelar</button>
-      </div>
-      <div class="trip-card-route">${a.origem} → ${a.destino}</div>
-    </div>
-  `).join('');
-}
-
-document.getElementById('scheduled-list')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-cancel-sched]');
-  if (!btn) return;
-  const idx = parseInt(btn.dataset.cancelSched, 10);
-  const agendamentos = getStorageJSON('interliga_agendamentos', []);
-  agendamentos.splice(idx, 1);
-  setStorageJSON('interliga_agendamentos', agendamentos);
-  showToast('Agendamento cancelado');
-  renderAgendamentos();
-});
-
-function buildCalendar() {
-  const grid = document.getElementById('calendar-grid');
-  const label = document.getElementById('cal-month-label');
-  if (!grid || !label) return;
-
-  label.textContent = `${MESES[calMonth]} ${calYear}`;
-  const firstDay = new Date(calYear, calMonth, 1).getDay();
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const today = new Date();
-
-  grid.innerHTML = '';
-  for (let i = 0; i < firstDay; i++) {
-    grid.insertAdjacentHTML('beforeend', '<div class="cal-day is-other"></div>');
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const thisDate = new Date(calYear, calMonth, d);
-    const isPast = thisDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const isToday = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
-    const classes = ['cal-day'];
-    if (isPast) classes.push('is-past');
-    if (isToday) classes.push('is-today');
-    grid.insertAdjacentHTML('beforeend', `<div class="${classes.join(' ')}" data-day="${d}">${d}</div>`);
-  }
-}
-
-document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
-  const el = e.target.closest('.cal-day');
-  if (!el || el.classList.contains('is-past') || el.classList.contains('is-other')) return;
-  document.querySelectorAll('.cal-day').forEach(d => d.classList.remove('is-selected'));
-  el.classList.add('is-selected');
-  selectedDay = el.dataset.day;
-});
-
-document.getElementById('cal-prev')?.addEventListener('click', () => {
-  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
-  buildCalendar();
-});
-document.getElementById('cal-next')?.addEventListener('click', () => {
-  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
-  buildCalendar();
-});
-
-function buildSlots() {
-  const grid = document.getElementById('slots-grid');
-  if (!grid) return;
-  grid.innerHTML = HORARIOS.map(h => `<div class="slot-item" data-slot="${h}">${h}</div>`).join('');
-}
-
-document.getElementById('slots-grid')?.addEventListener('click', (e) => {
-  const el = e.target.closest('.slot-item');
-  if (!el) return;
-  document.querySelectorAll('.slot-item').forEach(s => s.classList.remove('is-selected'));
-  el.classList.add('is-selected');
-  selectedSlot = el.dataset.slot;
-});
-
-document.getElementById('btn-confirmar-agendamento')?.addEventListener('click', () => {
-  const inputOrigem = document.getElementById('sched-origem');
-  const inputDestino = document.getElementById('sched-destino');
-  const origem = inputOrigem.value.trim();
-  const destino = inputDestino.value.trim();
-
-  if (!selectedDay) { showToast('⚠️ Selecione uma data'); return; }
-  if (!selectedSlot) { showToast('⚠️ Selecione um horário'); return; }
-  if (!origem) { showToast('⚠️ Informe o endereço de embarque'); inputOrigem.focus(); return; }
-  if (!destino) { showToast('⚠️ Informe o destino'); inputDestino.focus(); return; }
-
-  const agendamentos = getStorageJSON('interliga_agendamentos', []);
-  const dataDisparo = new Date(calYear, calMonth, parseInt(selectedDay, 10));
-  const [horaSel, minutoSel] = selectedSlot.split(':').map(Number);
-  dataDisparo.setHours(horaSel, minutoSel || 0, 0, 0);
-
-  agendamentos.unshift({
-    origem, destino,
-    origemLat: schedOrigemSelecionada?.lat || null,
-    origemLon: schedOrigemSelecionada?.lon || null,
-    destinoLat: schedDestinoSelecionada?.lat || null,
-    destinoLon: schedDestinoSelecionada?.lon || null,
-    data: `${selectedDay} de ${MESES[calMonth]}`,
-    hora: selectedSlot,
-    disparoEm: dataDisparo.toISOString(),
-    disparada: false,
-    criadoEm: new Date().toISOString(),
-  });
-  setStorageJSON('interliga_agendamentos', agendamentos.slice(0, 20));
-
-  showToast('✅ Corrida agendada com sucesso!');
-
-  // Limpar formulário e atualizar lista, sem sair da tela
-  inputOrigem.value = '';
-  inputDestino.value = '';
-  schedOrigemSelecionada = null;
-  schedDestinoSelecionada = null;
-  selectedDay = null;
-  selectedSlot = null;
-  document.querySelectorAll('.cal-day.is-selected, .slot-item.is-selected').forEach(el => el.classList.remove('is-selected'));
-  renderAgendamentos();
-});
-
-// ─────────────────────────────────────
-// MULTA — verifica multa pendente do passageiro e credita ao motorista
-// ─────────────────────────────────────
-async function verificarEAplicarMulta(passageiroId, motoristaId, precoCorrente) {
-  if (!passageiroId || !motoristaId || !firebaseReady || !db) return;
-  try {
-    const snap = await fb.getDocs(fb.query(
-      fb.collection(db, 'multas_pendentes'),
-      fb.where('passageiroId', '==', passageiroId),
-      fb.where('status', '==', 'pendente')
-    ));
-    if (snap.empty) return;
-
-    // Tem multa pendente — credita na carteira do motorista que fez essa corrida
-    for (const doc of snap.docs) {
-      const multa = doc.data();
-      // Credita o valor da multa na carteira do motorista
-      await fb.addDoc(fb.collection(db, 'carteira_transacoes'), {
-        motoristaId,
-        tipo: 'multa_recebida',
-        valor: multa.valor || 5.00,
-        descricao: 'Multa de cancelamento recebida',
-        corridaOrigem: multa.corridaId,
-        criadoEm: fb.serverTimestamp(),
-      });
-      // Marca a multa como paga
-      await fb.updateDoc(fb.doc(db, 'multas_pendentes', doc.id), {
-        status: 'paga',
-        corridaPagamento: state.corridaId,
-        pagaEm: fb.serverTimestamp(),
-      });
-    }
-    showToast('💰 Multa aplicada ao motorista!');
-  } catch(e) {
-    console.warn('[multa] erro ao aplicar:', e);
-  }
-}
-
-// ─────────────────────────────────────
-// INICIALIZAÇÃO
-// ─────────────────────────────────────
-// ─────────────────────────────────────
-// DISPARO DE AGENDAMENTOS — quando a hora marcada chega, cria a corrida de
-// verdade e chama motorista, do mesmo jeito que uma corrida pedida na hora.
-// IMPORTANTE: só funciona se o app estiver aberto (em primeiro ou segundo plano)
-// perto do horário marcado — não existe um servidor disparando isso sozinho.
-// ─────────────────────────────────────
-let agendamentosWatchdogInterval = null;
-
-function iniciarVerificacaoAgendamentos() {
-  clearInterval(agendamentosWatchdogInterval);
-  verificarAgendamentosPendentes();
-  agendamentosWatchdogInterval = setInterval(verificarAgendamentosPendentes, 30000);
-}
-
-async function verificarAgendamentosPendentes() {
-  try {
-    const agendamentos = getStorageJSON('interliga_agendamentos', []);
-    if (agendamentos.length === 0) return;
-    const agora = Date.now();
-    let mudou = false;
-
-    for (const ag of agendamentos) {
-      if (ag.disparada || !ag.disparoEm) continue;
-      const momentoDisparo = new Date(ag.disparoEm).getTime();
-      if (agora < momentoDisparo) continue; // ainda não chegou a hora
-
-      ag.disparada = true;
-      mudou = true;
-
-      if (agora - momentoDisparo < 10 * 60 * 1000) {
-        // Chegou a hora (com até 10 min de tolerância) — dispara a corrida de verdade
-        disparaCorridaAgendada(ag);
-      } else {
-        // Passou muito tempo do horário (app ficou fechado) — não dispara tarde, só marca como expirado
-        console.warn('[passageiro] agendamento expirado sem disparar (app estava fechado na hora):', ag);
-      }
-    }
-    if (mudou) setStorageJSON('interliga_agendamentos', agendamentos);
-  } catch (e) { console.warn('[passageiro] erro ao verificar agendamentos:', e); }
-}
-
-function disparaCorridaAgendada(ag) {
-  if (state.corridaId) return; // já tem corrida em andamento, não sobrepõe
-
-  state.origem = { texto: ag.origem, lat: ag.origemLat, lon: ag.origemLon };
-  state.destino = { texto: ag.destino, lat: ag.destinoLat, lon: ag.destinoLon };
-
-  const preco = (ag.origemLat && ag.destinoLat)
-    ? Math.max(8, 5 + haversineKm(ag.origemLat, ag.origemLon, ag.destinoLat, ag.destinoLon) * 2.40)
-    : 18;
-
-  go('screen-tracking');
-  montarSequenciaInicial();
-  document.getElementById('block-searching').hidden = false;
-  document.getElementById('block-driver').hidden = true;
-  document.getElementById('chat-panel').hidden = true;
-  document.getElementById('tracking-title').textContent = '🔔 Corrida agendada — buscando motorista...';
-  document.getElementById('tracking-sub').textContent = 'Aguarde um instante';
-  showToast('🔔 Hora da sua corrida agendada! Chamando motorista...');
-
-  criarCorrida(state.origem, state.destino, preco, 'x');
-}
-
-document.getElementById('btn-editar-perfil-passageiro')?.addEventListener('click', () => {
-  document.getElementById('ed-pax-nome').value = state.passageiro?.nome || '';
-  document.getElementById('ed-pax-celular').value = state.passageiro?.celular || '';
-  go('screen-editar-perfil-passageiro');
-});
-
-document.getElementById('btn-salvar-perfil-passageiro')?.addEventListener('click', async () => {
-  const erroEl = document.getElementById('ed-pax-erro');
+document.getElementById('btn-salvar-perfil-motorista')?.addEventListener('click', async () => {
+  const erroEl = document.getElementById('ed-mot-erro');
   erroEl.hidden = true;
-  const nome = document.getElementById('ed-pax-nome').value.trim();
-  const celular = document.getElementById('ed-pax-celular').value.trim();
+  const nome = document.getElementById('ed-mot-nome').value.trim();
+  const celular = document.getElementById('ed-mot-celular').value.trim();
+  const veiculo = document.getElementById('ed-mot-veiculo').value.trim();
+  const placa = document.getElementById('ed-mot-placa').value.trim().toUpperCase();
 
   if (!nome || nome.split(' ').length < 2) { erroEl.textContent = '⚠️ Informe seu nome completo'; erroEl.hidden = false; return; }
   if (celular.replace(/\D/g, '').length < 10) { erroEl.textContent = '⚠️ Informe um celular válido com DDD'; erroEl.hidden = false; return; }
-  if (!firebaseReady || !db || !meuPassageiroId) { erroEl.textContent = '⚠️ Sem conexão com o servidor'; erroEl.hidden = false; return; }
+  if (!veiculo || !placa) { erroEl.textContent = '⚠️ Informe o veículo e a placa'; erroEl.hidden = false; return; }
+  if (!firebaseReady || !db || !meuMotoristaId) { erroEl.textContent = '⚠️ Sem conexão com o servidor'; erroEl.hidden = false; return; }
 
-  const btn = document.getElementById('btn-salvar-perfil-passageiro');
+  const btn = document.getElementById('btn-salvar-perfil-motorista');
   btn.disabled = true;
   btn.textContent = 'Salvando...';
   try {
-    await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { nome, celular }, { merge: true });
-    if (state.passageiro) { state.passageiro.nome = nome; state.passageiro.celular = celular; }
-    document.getElementById('profile-name').textContent = nome;
-    document.getElementById('profile-phone').textContent = celular;
-    const elAvatar = document.querySelector('.profile-avatar');
-    if (elAvatar) elAvatar.textContent = nome.trim().charAt(0).toUpperCase();
-    const elHomeAvatar = document.getElementById('home-avatar');
-    if (elHomeAvatar) elHomeAvatar.textContent = nome.trim().charAt(0).toUpperCase();
+    await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { nome, celular, veiculo, placa }, { merge: true });
+    state.motorista.nome = nome;
+    state.motorista.celular = celular;
+    state.motorista.veiculo = veiculo;
+    state.motorista.placa = placa;
     showToast('✅ Perfil atualizado!');
     go('screen-profile');
+    verificarCadastroMotorista(); // recarrega os dados exibidos
   } catch (e) {
-    console.error('[passageiro] erro ao salvar perfil:', e);
+    console.error('[motorista] erro ao salvar perfil:', e);
     erroEl.textContent = '⚠️ Erro ao salvar — tenta de novo';
     erroEl.hidden = false;
   } finally {
@@ -2757,31 +2098,37 @@ document.getElementById('btn-salvar-perfil-passageiro')?.addEventListener('click
   }
 });
 
-document.getElementById('btn-suporte-passageiro')?.addEventListener('click', () => {
-  const msg = encodeURIComponent('Olá! Preciso de ajuda com o app Interliga.');
+document.getElementById('btn-suporte-motorista')?.addEventListener('click', () => {
+  const msg = encodeURIComponent('Olá! Preciso de ajuda com o app do motorista Interliga.');
   window.open('https://wa.me/5571981899571?text=' + msg, '_blank');
 });
 
-document.getElementById('btn-sair-passageiro')?.addEventListener('click', async () => {
+document.getElementById('btn-sair-motorista')?.addEventListener('click', async () => {
   if (!confirm('Sair da sua conta? Você vai precisar fazer login de novo pra voltar a usar o app.')) return;
   try {
-    if (cadastroPassageiroListenerUnsub) { cadastroPassageiroListenerUnsub(); cadastroPassageiroListenerUnsub = null; }
-    if (authPassageiro) await authModRef.signOut(authPassageiro);
-    meuPassageiroId = null;
-    go('screen-login-passageiro');
+    if (state.online) {
+      pararEscutaCorridas();
+      pararDisponibilidade();
+    }
+    if (authMotorista) await authModRef.signOut(authMotorista);
+    meuMotoristaId = null;
+    go('screen-login-motorista');
   } catch (e) {
-    console.error('[passageiro] erro ao sair:', e);
+    console.error('[motorista] erro ao sair:', e);
     showToast('⚠️ Erro ao sair, tenta de novo');
   }
 });
 
-document.getElementById('btn-trocar-para-motorista')?.addEventListener('click', () => {
-  window.location.href = 'motorista.html';
+document.getElementById('btn-trocar-para-passageiro')?.addEventListener('click', () => {
+  // Precisa marcar o papel como 'passageiro' antes de voltar — senão o
+  // index.html detecta 'motorista' salvo e manda de volta pra cá na hora.
+  localStorage.setItem('interliga_papel', 'passageiro');
+  window.location.href = 'index.html';
 });
 
 // ─────────────────────────────────────
-// NOTIFICAÇÕES PUSH — recebe aviso (ex: "motorista aceitou") mesmo com o
-// app fechado/em segundo plano (precisa da chave VAPID do Firebase Console)
+// NOTIFICAÇÕES PUSH — recebe aviso de corrida nova mesmo com o app fechado/
+// em segundo plano (precisa da chave VAPID do Firebase Console, ver abaixo)
 // ─────────────────────────────────────
 const VAPID_KEY = 'BNlkkjvYwHosBBv6UWCzKWCB58rNoEP1YrlGFsXetoPFLDMWUNdA2r4VqtD4sHwgdb_yyKbOBydT2dxKDXWrrY4'; // Firebase Console → Configurações do projeto → Cloud Messaging → Web Push certificates
 
@@ -2790,19 +2137,19 @@ let pushConfigurado = false;
 async function configurarNotificacoesPush() {
   if (pushConfigurado) return;
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.warn('[passageiro] notificações push não suportadas neste navegador');
+    console.warn('[motorista] notificações push não suportadas neste navegador');
     return;
   }
-  if (!fbAppInstancia || !meuPassageiroId || !db) return;
+  if (!fbAppInstancia || !meuMotoristaId || !db) return;
   if (VAPID_KEY === 'BNlkkjvYwHosBBv6UWCzKWCB58rNoEP1YrlGFsXetoPFLDMWUNdA2r4VqtD4sHwgdb_yyKbOBydT2dxKDXWrrY4') {
-    console.warn('[passageiro] VAPID_KEY ainda não configurada — pulando notificações push');
+    console.warn('[motorista] VAPID_KEY ainda não configurada — pulando notificações push');
     return;
   }
 
   try {
     const permissao = await Notification.requestPermission();
     if (permissao !== 'granted') {
-      console.warn('[passageiro] permissão de notificação negada pelo usuário');
+      console.warn('[motorista] permissão de notificação negada pelo usuário');
       return;
     }
 
@@ -2815,56 +2162,194 @@ async function configurarNotificacoesPush() {
     });
 
     if (token) {
-      await fb.setDoc(fb.doc(db, 'passageiros', meuPassageiroId), { fcmToken: token }, { merge: true });
+      await fb.setDoc(fb.doc(db, 'motoristas', meuMotoristaId), { fcmToken: token }, { merge: true });
       pushConfigurado = true;
-      console.log('[passageiro] notificações push configuradas');
+      console.log('[motorista] notificações push configuradas');
     }
   } catch (e) {
-    console.warn('[passageiro] erro ao configurar notificações push:', e);
+    console.warn('[motorista] erro ao configurar notificações push:', e);
   }
 }
 
-// Intercepta o botão "voltar" do Android (e o gesto de voltar no iOS).
-// Em vez de fechar o app ou sair da página, volta pra tela anterior dentro do app.
 window.addEventListener('popstate', () => {
-  const anterior = historicoNavPassageiro.pop();
+  // Se tiver em corrida ativa, ignora o voltar — não deixa sair da tela de corrida
+  if (state.emCorridaAtiva) {
+    history.pushState(null, '', '');
+    showToast('🚗 Você está numa corrida em andamento');
+    return;
+  }
+  const anterior = historicoNavMotorista.pop();
   if (anterior) {
-    // Vai pra tela anterior SEM empurrar no histórico de novo (evita loop)
     const next = document.getElementById(anterior);
     if (!next) return;
     const current = document.querySelector('.screen[data-active="true"]');
     if (current) current.removeAttribute('data-active');
     next.setAttribute('data-active', 'true');
-    state.currentScreen = anterior;
+    const handlers = { 'screen-home': onEnterHome, 'screen-ongoing': onEnterOngoing };
+    if (handlers[anterior]) handlers[anterior]();
   } else {
-    // Não tem mais histórico interno — empurra um estado vazio pra não fechar o app
     history.pushState(null, '', '');
   }
 });
 
-// Estado inicial no histórico — empurrado só UMA VEZ pra não acumular estados.
-// Se empilhasse várias vezes, o botão voltar do Android dispararia o popstate
-// múltiplas vezes antes de funcionar, causando o bug de "voltar ao botão Entrar".
-if (!window._historicoInicializado) {
-  window._historicoInicializado = true;
-  history.pushState(null, '', '');
+history.pushState(null, '', '');
+
+// ═══════════════════════════════════════
+// ENTREGAS INTERIFOOD — motoboy recebe e entrega pedidos
+// ═══════════════════════════════════════
+let entregasListenerUnsub = null;
+let entregaAtualId = null;
+let entregaAtualDados = null;
+
+function iniciarListenerEntregas() {
+  if (!firebaseReady || !db) return;
+  if (entregasListenerUnsub) return;
+
+  // Escuta pedidos com status 'aguardando_entregador' — prontos pra busca
+  const q = fb.query(
+    fb.collection(db, 'pedidos_food'),
+    fb.where('status', '==', 'aguardando_entregador'),
+    fb.where('tipoEntrega', '==', 'interliga')
+  );
+
+  entregasListenerUnsub = fb.onSnapshot(q, (snap) => {
+    const badge = document.getElementById('badge-entregas');
+    const lista = document.getElementById('lista-pedidos-entrega');
+    if (!lista) return;
+
+    // Não mostra se já está em outra entrega
+    if (entregaAtualId) return;
+
+    const pedidos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Atualiza badge
+    if (badge) {
+      badge.textContent = pedidos.length;
+      badge.style.display = pedidos.length > 0 ? 'flex' : 'none';
+    }
+
+    if (pedidos.length === 0) {
+      lista.innerHTML = `
+        <div style="text-align:center;color:#9098A8;padding:30px;">
+          <div style="font-size:32px;margin-bottom:8px;">🛵</div>
+          <div style="font-weight:600;">Nenhuma entrega disponível</div>
+          <div style="font-size:13px;margin-top:4px;">Quando um restaurante precisar de entregador, aparece aqui</div>
+        </div>`;
+      return;
+    }
+
+    lista.innerHTML = pedidos.map(p => {
+      const itens = (p.itens || []).map(i => `${i.qtd}x ${i.nome}`).join(', ');
+      return `
+        <div style="background:#1A1F2E;border-radius:14px;border:1px solid #2A3142;padding:16px;">
+          <div style="font-weight:700;font-size:15px;margin-bottom:6px;">🍔 ${p.restauranteNome || '—'}</div>
+          <div style="font-size:13px;color:#9098A8;margin-bottom:4px;">Itens: ${itens}</div>
+          <div style="font-size:13px;color:#9098A8;margin-bottom:8px;">📍 Entregar em: ${p.endereco || '—'}</div>
+          <div style="font-size:15px;font-weight:700;color:#FF6B00;margin-bottom:12px;">Taxa: ${formatMoeda(p.taxaEntrega || 0)}</div>
+          <button class="btn-accept" onclick="aceitarEntrega('${p.id}')">✅ Aceitar entrega</button>
+        </div>`;
+    }).join('');
+  });
 }
 
+async function aceitarEntrega(pedidoId) {
+  if (!firebaseReady || !db || !meuMotoristaId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', pedidoId), {
+      status: 'entrega',
+      entregadorId: meuMotoristaId,
+      entregadorNome: state.motorista?.nome || 'Entregador',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+
+    entregaAtualId = pedidoId;
+    // Busca os dados completos
+    const snap = await fb.getDoc(fb.doc(db, 'pedidos_food', pedidoId));
+    entregaAtualDados = snap.data();
+
+    // Mostra o card de entrega em andamento
+    document.getElementById('entrega-em-andamento').hidden = false;
+    document.getElementById('entrega-restaurante-nome').textContent = entregaAtualDados.restauranteNome || '—';
+    document.getElementById('entrega-restaurante-end').textContent = entregaAtualDados.enderecoRestaurante || 'Ver no mapa';
+    document.getElementById('entrega-cliente-nome').textContent = entregaAtualDados.passageiroNome || '—';
+    document.getElementById('entrega-cliente-end').textContent = entregaAtualDados.endereco || '—';
+
+    document.getElementById('lista-pedidos-entrega').innerHTML = '';
+    showToast('✅ Entrega aceita! Vá ao restaurante buscar o pedido.');
+  } catch(e) {
+    showToast('⚠️ Erro ao aceitar: ' + (e.message || e.code));
+  }
+}
+// motorista.js é carregado como <script type="module">, então funções
+// declaradas aqui ficam no escopo do módulo — não em window. O botão dessa
+// tela é criado dinamicamente (innerHTML) com onclick="aceitarEntrega(...)",
+// que roda no escopo global, então precisa dessa exposição explícita pra
+// não dar "aceitarEntrega is not defined" ao clicar.
+window.aceitarEntrega = aceitarEntrega;
+
+document.getElementById('btn-entrega-coletei')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'entrega_a_caminho',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    document.getElementById('btn-entrega-coletei').hidden = true;
+    document.getElementById('btn-entrega-entregue').hidden = false;
+    document.getElementById('btn-entrega-devolver').hidden = false;
+    showToast('🛵 Ótimo! Agora entregue ao cliente.');
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+document.getElementById('btn-entrega-entregue')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'entregue',
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    showToast('🏠 Entrega concluída!');
+    resetarEntregaAtual();
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+document.getElementById('btn-entrega-devolver')?.addEventListener('click', async () => {
+  if (!entregaAtualId) return;
+  const motivo = prompt('Motivo da devolução:\n1 - Cliente não encontrado\n2 - Cliente recusou o pedido\n3 - Endereço incorreto\n4 - Outro\n\nDigite o número ou descreva:');
+  if (!motivo) return;
+  try {
+    await fb.updateDoc(fb.doc(db, 'pedidos_food', entregaAtualId), {
+      status: 'devolvido',
+      motivoDevolucao: motivo,
+      atualizadoEm: fb.serverTimestamp(),
+    });
+    showToast('↩️ Devolução registrada — retorne ao restaurante.');
+    resetarEntregaAtual();
+  } catch(e) { showToast('⚠️ Erro: ' + e.message); }
+});
+
+function resetarEntregaAtual() {
+  entregaAtualId = null;
+  entregaAtualDados = null;
+  document.getElementById('entrega-em-andamento').hidden = true;
+  document.getElementById('btn-entrega-coletei').hidden = false;
+  document.getElementById('btn-entrega-entregue').hidden = true;
+  document.getElementById('btn-entrega-devolver').hidden = true;
+}
+
+function formatMoeda(v) { return 'R$ ' + Number(v||0).toFixed(2).replace('.', ','); }
+
 function boot() {
-  initFirebase(); // assíncrono — quando conectar, chama verificarCadastroPassageiro() se já escolheu ser passageiro
-  iniciarVerificacaoAgendamentos();
+  initFirebase(); // assíncrono — quando conectar, chama verificarCadastroMotorista() que decide a tela certa
   setTimeout(() => {
-    const papel = localStorage.getItem('interliga_papel');
-    if (!papel) {
-      go('screen-role-choice');
-    } else if (papel === 'motorista') {
-      window.location.href = 'motorista.html';
-    } else {
-      // já escolheu ser passageiro antes — fica no splash mais um instante
-      // até o Firebase responder e verificarCadastroPassageiro() decidir a tela certa
-      if (firebaseReady) verificarCadastroPassageiro();
+    // Rede de segurança: se o Firebase não respondeu em 6s (sem internet, erro etc.),
+    // libera a Home mesmo assim, em vez de travar o motorista pra sempre no splash.
+    const splash = document.getElementById('screen-splash');
+    if (splash && splash.getAttribute('data-active') === 'true') {
+      console.warn('[motorista] Firebase demorou pra responder — liberando Home em modo offline.');
+      go('screen-home');
     }
-  }, 1500);
+  }, 6000);
 }
 
 if (document.readyState === 'loading') {
