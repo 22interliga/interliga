@@ -930,6 +930,7 @@ async function aceitarCorrida() {
   }
 
   pararDisponibilidade(); // fico fora da fila de novas ofertas enquanto rodo essa corrida
+  pararEscutaCorridas(); // e paro de escutar/notificar novas corridas também, até finalizar ou cancelar essa
 
   // Salva corrida ativa no localStorage para restaurar se o app fechar
   try {
@@ -1159,7 +1160,7 @@ function escutarCancelamentoCorrida() {
       state.emCorridaAtiva = false;
       falarEmVoz('Atenção! O passageiro cancelou a corrida.');
       showToast('❌ Passageiro cancelou a corrida');
-      if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
+      if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
       go('screen-home');
     }
   }, (erro) => console.error('[motorista] erro no listener de cancelamento:', erro));
@@ -1326,7 +1327,7 @@ async function cancelarCorridaMotorista() {
   indiceRotaAtualMotorista = 0;
 
   showToast('❌ Corrida cancelada');
-  if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
+  if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
   go('screen-home');
 }
 
@@ -1379,7 +1380,7 @@ function finalizarCorrida() {
   indiceRotaAtualMotorista = 0;
 
   showToast('✅ Corrida finalizada! +R$ ' + Number(corrida.precoOriginal || corrida.preco || 18).toFixed(2).replace('.', ','));
-  if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
+  if (state.online) { iniciarDisponibilidade(); iniciarEscutaCorridas(); } // volta a ficar disponível e escutar novas ofertas
   abrirTelaAvaliarPassageiro(corrida.passageiroId, corrida.passageiroNome, corrida.id);
   atualizarStatsHome();
 }
