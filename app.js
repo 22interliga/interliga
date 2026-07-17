@@ -2061,6 +2061,9 @@ document.getElementById('btn-open-chat')?.addEventListener('click', () => {
   document.getElementById('chat-panel').hidden = false;
   document.getElementById('chat-input')?.focus();
 });
+document.getElementById('btn-close-chat')?.addEventListener('click', () => {
+  document.getElementById('chat-panel').hidden = true;
+});
 
 // Número do bot Interliga (Railway/Baileys) — faz a ponte anônima entre passageiro e motorista
 const BOT_NUMERO = '5571981899571';
