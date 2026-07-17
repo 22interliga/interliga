@@ -41,7 +41,7 @@
   --z-search: 5;
   --z-dropdown: 20;
   --z-sticky: 50;
-  --z-modal: 200;
+  --z-modal: 2000;
   --z-toast: 900;
 
   /* App máximo em telas largas (ver seção RESPONSIVO no fim do arquivo) */
@@ -554,7 +554,7 @@ input:focus-visible,
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 500;
+  z-index: 800;
   max-height: 60vh;
 }
 .chat-panel:not([hidden]) { display: flex; flex-direction: column; }
