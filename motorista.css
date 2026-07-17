@@ -239,12 +239,12 @@
   margin: 12px 0;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
+  min-height: 180px;
 }
 #chat-messages-driver {
   flex: 1;
-  min-height: 300px;
-  max-height: 400px;
+  min-height: 110px;
+  max-height: 160px;
   overflow-y: auto;
   padding: 12px;
   display: flex;
