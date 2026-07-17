@@ -170,7 +170,7 @@
 .btn-accept { background: var(--green); color: white; }
 
 /* ── ONGOING (corrida em andamento, motorista) ── */
-.home-map-wrap--ongoing { height: 38vh; position: relative; flex-shrink: 0; }
+.home-map-wrap--ongoing { height: 20vh; min-height: 140px; max-height: 200px; position: relative; flex-shrink: 0; }
 #map-ongoing { width: 100%; height: 100%; }
 .ongoing-eta-badge {
   position: absolute;
