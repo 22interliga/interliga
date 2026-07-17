@@ -1294,6 +1294,42 @@ document.getElementById('btn-seguir-viagem')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-finalizar-corrida')?.addEventListener('click', finalizarCorrida);
+
+document.getElementById('link-cancelar-corrida-motorista')?.addEventListener('click', cancelarCorridaMotorista);
+async function cancelarCorridaMotorista() {
+  const corrida = state.corridaAtual;
+  if (!corrida) { go('screen-home'); return; }
+  if (!confirm('Cancelar essa corrida? O passageiro será avisado.')) return;
+
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    try {
+      await fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+        status: 'cancelada',
+        canceladoPor: 'motorista',
+      });
+    } catch (e) {
+      console.error('[motorista] erro ao cancelar corrida:', e);
+      showToast('⚠️ Erro ao cancelar — tenta de novo');
+      return;
+    }
+  }
+
+  state.corridaAtual = null;
+  state.corridaAtualId = null;
+  state.emCorridaAtiva = false;
+  pararEscutaChat();
+  pararEscutaCancelamento();
+  pararEscutaRota();
+  pararBroadcastPosicao();
+  marcadorMotoristaMap = null;
+  sequenciaRotaMotorista = [];
+  indiceRotaAtualMotorista = 0;
+
+  showToast('❌ Corrida cancelada');
+  if (state.online) iniciarDisponibilidade(); // volta a ficar disponível pra novas ofertas
+  go('screen-home');
+}
+
 function finalizarCorrida() {
   const corrida = state.corridaAtual;
   if (!corrida) { go('screen-home'); return; }
