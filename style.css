@@ -545,12 +545,22 @@ input:focus-visible,
 
 .chat-panel {
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 -8px 28px rgba(20,23,31,0.18);
+  /* Flutua por cima do resto da tela, em vez de empurrar o mapa/card/botões
+     pra baixo — assim abrir o chat nunca faz a tela precisar de mais scroll. */
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+  max-height: 60vh;
 }
+.chat-panel:not([hidden]) { display: flex; flex-direction: column; }
 .chat-messages {
-  height: 110px;
+  flex: 1;
+  min-height: 110px;
   overflow-y: auto;
   padding: 10px;
   display: flex;
