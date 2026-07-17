@@ -1466,6 +1466,10 @@ function iniciarChatMotorista() {
   if (!firebaseReady || !db || !state.corridaAtualId) return;
   if (state.chatListenerUnsub) return;
 
+  document.getElementById('btn-close-chat-driver')?.addEventListener('click', () => {
+    document.getElementById('chat-panel-driver').hidden = true;
+  });
+
   const q = fb.query(
     fb.collection(db, 'corridas', state.corridaAtualId, 'mensagens'),
     fb.orderBy('ts', 'asc'), fb.limit(50)
