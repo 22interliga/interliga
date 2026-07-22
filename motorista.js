@@ -342,10 +342,14 @@ document.getElementById('online-toggle')?.addEventListener('click', () => {
     iniciarDisponibilidade();
     atualizarGridDemanda();
     iniciarListenerEntregas();
+    // Se estiver rodando dentro do APK (não no navegador comum), liga o
+    // serviço nativo que mantém o rastreamento funcionando minimizado.
+    if (window.AndroidNative?.ativarSegundoPlano) window.AndroidNative.ativarSegundoPlano();
   } else {
     showToast('🔴 Você está offline');
     pararEscutaCorridas();
     pararDisponibilidade();
+    if (window.AndroidNative?.desativarSegundoPlano) window.AndroidNative.desativarSegundoPlano();
   }
 });
 
@@ -1173,6 +1177,21 @@ function pararEscutaCancelamento() {
 // ─────────────────────────────────────
 // BROADCAST DE POSIÇÃO EM TEMPO REAL (motorista → Firebase → passageiro)
 // ─────────────────────────────────────
+// Chamada pelo RastreamentoService.java (Android nativo) quando o app está
+// minimizado/tela apagada — o WebView sozinho não consegue manter o GPS
+// funcionando nesse estado, então o serviço nativo assume e manda a posição
+// pra cá, reaproveitando a mesma lógica de sempre.
+window.receberPosicaoNativa = function(lat, lon) {
+  atualizarPosicaoNoMapa(lat, lon);
+  if (firebaseReady && db && state.corridaAtualId && !String(state.corridaAtualId).startsWith('local-')) {
+    fb.updateDoc(fb.doc(db, 'corridas', state.corridaAtualId), {
+      motoristaLat: lat,
+      motoristaLon: lon,
+      motoristaAtualizadoEm: Date.now(),
+    }).catch((e) => console.error('[motorista] erro ao salvar posição nativa no Firebase:', e));
+  }
+};
+
 let watchPositionId = null;
 let marcadorMotoristaMap = null;
 
